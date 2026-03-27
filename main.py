@@ -104,102 +104,113 @@ async def receive_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("✅ التوكن سليم. الآن أرسل **اسماً** لهذا البوت:")
     return GETTING_NAME
 # --------------------------------------------------------------------------
+# --------------------------------------------------------------------------
 async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """حفظ البيانات، وإرسال الإشعارات الثلاثية بشكل منفصل لضمان النجاح"""
+    """حفظ البيانات، فك تداخل التوكينات، وتشغيل الإشعارات الثلاثية"""
     bot_token = update.message.text.strip()
     user = update.effective_user
     user_id = user.id
     bot_type = context.user_data.get("type")
     
-    # التحقق من التوكن
     if not re.match(r'^\d+:[A-Za-z0-9_-]{35,}$', bot_token):
-        await update.message.reply_text("❌ التوكن غير صحيح! يرجى إرسال توكن صالح من @BotFather")
+        await update.message.reply_text("❌ التوكن غير صحيح! يرجى إرسال توكن صالح.")
         return GETTING_TOKEN
 
-    msg = await update.message.reply_text("⏳ جاري تسجيل البوت وتشغيل المحرك...")
+    msg = await update.message.reply_text("⏳ جاري تهيئة المحرك وفك تداخل التوكينات...")
 
     try:
-        # 1. جلب معلومات البوت الجديد
         from telegram import Bot
+        # إنشاء كائن بوت مستقل للتعامل مع التوكن الجديد
         temp_bot = Bot(bot_token)
+        
+        # حماية: إلغاء أي جلسات نشطة ومسح الرسائل العالقة لإنهاء مشكلة Conflict و Keyboard Expected
+        await temp_bot.delete_webhook(drop_pending_updates=True)
+        
         bot_info = await temp_bot.get_me()
         bot_username = f"@{bot_info.username}"
-        bot_display_name = bot_type  # الاسم هو النوع (تواصل)
+        bot_display_name = bot_type
 
-        # 2. الحفظ في جوجل شيت
+        # حفظ البيانات في جوجل شيت
         from sheets import save_bot, get_total_bots_count
         success = save_bot(user_id, bot_type, bot_display_name, bot_token)
 
         if success:
-            # 3. تشغيل المحرك في الخلفية (بدون إرسال رسائل داخل التوكن الجديد لتجنب التعليق)
             from contact_bot import start_handler, handle_contact_message, contact_callback_handler
             
             async def run_new_bot():
                 try:
-                    new_bot_app = ApplicationBuilder().token(bot_token).build()
-                    new_bot_app.bot_data["owner_id"] = int(user_id)
-                    new_bot_app.add_handler(CommandHandler("start", start_handler))
-                    new_bot_app.add_handler(CallbackQueryHandler(contact_callback_handler))
-                    new_bot_app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_contact_message))
-                    await new_bot_app.initialize()
-                    await new_bot_app.start()
-                    await new_bot_app.updater.start_polling()
+                    # بناء تطبيق البوت الجديد بشكل منعزل
+                    new_app = ApplicationBuilder().token(bot_token).build()
+                    new_app.bot_data["owner_id"] = int(user_id)
+                    
+                    # إضافة المعالجات (تأكد من وجود موديول contact_bot)
+                    new_app.add_handler(CommandHandler("start", start_handler))
+                    new_app.add_handler(CallbackQueryHandler(contact_callback_handler))
+                    new_app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_contact_message))
+                    new_app.add_handler(MessageHandler(filters.PHOTO, handle_contact_message))
+                    
+                    await new_app.initialize()
+                    await new_app.start()
+                    # البدء بصفحة بيضاء تماماً
+                    await new_app.updater.start_polling(drop_pending_updates=True)
                 except Exception as e:
-                    print(f"⚠️ خطأ محرك: {e}")
+                    print(f"⚠️ خطأ محرك {bot_username}: {e}")
 
+            # إطلاق مهمة التشغيل في الخلفية
             asyncio.create_task(run_new_bot())
 
-            # 4. إرسال إشعار النجاح للمستخدم في "المصنع" (بدون Markdown لتجنب أخطاء التنسيق)
-            success_text = (
-                f"🎉 مبروك! تم إنشاء بوتك بنجاح\n\n"
+            # --- [إرسال إشعار النجاح للمستخدم في المصنع] ---
+            await msg.edit_text(
+                f"🎉 **مبروك! تم إنشاء بوتك بنجاح**\n\n"
                 f"📦 النوع: {bot_type}\n"
                 f"📛 المعرف: {bot_username}\n"
-                f"🚀 البوت يعمل الآن، اذهب إليه وجربه!"
-            )
-            await msg.edit_text(
-                success_text,
-                reply_markup=ReplyKeyboardMarkup(main_menu if user_id == ADMIN_ID else [["➕ إنشاء بوت"]], resize_keyboard=True)
+                f"🚀 البوت يعمل الآن، اذهب إليه وجربه!",
+                reply_markup=ReplyKeyboardMarkup(main_menu if user_id == ADMIN_ID else [["➕ إنشاء بوت"]], resize_keyboard=True),
+                parse_mode="Markdown"
             )
 
-            # 5. إرسال إشعار للمطور (أنت) - استخدام نص بسيط لضمان الوصول
-            total_bots = get_total_bots_count()
-            admin_notification = (
-                f"✅ بوت جديد تم صنعه!\n"
-                f"-----------------------\n"
-                f"👤 المالك: {user.full_name}\n"
-                f"🆔 الآيدي: {user_id}\n"
-                f"🔗 المعرف: @{user.username if user.username else 'لا يوجد'}\n"
-                f"-----------------------\n"
-                f"🤖 النوع: {bot_type}\n"
-                f"🎈 البوت: {bot_username}\n"
-                f"-----------------------\n"
-                f"📊 الإجمالي: {total_bots}"
-            )
-            # إرسال للأدمن عبر بوت المصنع الأساسي
-            await context.bot.send_message(chat_id=ADMIN_ID, text=admin_notification)
-
-            # 6. إرسال رسالة التهنئة داخل البوت الجديد (باستخدام كائن Bot منفصل تماماً)
+            # --- [إرسال إشعار التهنئة داخل البوت الجديد] ---
             factory_info = await context.bot.get_me()
             congrats_text = (
-                f"🎉 الف مبروك! تم إنشاء بوتك بنجاح\n\n"
+                f"🎉 **الف مبروك! تم إنشاء بوتك بنجاح**\n\n"
                 f"📦 النوع: {bot_type}\n"
                 f"📛 الاسم: {bot_display_name}\n"
-                f"🔑 تم ربط قاعدة البيانات تلقائياً.\n\n"
-                f"صنع عبر: @{factory_info.username}"
+                f"🔑 تم ربط قاعدة البيانات وإعدادات المحتوى تلقائياً.\n"
+                f"-----------------------\n"
+                f"تم صنع البوت عبر : @{factory_info.username}"
             )
-            await temp_bot.send_message(chat_id=user_id, text=congrats_text)
+            try:
+                await temp_bot.send_message(chat_id=user_id, text=congrats_text, parse_mode="Markdown")
+            except: pass
+
+            # --- [إرسال إشعار تفصيلي لك (المطور)] ---
+            total_bots = get_total_bots_count()
+            admin_notification = (
+                f"تم صنع بوت جديد في الصانع الخاص بك 📝\n"
+                f"            -----------------------\n"
+                f"• معلومات عن الشخص الذي صنع البوت .\n\n"
+                f"• الاسم : {user.full_name} ،\n"
+                f"• المعرف : @{user.username if user.username else 'لا يوجد'} ،\n"
+                f"• الايدي : `{user_id}` ،\n"
+                f"            -----------------------\n"
+                f"• نوع البوت المصنوع : {bot_type} ،\n"
+                f"• معرف البوت المُنشأ : {bot_username} ،\n"
+                f"            -----------------------\n\n"
+                f"• عدد البوتات المصنوعة : {total_bots}"
+            )
+            await context.bot.send_message(chat_id=ADMIN_ID, text=admin_notification, parse_mode="Markdown")
 
         else:
-            await msg.edit_text("❌ فشل الحفظ في قاعدة البيانات.")
+            await msg.edit_text("❌ حدث خطأ أثناء الحفظ في جوجل شيت.")
 
     except Exception as e:
-        # تسجيل الخطأ في الكونسول ومعالجته بهدوء
         print(f"❌ Error in finalize: {e}")
-        await msg.edit_text(f"⚠️ حدث خطأ تقني بسيط، لكن البوت قد يكون اشتغل. جربه الآن!\nالتفاصيل: {e}")
+        await msg.edit_text(f"⚠️ حدث خطأ تقني.\nالتفاصيل: {e}")
 
     context.user_data.clear()
     return ConversationHandler.END
-
+    
+# --------------------------------------------------------------------------
 # --------------------------------------------------------------------------
 # --- لوحة التحكم والعمليات الإدارية ---
 
