@@ -226,7 +226,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("🔄 جاري إعادة تشغيل المصنع لتطبيق التحديثات...")
         # إعادة تشغيل البايثون فوراً
         os.execv(sys.executable, ['python'] + sys.argv)
-    async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    
+    # يمكن إضافة معالجة بقية الأزرار هنا (stats_all, broadcast_owners, إلخ)
+
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دالة إلغاء عملية إنشاء البوت والعودة للقائمة الرئيسية"""
     user_id = update.effective_user.id
     # العودة للقائمة الرئيسية بناءً على هوية المستخدم
@@ -239,10 +242,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # مسح البيانات المؤقتة
     context.user_data.clear()
     return ConversationHandler.END
-
-    
-    
-    # يمكن إضافة معالجة بقية الأزرار هنا (stats_all, broadcast_owners, إلخ)
 
 async def handle_docs(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """استقبال ملفات البرمجة وتحديث الموديولات برمجياً"""
@@ -296,6 +295,7 @@ async def start_all_sub_bots():
             sub_app.add_handler(CommandHandler("start", start_handler))
             sub_app.add_handler(CallbackQueryHandler(contact_callback_handler))
             sub_app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_contact_message))
+            sub_app.add_handler(MessageHandler(filters.PHOTO, handle_contact_message))
             
             # تشغيل البوت في الخلفية
             await sub_app.initialize()
@@ -332,4 +332,3 @@ if __name__ == "__main__":
         app.run_polling()
     except Exception as e:
         print(f"🔴 خطأ في إقلاع المصنع: {e}")
-
