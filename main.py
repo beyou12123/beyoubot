@@ -176,7 +176,10 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     new_app.add_handler(CallbackQueryHandler(contact_callback_handler))
                     new_app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_contact_message))
                     new_app.add_handler(MessageHandler(filters.PHOTO, handle_contact_message))
-                    
+                    # أضف هذا السطر تحت معالج الـ MessageHandler وقبل initialize
+from contact_bot import track_chats
+new_app.add_handler(ChatMemberHandler(track_chats, ChatMemberHandler.MY_CHAT_MEMBER))
+
                     await new_app.initialize()
                     await new_app.start()
                     # البدء بصفحة بيضاء تماماً
