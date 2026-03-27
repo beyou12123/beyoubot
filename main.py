@@ -34,7 +34,24 @@ ADMIN_ID = 873158772  # معرف المطور والمالك
 # تعريف مراحل محادثة إنشاء البوت (حالات الـ ConversationHandler)
 CHOOSING_TYPE, GETTING_TOKEN, GETTING_NAME = range(3)
 
-# --- القوائم (Keyboard Markups) ---
+# --- القوائم الشفافة المحدثة (Inline Keyboards) ---
+def get_main_menu_inline(user_id):
+    keyboard = [[InlineKeyboardButton("➕ إنشاء بوت", callback_data="start_manufacture")]]
+    if user_id == ADMIN_ID:
+        keyboard.append([InlineKeyboardButton("🛠 لوحة التحكم (للمالك)", callback_data="open_admin_dashboard")])
+    return InlineKeyboardMarkup(keyboard)
+
+def get_types_menu_inline():
+    keyboard = [
+        [InlineKeyboardButton("📩 تواصل", callback_data="set_type_📩 تواصل")],
+        [InlineKeyboardButton("🛡 حماية", callback_data="set_type_🛡 حماية")],
+        [InlineKeyboardButton("🎓 منصة تعليمية", callback_data="set_type_🎓 منصة تعليمية")],
+        [InlineKeyboardButton("🛒 متجر", callback_data="set_type_🛒 متجر")],
+        [InlineKeyboardButton("🔙 إلغاء", callback_data="cancel_action")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+# القوائم القديمة (للحفاظ على التوافق مع الوظائف التي قد تطلبها)
 main_menu = [["➕ إنشاء بوت"], ["🛠 لوحة التحكم (للمالك)"]]
 admin_options = [["📝 تعديل النصوص", "⚙️ إعدادات الموديولات"], ["🔙 العودة للقائمة الرئيسية"]]
 types_menu = [["📩 تواصل"], ["🛡 حماية"], ["🎓 منصة تعليمية"], ["🛒 متجر"]]
@@ -60,34 +77,43 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_user(user.id, user.username)
     
     # التحقق من الصلاحيات لإظهار لوحة التحكم للمالك فقط
-    current_menu = main_menu if user.id == ADMIN_ID else [["➕ إنشاء بوت"]]
-    
     await update.message.reply_text(
         "✨ أهلاً بك في مصنع البوتات المتطور 🤖\n\n"
         "أنا بوت المصنع، يمكنني مساعدتك في إنشاء وإدارة بوتاتك الخاصة بسهولة وربطها بقاعدة بيانات جوجل.",
-        reply_markup=ReplyKeyboardMarkup(current_menu, resize_keyboard=True)
+        reply_markup=get_main_menu_inline(user.id)
     )
 
 # --- نظام إنشاء البوت (Conversation Flow) ---
 
 async def start_create_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """بدء عملية إنشاء بوت جديد وطلب اختيار النوع"""
-    await update.message.reply_text(
-        "🛠 **مرحباً بك في قسم التصنيع**\n\nاختر نوع البوت الذي تريد إنشاءه:",
-        reply_markup=ReplyKeyboardMarkup(types_menu, resize_keyboard=True, one_time_keyboard=True)
-    )
+    """بدء عملية إنشاء بوت جديد وطلب اختيار النوع (عن طريق الأزرار الشفافة)"""
+    query = update.callback_query
+    if query:
+        await query.answer()
+        await query.edit_message_text(
+            "🛠 **مرحباً بك في قسم التصنيع**\n\nاختر نوع البوت الذي تريد إنشاءه:",
+            reply_markup=get_types_menu_inline()
+        )
+    else:
+        await update.message.reply_text(
+            "🛠 **مرحباً بك في قسم التصنيع**\n\nاختر نوع البوت الذي تريد إنشاءه:",
+            reply_markup=get_types_menu_inline()
+        )
     return CHOOSING_TYPE
 
 async def select_type(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """تخزين النوع المختار وطلب التوكن"""
-    bot_type = update.message.text
+    query = update.callback_query
+    await query.answer()
+    
+    # استخراج النوع من callback_data
+    bot_type = query.data.replace("set_type_", "")
     context.user_data["type"] = bot_type
     
-    await update.message.reply_text(
+    await query.edit_message_text(
         f"✅ تم اختيار نوع: {bot_type}\n\n"
         "الآن، من فضلك أرسل **API Token** الخاص بالبوت.\n"
-        "يمكنك الحصول عليه من @BotFather",
-        reply_markup=ReplyKeyboardRemove()
+        "يمكنك الحصول عليه من @BotFather"
     )
     return GETTING_TOKEN
 
@@ -101,8 +127,10 @@ async def receive_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return GETTING_TOKEN
     
     context.user_data["bot_token"] = token
-    await update.message.reply_text("✅ التوكن سليم. الآن أرسل **اسماً** لهذا البوت:")
-    return GETTING_NAME
+    # ملاحظة: تم الإبقاء على الوظيفة كما هي بناءً على النسخة السابقة مع تفعيل التجاوز التلقائي لاحقاً
+    await finalize_bot(update, context)
+    return ConversationHandler.END
+
 # --------------------------------------------------------------------------
 # --------------------------------------------------------------------------
 async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -165,7 +193,7 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"📦 النوع: {bot_type}\n"
                 f"📛 المعرف: {bot_username}\n"
                 f"🚀 البوت يعمل الآن، اذهب إليه وجربه!",
-                reply_markup=ReplyKeyboardMarkup(main_menu if user_id == ADMIN_ID else [["➕ إنشاء بوت"]], resize_keyboard=True),
+                reply_markup=get_main_menu_inline(user_id),
                 parse_mode="Markdown"
             )
 
@@ -211,48 +239,48 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
     
 # --------------------------------------------------------------------------
-# --------------------------------------------------------------------------
 # --- لوحة التحكم والعمليات الإدارية ---
 
 async def owner_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """لوحة تحكم المطور (المالك)"""
-    if update.effective_user.id != ADMIN_ID:
+    """لوحة تحكم المطور (المالك) - متوافقة مع الأزرار الشفافة"""
+    user_id = update.effective_user.id
+    if user_id != ADMIN_ID:
         return
 
     keyboard = [
         [InlineKeyboardButton("📊 إحصائيات البوتات", callback_data="stats_all")],
         [InlineKeyboardButton("📢 إذاعة للمشتركين", callback_data="broadcast_owners")],
-        [InlineKeyboardButton("🔄 تحديث السيرفر", callback_data="restart_factory")]
+        [InlineKeyboardButton("🔄 تحديث السيرفر", callback_data="restart_factory")],
+        [InlineKeyboardButton("🔙 العودة", callback_data="back_to_main")]
     ]
-    await update.message.reply_text(
-        "🛠 **لوحة تحكم المطور**\nإدارة المصنع والعمليات المركزية:", 
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+    
+    text = "🛠 **لوحة تحكم المطور**\nإدارة المصنع والعمليات المركزية:"
+    
+    if update.callback_query:
+        await update.callback_query.answer()
+        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+    else:
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """معالجة الرسائل النصية والأزرار الدائمة"""
+    """معالجة الرسائل النصية والأزرار الدائمة (للحفاظ على الوظائف القديمة)"""
     text = update.message.text
     user_id = update.effective_user.id
     
-    # زر العودة للقائمة الرئيسية
     if text == "🔙 العودة للقائمة الرئيسية":
         await start(update, context)
         return
 
-    # الدخول للوحة التحكم (للمالك فقط)
     elif text == "🛠 لوحة التحكم (للمالك)" and user_id == ADMIN_ID:
-        await update.message.reply_text(
-            "مرحباً بك في غرفة القيادة 🕹️\nاختر القسم الذي تريد إدارته:", 
-            reply_markup=ReplyKeyboardMarkup(admin_options, resize_keyboard=True)
-        )
         await owner_dashboard(update, context)
 
-    # تعديل النصوص (وظيفة للمالك)
+    elif text == "➕ إنشاء بوت":
+        await start_create_bot(update, context)
+
     elif text == "📝 تعديل النصوص" and user_id == ADMIN_ID:
         await update.message.reply_text("أرسل ID البوت أو التوكن الذي تريد تعديل نصوصه:")
         context.user_data["admin_action"] = "edit_texts"
 
-    # معالجة المدخلات الخاصة بالأدمن (تعديل المحتوى)
     elif context.user_data.get("admin_action") == "edit_texts" and user_id == ADMIN_ID:
         target_bot = text
         context.user_data["target_bot"] = target_bot
@@ -267,26 +295,37 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["admin_action"] = None
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """معالجة ضغطات الأزرار الشفافة (Inline Buttons)"""
+    """معالجة ضغطات الأزرار الشفافة (Inline Buttons) المركزية"""
     query = update.callback_query
-    await query.answer()
+    data = query.data
+    user_id = query.from_user.id
     
-    if query.data == "restart_factory":
+    if data == "restart_factory":
+        await query.answer("🔄 جاري إعادة التشغيل...")
         await query.edit_message_text("🔄 جاري إعادة تشغيل المصنع لتطبيق التحديثات...")
-        # إعادة تشغيل البايثون فوراً
         os.execv(sys.executable, ['python'] + sys.argv)
+        
+    elif data == "open_admin_panel":
+        await owner_dashboard(update, context)
+        
+    elif data == "back_to_main":
+        await query.answer()
+        await query.edit_message_text(
+            "✨ أهلاً بك في مصنع البوتات المتطور 🤖\n\nاختر ما تريد القيام به:",
+            reply_markup=get_main_menu_inline(user_id)
+        )
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دالة إلغاء عملية إنشاء البوت والعودة للقائمة الرئيسية"""
     user_id = update.effective_user.id
-    # العودة للقائمة الرئيسية بناءً على هوية المستخدم
-    current_menu = main_menu if user_id == ADMIN_ID else [["➕ إنشاء بوت"]]
+    text = "❌ تم إلغاء عملية الإنشاء والعودة للقائمة الرئيسية."
     
-    await update.message.reply_text(
-        "❌ تم إلغاء عملية الإنشاء والعودة للقائمة الرئيسية.",
-        reply_markup=ReplyKeyboardMarkup(current_menu, resize_keyboard=True)
-    )
-    # مسح البيانات المؤقتة
+    if update.callback_query:
+        await update.callback_query.answer()
+        await update.callback_query.edit_message_text(text, reply_markup=get_main_menu_inline(user_id))
+    else:
+        await update.message.reply_text(text, reply_markup=get_main_menu_inline(user_id))
+        
     context.user_data.clear()
     return ConversationHandler.END
 
@@ -298,7 +337,6 @@ async def handle_docs(update: Update, context: ContextTypes.DEFAULT_TYPE):
     doc = update.message.document
     if doc.file_name.endswith(".py"):
         file = await doc.get_file()
-        # التأكد من وجود مجلد الموديولات
         if not os.path.exists("modules"): 
             os.makedirs("modules")
             
@@ -306,19 +344,25 @@ async def handle_docs(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await file.download_to_drive(file_path)
         
         await update.message.reply_text(f"✅ تم تحديث موديول {doc.file_name} بنجاح!\n🔄 جاري إعادة التشغيل...")
-        # إعادة التشغيل لتفعيل الموديول الجديد
         os.execv(sys.executable, ['python'] + sys.argv)
 
 # --- بناء وتشغيل التطبيق ---
 
-# إعداد الـ ConversationHandler لعملية إنشاء البوت
+# إعداد الـ ConversationHandler المطور ليدعم الأزرار الشفافة
 create_bot_conv = ConversationHandler(
-    entry_points=[MessageHandler(filters.Regex('^➕ إنشاء بوت$'), start_create_bot)],
+    entry_points=[
+        MessageHandler(filters.Regex('^➕ إنشاء بوت$'), start_create_bot),
+        CallbackQueryHandler(start_create_bot, pattern="^start_manufacture$")
+    ],
     states={
-        CHOOSING_TYPE: [MessageHandler(filters.TEXT & ~filters.COMMAND, select_type)],
-        GETTING_TOKEN: [MessageHandler(filters.TEXT & ~filters.COMMAND, finalize_bot)], # هنا تم التعديل
+        CHOOSING_TYPE: [CallbackQueryHandler(select_type, pattern="^set_type_")],
+        GETTING_TOKEN: [MessageHandler(filters.TEXT & ~filters.COMMAND, finalize_bot)],
     },
-    fallbacks=[CommandHandler('cancel', cancel), MessageHandler(filters.Regex('^🔙 العودة$'), cancel)],
+    fallbacks=[
+        CommandHandler('cancel', cancel), 
+        CallbackQueryHandler(cancel, pattern="^cancel_action$"),
+        MessageHandler(filters.Regex('^🔙 العودة$'), cancel)
+    ],
 )
 
 # --------------------------------------------------------------------------
@@ -334,16 +378,12 @@ async def start_all_sub_bots():
         token = bot_data.get("التوكن")
         owner_id = bot_data.get("ID المالك")
         try:
-            # إنشاء تطبيق منفصل لكل توكن
             sub_app = ApplicationBuilder().token(token).build()
             sub_app.bot_data["owner_id"] = int(owner_id)
-            
-            # ربط موديول التواصل بالبوت الجديد
             sub_app.add_handler(CommandHandler("start", start_handler))
             sub_app.add_handler(CallbackQueryHandler(contact_callback_handler))
             sub_app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_contact_message))
             
-            # تشغيل البوت في الخلفية
             await sub_app.initialize()
             await sub_app.start()
             await sub_app.updater.start_polling()
@@ -351,29 +391,28 @@ async def start_all_sub_bots():
         except Exception as e:
             print(f"❌ فشل تشغيل بوت {token[:10]}: {e}")
 
-
-# --------------------------------------------------------------------------
 # بناء التطبيق
 app = ApplicationBuilder().token(TOKEN).build()
 
 # إضافة المعالجات (Handlers)
 app.add_handler(CommandHandler("start", start))
-app.add_handler(create_bot_conv)  # معالج محادثة الإنشاء
-app.add_handler(CallbackQueryHandler(button_callback))  # معالج أزرار لوحة التحكم
-app.add_handler(MessageHandler(filters.Document.FileExtension("py"), handle_docs))  # معالج ملفات البرمجة
-app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))  # معالج النصوص العام
-
-# --------------------------------------------------------------------------
+app.add_handler(create_bot_conv) 
+app.add_handler(CallbackQueryHandler(button_callback))
+app.add_handler(MessageHandler(filters.Document.FileExtension("py"), handle_docs))
+app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
 
 # تشغيل البوت بنظام Polling
 if __name__ == "__main__":
-    # تشغيل المصنع والبوتات القديمة معاً
     import asyncio
     try:
-        loop = asyncio.get_event_loop()
-        # استدعاء الدالة التي تجلب البوتات "النشطة" وتشغلها عند بداية السيرفر
+        # استخدام حلقة أحداث مستقرة
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
         loop.create_task(start_all_sub_bots()) 
-        
         print("🚀 مصنع البوتات يعمل الآن بكافة محركاته...")
         app.run_polling()
     except Exception as e:
