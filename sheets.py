@@ -5,33 +5,38 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
 
-# --- نظام الاتصال الذكي والمعالج للأخطاء ---
+# --- نظام الاتصال الاحترافي: معالجة النصوص المشوهة وتصحيح التنسيق ---
 
-def get_creds_dict():
-    encoded_creds = os.getenv("GOOGLE_CREDS")
-    if not encoded_creds:
-        print("❌ خطأ: لم يتم العثور على متغير GOOGLE_CREDS")
+def get_clean_creds():
+    raw_creds = os.getenv("GOOGLE_CREDS")
+    if not raw_creds:
+        print("❌ خطأ: متغير GOOGLE_CREDS غير موجود في السيرفر")
         return None
 
     try:
-        # تنظيف النص من أي شوائب ناتجة عن النسخ واللصق
-        clean_encoded = str(encoded_creds).strip().replace('"', '').replace("'", "")
+        # 1. تنظيف شامل للنص من أي مسافات أو علامات اقتباس محيطة
+        clean_text = raw_creds.strip().strip('"').strip("'")
         
-        # محاولة فك التشفير مع تجاهل الأخطاء البسيطة في التنسيق
-        decoded_bytes = base64.b64decode(clean_encoded, validate=False)
+        # 2. فك التشفير من Base64
+        decoded_data = base64.b64decode(clean_text, validate=False)
         
-        # تحويل النص إلى قاموس مع معالجة الرموز الخاصة
-        creds_dict = json.loads(decoded_bytes.decode('utf-8', errors='ignore'))
+        # 3. تحويل البيانات إلى نص ومعالجة الهروب (Escape characters) يدوياً إذا لزم الأمر
+        json_str = decoded_data.decode('utf-8', errors='ignore')
         
+        # 4. محاولة تحميل الـ JSON
+        creds_dict = json.loads(json_str)
+        
+        # 5. معالجة دقيقة للمفتاح الخاص لضمان قبول جوجل للتوقيع
         if "private_key" in creds_dict:
+            # استبدال الهروب المزدوج بأسطر حقيقية
             creds_dict["private_key"] = creds_dict["private_key"].replace('\\n', '\n')
-        
+            
         return creds_dict
     except Exception as e:
         print(f"❌ خطأ في معالجة المفتاح: {str(e)}")
         return None
 
-# المتغيرات العالمية للاتصال
+# --- إعداد الثوابت والمتغيرات العالمية ---
 client = None
 ss = None
 users_sheet = None
@@ -42,7 +47,7 @@ SPREADSHEET_ID = "1e0tREOyfmZgQ_iCvWXJL2GpR_I4WfCpBlU7DYUclsfY"
 
 def connect_to_google():
     global client, ss, users_sheet, bots_sheet, content_sheet, logs_sheet
-    config = get_creds_dict()
+    config = get_clean_creds()
     if not config: return False
 
     try:
@@ -51,21 +56,22 @@ def connect_to_google():
         client = gspread.authorize(creds)
         ss = client.open_by_key(SPREADSHEET_ID)
         
+        # ربط الأوراق (تأكد من مطابقة الأسماء تماماً في الشيت)
         users_sheet = ss.worksheet("المستخدمين")
         bots_sheet = ss.worksheet("البوتات_المصنوعة")
         content_sheet = ss.worksheet("إعدادات_المحتوى")
         logs_sheet = ss.worksheet("السجلات")
         
-        print("✅ تم الاتصال بقاعدة بيانات جوجل بنجاح")
+        print("✅ تم الاتصال بنجاح وقاعدة البيانات جاهزة للعمل")
         return True
     except Exception as e:
-        print(f"❌ فشل فتح الملف: {str(e)}")
+        print(f"❌ فشل فتح الملف أو الأوراق: {str(e)}")
         return False
 
-# محاولة الاتصال الأولية
+# محاولة الاتصال عند إقلاع الملف
 connect_to_google()
 
-# --- كافة الوظائف البرمجية المطلوبة ---
+# --- كافة الدوال الوظيفية المطلوبة (بدون اختصار) ---
 
 def save_user(user_id, username):
     global users_sheet
@@ -74,13 +80,15 @@ def save_user(user_id, username):
         if users_sheet:
             try:
                 users_sheet.find(str(user_id))
-                return False
+                return False # موجود مسبقاً
             except (gspread.exceptions.CellNotFound, gspread.CellNotFound):
                 now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                # ID، اسم، تاريخ، حالة، اشتراك، عدد بوتات، نشاط، لغة، مصدر، كود، رصيد
                 row = [str(user_id), username, now, "نشط", "مجاني", 0, now, "ar", "Direct", "", 0]
                 users_sheet.append_row(row)
                 return True
-    except: pass
+    except Exception as e:
+        print(f"Error in save_user: {e}")
     return False
 
 def save_bot(owner_id, bot_type, bot_name):
@@ -92,7 +100,8 @@ def save_bot(owner_id, bot_type, bot_name):
             row = [str(owner_id), bot_type, bot_name, "", "متوقف", "", "", now, "", 0, 0, "جيد", "", "polling", "free", "", "true", ""]
             bots_sheet.append_row(row)
             return True
-    except: pass
+    except Exception as e:
+        print(f"Error in save_bot: {e}")
     return False
 
 def update_content_setting(bot_id, column_name, new_value):
