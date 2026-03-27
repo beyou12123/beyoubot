@@ -103,9 +103,10 @@ async def receive_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["bot_token"] = token
     await update.message.reply_text("✅ التوكن سليم. الآن أرسل **اسماً** لهذا البوت:")
     return GETTING_NAME
+# --------------------------------------------------------------------------
 
 async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """حفظ البيانات النهائية في جوجل شيت وإنهاء المحادثة"""
+    """حفظ البيانات النهائية في جوجل شيت وإنهاء المحادثة وتشغيل البوت فوراً"""
     bot_name = update.message.text.strip()
     user_id = update.effective_user.id
     bot_type = context.user_data.get("type")
@@ -117,11 +118,43 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     success = save_bot(user_id, bot_type, bot_name, bot_token)
 
     if success:
+        # --- [بداية تعديل التشغيل الفوري] ---
+        # استيراد المعالجات الخاصة ببوت التواصل لتشغيل المحرك الجديد
+        from contact_bot import start_handler, handle_contact_message, contact_callback_handler
+        
+        try:
+            # بناء تطبيق مصغر للبوت الجديد باستخدام التوكن الخاص به
+            new_bot_app = ApplicationBuilder().token(bot_token).build()
+            
+            # تعيين صاحب البوت في ذاكرة البوت الجديد
+            new_bot_app.bot_data["owner_id"] = int(user_id)
+            
+            # ربط كافة المعالجات (الترحيب، التواصل، لوحة التحكم الشفافة)
+            new_bot_app.add_handler(CommandHandler("start", start_handler))
+            new_bot_app.add_handler(CallbackQueryHandler(contact_callback_handler))
+            new_bot_app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_contact_message))
+            new_bot_app.add_handler(MessageHandler(filters.PHOTO, handle_contact_message))
+            
+            # تشغيل البوت في الخلفية (Asynchronous Tasks) لضمان عدم توقف المصنع
+            import asyncio
+            asyncio.create_task(new_bot_app.initialize())
+            asyncio.create_task(new_bot_app.start())
+            asyncio.create_task(new_bot_app.updater.start_polling())
+            
+            print(f"🚀 تم إطلاق محرك البوت بنجاح: {bot_name} ({bot_token[:10]}...)")
+            
+        except Exception as e:
+            # تسجيل الخطأ في السجلات إذا فشل تشغيل المحرك برمجياً
+            print(f"⚠️ فشل تشغيل المحرك الفوري للبوت {bot_name}: {e}")
+            add_log_entry(bot_token, "RUNNER_ERROR", str(e))
+        # --- [نهاية تعديل التشغيل الفوري] ---
+
         await update.message.reply_text(
             f"🎉 **مبروك! تم إنشاء بوتك بنجاح**\n\n"
             f"📦 النوع: {bot_type}\n"
             f"📛 الاسم: {bot_name}\n"
-            "🔑 تم ربط قاعدة البيانات وإعدادات المحتوى تلقائياً.",
+            "🔑 تم ربط قاعدة البيانات وإعدادات المحتوى تلقائياً.\n"
+            "🚀 البوت يعمل الآن، يمكنك التوجه إليه والبدء!",
             reply_markup=ReplyKeyboardMarkup(main_menu if user_id == ADMIN_ID else [["➕ إنشاء بوت"]], resize_keyboard=True)
         )
     else:
@@ -129,16 +162,7 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data.clear()
     return ConversationHandler.END
-
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """إلغاء عملية الإنشاء في أي وقت"""
-    user_id = update.effective_user.id
-    await update.message.reply_text(
-        "❌ تم إلغاء عملية الإنشاء.",
-        reply_markup=ReplyKeyboardMarkup(main_menu if user_id == ADMIN_ID else [["➕ إنشاء بوت"]], resize_keyboard=True)
-    )
-    return ConversationHandler.END
-
+# --------------------------------------------------------------------------
 # --- لوحة التحكم والعمليات الإدارية ---
 
 async def owner_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -278,13 +302,19 @@ app.add_handler(CallbackQueryHandler(button_callback))  # معالج أزرار 
 app.add_handler(MessageHandler(filters.Document.FileExtension("py"), handle_docs))  # معالج ملفات البرمجة
 app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))  # معالج النصوص العام
 
+# --------------------------------------------------------------------------
+
 # تشغيل البوت بنظام Polling
 if __name__ == "__main__":
+    # تشغيل المصنع والبوتات القديمة معاً
     import asyncio
-    # تشغيل المصنع والبوتات المصنوعة معاً
-    loop = asyncio.get_event_loop()
-    # تشغيل دالة تشغيل البوتات الفرعية في الخلفية
-    loop.create_task(start_all_sub_bots())
-    # تشغيل المصنع الرئيسي
-    print("🚀 مصنع البوتات يعمل الآن...")
-    app.run_polling()
+    try:
+        loop = asyncio.get_event_loop()
+        # استدعاء الدالة التي تجلب البوتات "النشطة" وتشغلها عند بداية السيرفر
+        loop.create_task(start_all_sub_bots()) 
+        
+        print("🚀 مصنع البوتات يعمل الآن بكافة محركاته...")
+        app.run_polling()
+    except Exception as e:
+        print(f"🔴 خطأ في إقلاع المصنع: {e}")
+
