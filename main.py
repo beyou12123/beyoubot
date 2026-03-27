@@ -1,8 +1,20 @@
 import os
 import sys
 import re
-from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove
+import asyncio
+
+# استيراد الأدوات الأساسية من مكتبة تليجرام
+from telegram import (
+    Update, 
+    ReplyKeyboardMarkup, 
+    InlineKeyboardButton, 
+    InlineKeyboardMarkup, 
+    ReplyKeyboardRemove
+)
+
+# استيراد أدوات المعالجة والتشغيل من مكتبة telegram.ext
 from telegram.ext import (
+    Application,
     ApplicationBuilder, 
     CommandHandler, 
     MessageHandler, 
@@ -27,6 +39,15 @@ main_menu = [["➕ إنشاء بوت"], ["🛠 لوحة التحكم (للمال
 admin_options = [["📝 تعديل النصوص", "⚙️ إعدادات الموديولات"], ["🔙 العودة للقائمة الرئيسية"]]
 types_menu = [["📩 تواصل"], ["🛡 حماية"], ["🎓 منصة تعليمية"], ["🛒 متجر"]]
 
+# --------------------------------------------------------------------------
+
+async def load_and_run_sub_bots():
+    """هذه الدالة تقرأ التوكينات من الشيت وتشغلها"""
+    # هنا سنقوم بجلب التوكينات من ورقة 'البوتات_المصنوعة'
+    # وتشغيلها باستخدام نظام الحلقات (Loops)
+    # ملاحظة: يتطلب هذا وجود ملف برمجى لكل نوع بوت (تواصل، حماية، إلخ)
+    print("🔄 جاري تحميل وتشغيل البوتات المصنوعة...")
+    pass 
 # --------------------------------------------------------------------------
 # [مكان إضافة الدوال والوظائف البرمجية المستقبلية]
 # يمكنك كتابة أي دوال جديدة هنا (مثل دوال الإحصائيات المتقدمة أو أنظمة الدفع)
