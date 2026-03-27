@@ -5,38 +5,54 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
 
-# --- إعداد المتغيرات بشكل عالمي ---
+# --- نظام الاتصال الفولاذي: تنظيف أوتوماتيكي وفك تشفير متعدد المراحل ---
+
+def get_creds_dict():
+    encoded_creds = os.getenv("GOOGLE_CREDS")
+    if not encoded_creds:
+        print("❌ خطأ: لم يتم العثور على متغير GOOGLE_CREDS")
+        return None
+
+    try:
+        # 1. تنظيف النص من المسافات أو علامات الاقتباس الزائدة التي تأتي من اللصق
+        clean_encoded = encoded_creds.strip().replace('"', '').replace("'", "")
+        
+        # 2. فك التشفير من Base64 إلى bytes
+        decoded_bytes = base64.b64decode(clean_encoded)
+        
+        # 3. تحويل bytes إلى نص JSON ثم إلى قاموس بايثون
+        creds_dict = json.loads(decoded_bytes.decode('utf-8'))
+        
+        # 4. معالجة المفتاح الخاص
+        if "private_key" in creds_dict:
+            creds_dict["private_key"] = creds_dict["private_key"].replace('\\n', '\n')
+        
+        return creds_dict
+    except Exception as e:
+        print(f"❌ خطأ في معالجة المفتاح: {str(e)}")
+        return None
+
+# إعداد المتغيرات العالمية
 client = None
 ss = None
 users_sheet = None
 bots_sheet = None
 content_sheet = None
 logs_sheet = None
-
 SPREADSHEET_ID = "1e0tREOyfmZgQ_iCvWXJL2GpR_I4WfCpBlU7DYUclsfY"
 
 def connect_to_google():
-    """الاتصال وفك تشفير Base64"""
     global client, ss, users_sheet, bots_sheet, content_sheet, logs_sheet
-    
-    encoded_creds = os.getenv("GOOGLE_CREDS")
-    if not encoded_creds:
-        print("❌ خطأ: لم يتم العثور على متغير GOOGLE_CREDS")
-        return False
+    config = get_creds_dict()
+    if not config: return False
 
     try:
-        # فك التشفير
-        decoded_bytes = base64.b64decode(encoded_creds)
-        config = json.loads(decoded_bytes.decode('utf-8'))
-        
-        if "private_key" in config:
-            config["private_key"] = config["private_key"].replace('\\n', '\n')
-
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
         creds = ServiceAccountCredentials.from_json_keyfile_dict(config, scope)
         client = gspread.authorize(creds)
-        
         ss = client.open_by_key(SPREADSHEET_ID)
+        
+        # الوصول للأوراق
         users_sheet = ss.worksheet("المستخدمين")
         bots_sheet = ss.worksheet("البوتات_المصنوعة")
         content_sheet = ss.worksheet("إعدادات_المحتوى")
@@ -45,15 +61,18 @@ def connect_to_google():
         print("✅ تم الاتصال بقاعدة بيانات جوجل بنجاح")
         return True
     except Exception as e:
-        print(f"❌ فشل الاتصال: {str(e)}")
+        print(f"❌ فشل فتح الشيت: {str(e)}")
         return False
 
 # محاولة الاتصال عند التشغيل
 connect_to_google()
 
+# --- الوظائف الأساسية (كاملة وبدون أي اختصار) ---
+
 def save_user(user_id, username):
     global users_sheet
-    if users_sheet is None: connect_to_google()
+    if users_sheet is None: 
+        if not connect_to_google(): return False
     try:
         users_sheet.find(str(user_id))
         return False
@@ -65,7 +84,8 @@ def save_user(user_id, username):
 
 def save_bot(owner_id, bot_type, bot_name):
     global bots_sheet
-    if bots_sheet is None: connect_to_google()
+    if bots_sheet is None:
+        if not connect_to_google(): return False
     try:
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         row = [str(owner_id), bot_type, bot_name, "", "متوقف", "", "", now, "", 0, 0, "جيد", "", "polling", "free", "", "true", ""]
@@ -75,7 +95,8 @@ def save_bot(owner_id, bot_type, bot_name):
 
 def update_content_setting(bot_id, column_name, new_value):
     global content_sheet
-    if content_sheet is None: connect_to_google()
+    if content_sheet is None:
+        if not connect_to_google(): return False
     try:
         cell = content_sheet.find(str(bot_id))
         if cell:
@@ -88,7 +109,8 @@ def update_content_setting(bot_id, column_name, new_value):
 
 def get_bot_config(bot_id):
     global content_sheet
-    if content_sheet is None: connect_to_google()
+    if content_sheet is None:
+        if not connect_to_google(): return False
     try:
         cell = content_sheet.find(str(bot_id))
         if cell:
@@ -98,7 +120,8 @@ def get_bot_config(bot_id):
 
 def add_log_entry(bot_id, log_type, message):
     global logs_sheet
-    if logs_sheet is None: connect_to_google()
+    if logs_sheet is None:
+        if not connect_to_google(): return False
     try:
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         logs_sheet.append_row([str(bot_id), log_type, message, now])
