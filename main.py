@@ -72,12 +72,35 @@ async def load_and_run_sub_bots():
 # --------------------------------------------------------------------------
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """دالة الانطلاق وتسجيل المستخدم في قاعدة البيانات"""
+    """دالة الانطلاق، تسجيل المستخدم، وإشعار المطور بالعضو الجديد"""
     user = update.effective_user
-    # حفظ أو تحديث بيانات المستخدم في جوجل شيت
-    save_user(user.id, user.username)
     
-    # التحقق من الصلاحيات لإظهار لوحة التحكم للمالك فقط
+    # استيراد الدالة المطلوبة من sheets
+    from sheets import save_user, get_total_factory_users
+    
+    # محاولة حفظ المستخدم (الدالة تعيد True إذا كان المستخدم جديداً)
+    is_new = save_user(user.id, user.username)
+    
+    # إذا كان المستخدم جديداً، أرسل إشعاراً للمطور (أنت)
+    if is_new:
+        total_factory_users = get_total_factory_users()
+        factory_notif = (
+            f"<b>تم دخول شخص جديد إلى المصنع الخاص بك</b> 👾\n"
+            f"            -----------------------\n"
+            f"• معلومات العضو الجديد .\n\n"
+            f"• الاسم : {user.full_name}\n"
+            f"• معرف : @{user.username if user.username else 'لا يوجد'}\n"
+            f"• الايدي : <code>{user.id}</code>\n"
+            f"            -----------------------\n"
+            f"• عدد الأعضاء الكلي للمصنع : {total_factory_users}"
+        )
+        try:
+            # إرسال الإشعار لك عبر بوت المصنع
+            await context.bot.send_message(chat_id=ADMIN_ID, text=factory_notif, parse_mode="HTML")
+        except Exception as e:
+            print(f"⚠️ فشل إرسال إشعار العضو الجديد للمطور: {e}")
+
+    # إظهار القائمة الرئيسية للمستخدم
     await update.message.reply_text(
         "✨ أهلاً بك في مصنع البوتات المتطور 🤖\n\n"
         "أنا بوت المصنع، يمكنني مساعدتك في إنشاء وإدارة بوتاتك الخاصة بسهولة وربطها بقاعدة بيانات جوجل.",
