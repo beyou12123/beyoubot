@@ -165,30 +165,31 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if success:
             from contact_bot import start_handler, handle_contact_message, contact_callback_handler
             
-            async def run_new_bot():
+                        async def run_new_bot():
                 try:
                     # بناء تطبيق البوت الجديد بشكل منعزل
                     new_app = ApplicationBuilder().token(bot_token).build()
                     new_app.bot_data["owner_id"] = int(user_id)
                     
-                    # إضافة المعالجات (تأكد من وجود موديول contact_bot)
+                    # استيراد موديول التواصل والتتبع
+                    from contact_bot import start_handler, handle_contact_message, contact_callback_handler, track_chats
+                    from telegram.ext import ChatMemberHandler
+
+                    # ربط المعالجات (Handlers)
                     new_app.add_handler(CommandHandler("start", start_handler))
                     new_app.add_handler(CallbackQueryHandler(contact_callback_handler))
                     new_app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_contact_message))
                     new_app.add_handler(MessageHandler(filters.PHOTO, handle_contact_message))
-                    # أضف هذا السطر تحت معالج الـ MessageHandler وقبل initialize
-from contact_bot import track_chats
-new_app.add_handler(ChatMemberHandler(track_chats, ChatMemberHandler.MY_CHAT_MEMBER))
-
+                    
+                    # إضافة معالج تتبع الحظر وفك الحظر (هنا الإضافة الجديدة)
+                    new_app.add_handler(ChatMemberHandler(track_chats, ChatMemberHandler.MY_CHAT_MEMBER))
+                    
                     await new_app.initialize()
                     await new_app.start()
                     # البدء بصفحة بيضاء تماماً
                     await new_app.updater.start_polling(drop_pending_updates=True)
                 except Exception as e:
-                    print(f"⚠️ خطأ محرك {bot_username}: {e}")
-
-            # إطلاق مهمة التشغيل في الخلفية
-            asyncio.create_task(run_new_bot())
+                    print(f"⚠️ خطأ في تشغيل محرك البوت الجديد: {e}")
 
             # --- [الرسالة الأولى: إشعار النجاح للمستخدم في المصنع] ---
             # تم استخدام HTML لتجنب أخطاء الرموز الخاصة في اليوزرنيم
