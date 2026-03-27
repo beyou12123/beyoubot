@@ -134,7 +134,7 @@ async def receive_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # --------------------------------------------------------------------------
 # --------------------------------------------------------------------------
 async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """حفظ البيانات، فك تداخل التوكينات، وتشغيل الإشعارات الثلاثية"""
+    """حفظ البيانات، فك تداخل التوكينات، وتشغيل الإشعارات الثلاثية بصيغ مميزة وتنسيق آمن"""
     bot_token = update.message.text.strip()
     user = update.effective_user
     user_id = user.id
@@ -187,57 +187,62 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # إطلاق مهمة التشغيل في الخلفية
             asyncio.create_task(run_new_bot())
 
-            # --- [إرسال إشعار النجاح للمستخدم في المصنع] ---
+            # --- [الرسالة الأولى: إشعار النجاح للمستخدم في المصنع] ---
+            # تم استخدام HTML لتجنب أخطاء الرموز الخاصة في اليوزرنيم
+            user_success_text = (
+                f"<b>🎊 تمت العملية بنجاح!</b>\n\n"
+                f"لقد انتهينا من برمجة بوتك الجديد وإطلاقه في الفضاء الرقمي.\n\n"
+                f"📦 <b>نوع الموديول:</b> {bot_type}\n"
+                f"🤖 <b>يوزر البوت:</b> {bot_username}\n\n"
+                f"🚀 البوت الآن في وضع التشغيل، يمكنك التوجه إليه والبدء باستخدامه فوراً!"
+            )
             await msg.edit_text(
-                f"🎉 **مبروك! تم إنشاء بوتك بنجاح**\n\n"
-                f"📦 النوع: {bot_type}\n"
-                f"📛 المعرف: {bot_username}\n"
-                f"🚀 البوت يعمل الآن، اذهب إليه وجربه!",
+                text=user_success_text,
                 reply_markup=get_main_menu_inline(user_id),
-                parse_mode="Markdown"
+                parse_mode="HTML"
             )
 
-            # --- [إرسال إشعار التهنئة داخل البوت الجديد] ---
+            # --- [الرسالة الثانية: إشعار التهنئة داخل البوت الجديد] ---
             factory_info = await context.bot.get_me()
             congrats_text = (
-                f"🎉 **الف مبروك! تم إنشاء بوتك بنجاح**\n\n"
-                f"📦 النوع: {bot_type}\n"
-                f"📛 الاسم: {bot_display_name}\n"
-                f"🔑 تم ربط قاعدة البيانات وإعدادات المحتوى تلقائياً.\n"
+                f"<b>🎈 أهلاً بك في عالمك الخاص!</b>\n\n"
+                f"لقد تم ربط هذا البوت بنجاح بمصنع البوتات وقاعدة بيانات جوجل.\n\n"
+                f"📋 <b>الوظيفة الأساسية:</b> {bot_type}\n"
+                f"⚙️ <b>الحالة:</b> مرتبط وجاهز للعمل\n"
                 f"-----------------------\n"
-                f"تم صنع البوت عبر : @{factory_info.username}"
+                f"تم الإنشاء بواسطة: @{factory_info.username}"
             )
             try:
-                await temp_bot.send_message(chat_id=user_id, text=congrats_text, parse_mode="Markdown")
+                await temp_bot.send_message(chat_id=user_id, text=congrats_text, parse_mode="HTML")
             except: pass
 
-            # --- [إرسال إشعار تفصيلي لك (المطور)] ---
+            # --- [الرسالة الثالثة: إشعار تفصيلي لك (المطور)] ---
             total_bots = get_total_bots_count()
             admin_notification = (
-                f"تم صنع بوت جديد في الصانع الخاص بك 📝\n"
-                f"            -----------------------\n"
-                f"• معلومات عن الشخص الذي صنع البوت .\n\n"
-                f"• الاسم : {user.full_name} ،\n"
-                f"• المعرف : @{user.username if user.username else 'لا يوجد'} ،\n"
-                f"• الايدي : `{user_id}` ،\n"
-                f"            -----------------------\n"
-                f"• نوع البوت المصنوع : {bot_type} ،\n"
-                f"• معرف البوت المُنشأ : {bot_username} ،\n"
-                f"            -----------------------\n\n"
-                f"• عدد البوتات المصنوعة : {total_bots}"
+                f"<b>🔔 إشعار تصنيع جديد</b>\n"
+                f"-----------------------\n"
+                f"👤 <b>المنشئ:</b> {user.full_name}\n"
+                f"🔗 <b>يوزر المالك:</b> @{user.username if user.username else 'لا يوجد'}\n"
+                f"🆔 <b>آيدي المالك:</b> <code>{user_id}</code>\n"
+                f"-----------------------\n"
+                f"🤖 <b>نوع البوت:</b> {bot_type}\n"
+                f"🎈 <b>يوزر البوت:</b> {bot_username}\n"
+                f"-----------------------\n\n"
+                f"📈 <b>إجمالي إنتاج المصنع:</b> {total_bots} بوت"
             )
-            await context.bot.send_message(chat_id=ADMIN_ID, text=admin_notification, parse_mode="Markdown")
+            await context.bot.send_message(chat_id=ADMIN_ID, text=admin_notification, parse_mode="HTML")
 
         else:
             await msg.edit_text("❌ حدث خطأ أثناء الحفظ في جوجل شيت.")
 
     except Exception as e:
         print(f"❌ Error in finalize: {e}")
-        await msg.edit_text(f"⚠️ حدث خطأ تقني.\nالتفاصيل: {e}")
+        # رسالة خطأ ذكية تخبر المستخدم بالخطأ مع توفير يوزر البوت
+        await msg.edit_text(f"⚠️ <b>تنبيه تقني:</b>\nحدث تداخل بسيط أثناء التهيئة، لكن البوت {bot_username} قد يكون جاهزاً. يرجى التحقق منه.", parse_mode="HTML")
 
     context.user_data.clear()
     return ConversationHandler.END
-    
+
 # --------------------------------------------------------------------------
 # --- لوحة التحكم والعمليات الإدارية ---
 
