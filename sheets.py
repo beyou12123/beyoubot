@@ -62,8 +62,7 @@ def connect_to_google():
         sheets_names = [s.title for s in ss.worksheets()]
         print(f"📋 الأوراق المكتشفة في الملف هي: {sheets_names}")
 
-        # ربط الأوراق بالمتغيرات العالمية (يجب أن تكون الأسماء في الشيت: المستخدمين، السجلات، إلخ)
-        # ملاحظة: تم التأكيد على استخدام "المستخدمين" بالياء المنقوطة
+        # ربط الأوراق بالمتغيرات العالمية (يجب أن تكون الأسماء في الشيت مطابقة تماماً)
         users_sheet = ss.worksheet("المستخدمين")
         bots_sheet = ss.worksheet("البوتات_المصنوعة")
         content_sheet = ss.worksheet("إعدادات_المحتوى")
@@ -100,39 +99,51 @@ def save_user(user_id, username):
                 print(f"ℹ️ المستخدم {user_id} مسجل بالفعل في الصف رقم {exists.row}")
                 return False
         except:
-            pass # في حال عدم العثور أو حدوث خطأ بسيط في البحث، ننتقل للكتابة
+            pass # في حال عدم العثور، ننتقل للكتابة
 
-        # إعداد بيانات المستخدم (ID، اسم، تاريخ، حالة، اشتراك، عدد بوتات، نشاط، لغة، مصدر، كود، رصيد)
+        # إعداد بيانات المستخدم
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         row = [str(user_id), str(username), now, "نشط", "مجاني", 0, now, "ar", "Direct", "", 0]
         
-        # استخدام insert_row في السطر 2 لتجاوز أي صفوف فارغة "وهمية" بالأسفل وضمان الرؤية الفورية
+        # استخدام insert_row في السطر 2 لضمان الرؤية الفورية وتجنب الصفوف العالقة
         users_sheet.insert_row(row, 2)
         print(f"✅ تم تسجيل المستخدم {user_id} في السطر الثاني بنجاح تام!")
         return True
     except Exception as e:
-        print(f"❌ خطأ فني أثناء الكتابة في الشيت (تأكد من تفعيل Drive API): {e}")
+        print(f"❌ خطأ فني أثناء الكتابة في الشيت: {e}")
         return False
 
-def save_bot(owner_id, bot_type, bot_name):
-    """توثيق وحفظ بيانات البوتات المصنوعة حديثاً"""
-    global bots_sheet
-    if bots_sheet is None: 
+def save_bot(owner_id, bot_type, bot_name, bot_token):
+    """توثيق البوت المَصنوع، حفظ التوكن، وإنشاء ملف إعداداته فوراً في ورقة إعدادات المحتوى"""
+    global bots_sheet, content_sheet
+    if bots_sheet is None or content_sheet is None: 
         if not connect_to_google(): return False
     try:
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        # ترتيب البيانات حسب أعمدة ورقة البوتات_المصنوعة
-        row = [
-            str(owner_id), bot_type, bot_name, "", "متوقف", 
+        
+        # 1. تسجيل البوت في ورقة "البوتات_المصنوعة" (تحديث الخانات بالتوكن والبيانات)
+        # الترتيب حسب ملف التأسيس: ID المالك، نوع البوت، اسم البوت، التوكن، حالة التشغيل، ...الخ
+        bot_row = [
+            str(owner_id), bot_type, bot_name, bot_token, "متوقف", 
             "", "", now, "", 0, 0, "جيد", "", "polling", 
             "free", "", "true", ""
         ]
-        bots_sheet.append_row(row)
-        print(f"✅ تم تسجيل بوت جديد ({bot_name}) للمالك {owner_id}")
+        bots_sheet.append_row(bot_row)
+
+        # 2. إنشاء إعدادات افتراضية فورية في ورقة "إعدادات_المحتوى" لربطها بالبوت الجديد
+        # الترتيب حسب ملف التأسيس: ID البوت (التوكن)، الرسالة الترحيبية، القوانين، ...الخ
+        content_row = [
+            bot_token, "أهلاً بك في بوتك الجديد! 🤖", "لا توجد قوانين حالياً.", 
+            "عذراً، البوت متوقف مؤقتاً.", "false", "false", "true", 
+            "[]", "[]", str(owner_id), "ar", "default", "0", "true", "[]"
+        ]
+        content_sheet.append_row(content_row)
+        
+        print(f"✅ تم تصنيع البوت ({bot_name}) وإنشاء ملفات التكوين بنجاح للمالك {owner_id}")
         return True
     except Exception as e:
-        print(f"❌ خطأ في حفظ بيانات البوت المصنوع: {e}")
-    return False
+        print(f"❌ خطأ حرج في عملية تصنيع وحفظ البوت: {e}")
+        return False
 
 def update_content_setting(bot_id, column_name, new_value):
     """تحديث ديناميكي لأي إعداد في ورقة إعدادات المحتوى (ترحيب، قوانين، موديولات)"""
@@ -164,7 +175,6 @@ def get_bot_config(bot_id):
         if cell:
             values = content_sheet.row_values(cell.row)
             headers = content_sheet.row_values(1)
-            # دمج العناوين مع القيم لسهولة الوصول (config['ترحيب'])
             return dict(zip(headers, values))
     except Exception as e:
         print(f"❌ خطأ في جلب بيانات تكوين البوت: {e}")
@@ -177,9 +187,17 @@ def add_log_entry(bot_id, log_type, message):
         if not connect_to_google(): return False
     try:
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        # تسجيل: ID البوت، نوع العملية، الرسالة، الوقت
         logs_sheet.append_row([str(bot_id), log_type, message, now])
         return True
     except Exception as e:
         print(f"❌ خطأ في تدوين سجل العملية: {e}")
         return False
+
+def check_connection():
+    """وظيفة المراقبة الدورية لسلامة الاتصال بجوجل شيت (Heartbeat)"""
+    try:
+        ss.title
+        return True
+    except:
+        print("🔄 محاولة إعادة الاتصال التلقائي بقاعدة البيانات...")
+        return connect_to_google()
