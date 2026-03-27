@@ -28,7 +28,7 @@ from telegram.ext import (
 from sheets import save_user, save_bot, update_content_setting, get_bot_config, add_log_entry
 
 # --- الإعدادات الأساسية ---
-TOKEN = "8532487667:AAGeWhNyLZri9BxZMCw3AQZaJmOI5OVdxkE"
+TOKEN = "8532487667:AAGYgoSw-S2G7ruf_To8LGGd5OGCfn_T6dw"
 ADMIN_ID = 873158772  # معرف المطور والمالك
 
 # تعريف مراحل محادثة إنشاء البوت (حالات الـ ConversationHandler)
