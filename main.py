@@ -236,7 +236,38 @@ create_bot_conv = ConversationHandler(
     },
     fallbacks=[CommandHandler('cancel', cancel), MessageHandler(filters.Regex('^🔙 العودة$'), cancel)],
 )
+# --------------------------------------------------------------------------
+# --- دالة تشغيل البوتات المصنوعة تلقائياً ---
+async def start_all_sub_bots():
+    from sheets import get_all_active_bots
+    from contact_bot import start_handler, handle_contact_message, contact_callback_handler
+    
+    active_bots = get_all_active_bots()
+    print(f"🔄 جاري محاولة تشغيل {len(active_bots)} بوت مصنوع...")
+    
+    for bot_data in active_bots:
+        token = bot_data.get("التوكن")
+        owner_id = bot_data.get("ID المالك")
+        try:
+            # إنشاء تطبيق منفصل لكل توكن
+            sub_app = ApplicationBuilder().token(token).build()
+            sub_app.bot_data["owner_id"] = int(owner_id)
+            
+            # ربط موديول التواصل بالبوت الجديد
+            sub_app.add_handler(CommandHandler("start", start_handler))
+            sub_app.add_handler(CallbackQueryHandler(contact_callback_handler))
+            sub_app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_contact_message))
+            
+            # تشغيل البوت في الخلفية
+            await sub_app.initialize()
+            await sub_app.start()
+            await sub_app.updater.start_polling()
+            print(f"✅ تم تشغيل بوت التوكن: {token[:10]}...")
+        except Exception as e:
+            print(f"❌ فشل تشغيل بوت {token[:10]}: {e}")
 
+
+# --------------------------------------------------------------------------
 # بناء التطبيق
 app = ApplicationBuilder().token(TOKEN).build()
 
@@ -249,5 +280,11 @@ app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message
 
 # تشغيل البوت بنظام Polling
 if __name__ == "__main__":
+    import asyncio
+    # تشغيل المصنع والبوتات المصنوعة معاً
+    loop = asyncio.get_event_loop()
+    # تشغيل دالة تشغيل البوتات الفرعية في الخلفية
+    loop.create_task(start_all_sub_bots())
+    # تشغيل المصنع الرئيسي
     print("🚀 مصنع البوتات يعمل الآن...")
     app.run_polling()
