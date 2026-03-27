@@ -1,11 +1,11 @@
 import logging
-from telegram import ChatMember, ChatMemberUpdated
+from telegram import ChatMember, ChatMemberUpdated, Bot # تم إضافة Bot لضمان الإرسال المركزي
 from telegram.ext import ChatMemberHandler
 
 import re
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
-from sheets import get_bot_config, add_log_entry, update_content_setting
+from sheets import get_bot_config, add_log_entry, update_content_setting, get_bot_users_count, get_bot_blocks_count
 
 # إعداد التنبيهات لمراقبة الأداء التقني للبوت المصنوع
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -19,6 +19,7 @@ def escape_markdown(text):
     """دالة تنظيف النصوص لتتوافق مع نظام MarkdownV2 الخاص بتليجرام"""
     escape_chars = r'_*[]()~`>#+-=|{}.!'
     return re.sub(f'([{re.escape(escape_chars)}])', r'\\\1', str(text))
+
 # --------------------------------------------------------------------------
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -38,9 +39,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 2. إذا كان مستخدماً جديداً
     else:
         # إشعار لصاحب البوت المصنوع
-        # (ملاحظة: نفترض وجود دالة get_bot_users_count في sheets)
-        from sheets import get_bot_users_count
-        total_members = get_bot_users_count(bot_token) 
+        total_members = get_bot_users_count(bot_token)
 
         owner_notif = (
             f"<b>تم دخول شخص جديد إلى البوت الخاص بك</b> 👾\n"
@@ -56,8 +55,10 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_message(chat_id=bot_owner_id, text=owner_notif, parse_mode="HTML")
         except: pass
 
-        # إشعار لك (مطور المصنع)
-        from main import ADMIN_ID
+        # --- [تصحيح: إشعار المطور يتم عبر بوت المصنع الأساسي] ---
+        from main import ADMIN_ID, TOKEN
+        factory_main_bot = Bot(TOKEN)
+        
         factory_admin_notif = (
             f"<b>تم دخول شخص جديد إلى الصانع الخاص بك</b> 👾\n"
             f"-----------------------\n"
@@ -67,10 +68,11 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"• معرف : @{user.username if user.username else 'لا يوجد'}\n"
             f"• الايدي : <code>{user.id}</code>\n"
             f"-----------------------\n"
-            f"• عدد الأعضاء الكلي للمصنع : {total_members}"
+            f"• عدد الأعضاء الكلي : {total_members}"
         )
         try:
-            await context.bot.send_message(chat_id=ADMIN_ID, text=factory_admin_notif, parse_mode="HTML")
+            # هنا يتم الإرسال إلى حسابك عبر "بوت المصنع" وليس "البوت المصنوع"
+            await factory_main_bot.send_message(chat_id=ADMIN_ID, text=factory_admin_notif, parse_mode="HTML")
         except: pass
 
         # إرسال الترحيب للمستخدم
@@ -103,7 +105,7 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
     bot_token = context.bot.token
     
     # محاولة جلب المالك من الذاكرة أو الشيت
-    bot_owner_id = context.bot_data.get("owner_id") 
+    bot_owner_id = context.bot_data.get("owner_id")
     if not bot_owner_id:
         config = get_bot_config(bot_token)
         bot_owner_id = int(config.get("admin_ids", 0))
@@ -187,15 +189,14 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 
 # --------------------------------------------------------------------------
 async def track_chats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """تتبع عمليات الحظر وإعادة الاستخدام"""
+    """تتبع عمليات الحظر وإعادة الاستخدام وإبلاغ المالك عبر البوت المصنوع"""
     result = update.my_chat_member
     user = result.from_user
     bot_token = context.bot.token
     config = get_bot_config(bot_token)
     bot_owner_id = int(config.get("admin_ids", 0))
 
-    # نفترض وجود دالة get_bot_blocks_count في sheets
-    from sheets import get_bot_blocks_count
+    # جلب عدد المحظورين
     total_blocks = get_bot_blocks_count(bot_token)
 
     # حالة الحظر (Blocked)
@@ -208,7 +209,8 @@ async def track_chats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"• الآيدي: <code>{user.id}</code>\n\n"
             f"📊 إجمالي عدد المحادثات التي قامت بحظر البوت حتى الآن: {total_blocks}"
         )
-        try: await context.bot.send_message(chat_id=bot_owner_id, text=block_msg, parse_mode="HTML")
+        try: 
+            await context.bot.send_message(chat_id=bot_owner_id, text=block_msg, parse_mode="HTML")
         except: pass
 
     # حالة إلغاء الحظر (Unblocked / Member)
@@ -221,10 +223,9 @@ async def track_chats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"• الآيدي: <code>{user.id}</code>\n\n"
             f"📊 إجمالي عدد المحادثات الحالية: {total_blocks}"
         )
-        try: await context.bot.send_message(chat_id=bot_owner_id, text=unblock_msg, parse_mode="HTML")
+        try: 
+            await context.bot.send_message(chat_id=bot_owner_id, text=unblock_msg, parse_mode="HTML")
         except: pass
-
-# --------------------------------------------------------------------------
 
 # --------------------------------------------------------------------------
 # [مكان إضافة معالجات الردود (Callbacks) المستقبلية]
