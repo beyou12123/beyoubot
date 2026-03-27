@@ -5,7 +5,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, fil
 from sheets import save_user, save_bot, update_content_setting, get_bot_config # تأكد من وجود هذه الدوال في sheets.py
 
 # إعدادات البوت والتحقق
-TOKEN = "7173112564:AAGrLaXGViCRyDM4YGGCqxbXlu6pnfkGdFA"
+TOKEN = "8532487667:AAGeWhNyLZri9BxZMCw3AQZaJmOI5OVdxkE"
 ADMIN_ID = 873158772 # معرفك الخاص
 
 # القوائم
