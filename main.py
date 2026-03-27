@@ -21,11 +21,12 @@ from telegram.ext import (
     filters, 
     ContextTypes, 
     CallbackQueryHandler, 
-    ConversationHandler
+    ConversationHandler,
+    ChatMemberHandler
 )
 
 # استيراد الدوال من ملف البرمجة الخاص بجوجل شيت (sheets.py)
-from sheets import save_user, save_bot, update_content_setting, get_bot_config, add_log_entry
+from sheets import save_user, save_bot, update_content_setting, get_bot_config, add_log_entry, get_total_bots_count
 
 # --- الإعدادات الأساسية ---
 TOKEN = "8532487667:AAGYgoSw-S2G7ruf_To8LGGd5OGCfn_T6dw"
@@ -163,25 +164,21 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
         success = save_bot(user_id, bot_type, bot_display_name, bot_token)
 
         if success:
-            from contact_bot import start_handler, handle_contact_message, contact_callback_handler
-            
-                        async def run_new_bot():
+            from contact_bot import start_handler, handle_contact_message, contact_callback_handler, track_chats
+
+            async def run_new_bot():
                 try:
                     # بناء تطبيق البوت الجديد بشكل منعزل
                     new_app = ApplicationBuilder().token(bot_token).build()
                     new_app.bot_data["owner_id"] = int(user_id)
                     
-                    # استيراد موديول التواصل والتتبع
-                    from contact_bot import start_handler, handle_contact_message, contact_callback_handler, track_chats
-                    from telegram.ext import ChatMemberHandler
-
                     # ربط المعالجات (Handlers)
                     new_app.add_handler(CommandHandler("start", start_handler))
                     new_app.add_handler(CallbackQueryHandler(contact_callback_handler))
                     new_app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_contact_message))
                     new_app.add_handler(MessageHandler(filters.PHOTO, handle_contact_message))
                     
-                    # إضافة معالج تتبع الحظر وفك الحظر (هنا الإضافة الجديدة)
+                    # إضافة معالج تتبع الحظر وفك الحظر
                     new_app.add_handler(ChatMemberHandler(track_chats, ChatMemberHandler.MY_CHAT_MEMBER))
                     
                     await new_app.initialize()
@@ -191,8 +188,10 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception as e:
                     print(f"⚠️ خطأ في تشغيل محرك البوت الجديد: {e}")
 
+            # إطلاق مهمة التشغيل في الخلفية
+            asyncio.create_task(run_new_bot())
+
             # --- [الرسالة الأولى: إشعار النجاح للمستخدم في المصنع] ---
-            # تم استخدام HTML لتجنب أخطاء الرموز الخاصة في اليوزرنيم
             user_success_text = (
                 f"<b>🎊 تمت العملية بنجاح!</b>\n\n"
                 f"لقد انتهينا من برمجة بوتك الجديد وإطلاقه في الفضاء الرقمي.\n\n"
@@ -241,7 +240,6 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     except Exception as e:
         print(f"❌ Error in finalize: {e}")
-        # رسالة خطأ ذكية تخبر المستخدم بالخطأ مع توفير يوزر البوت
         await msg.edit_text(f"⚠️ <b>تنبيه تقني:</b>\nحدث تداخل بسيط أثناء التهيئة، لكن البوت {bot_username} قد يكون جاهزاً. يرجى التحقق منه.", parse_mode="HTML")
 
     context.user_data.clear()
@@ -272,7 +270,7 @@ async def owner_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """معالجة الرسائل النصية والأزرار الدائمة (للحفاظ على الوظائف القديمة)"""
+    """معالجة الرسائل النصية والأزرار الدائمة"""
     text = update.message.text
     user_id = update.effective_user.id
     
@@ -304,7 +302,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["admin_action"] = None
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """معالجة ضغطات الأزرار الشفافة (Inline Buttons) المركزية"""
+    """معالجة ضغطات الأزرار الشفافة المركزية"""
     query = update.callback_query
     data = query.data
     user_id = query.from_user.id
@@ -355,9 +353,7 @@ async def handle_docs(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"✅ تم تحديث موديول {doc.file_name} بنجاح!\n🔄 جاري إعادة التشغيل...")
         os.execv(sys.executable, ['python'] + sys.argv)
 
-# --- بناء وتشغيل التطبيق ---
-
-# إعداد الـ ConversationHandler المطور ليدعم الأزرار الشفافة
+# إعداد الـ ConversationHandler لإنشاء البوت
 create_bot_conv = ConversationHandler(
     entry_points=[
         MessageHandler(filters.Regex('^➕ إنشاء بوت$'), start_create_bot),
@@ -374,11 +370,10 @@ create_bot_conv = ConversationHandler(
     ],
 )
 
-# --------------------------------------------------------------------------
 # --- دالة تشغيل البوتات المصنوعة تلقائياً ---
 async def start_all_sub_bots():
     from sheets import get_all_active_bots
-    from contact_bot import start_handler, handle_contact_message, contact_callback_handler
+    from contact_bot import start_handler, handle_contact_message, contact_callback_handler, track_chats
     
     active_bots = get_all_active_bots()
     print(f"🔄 جاري محاولة تشغيل {len(active_bots)} بوت مصنوع...")
@@ -389,9 +384,13 @@ async def start_all_sub_bots():
         try:
             sub_app = ApplicationBuilder().token(token).build()
             sub_app.bot_data["owner_id"] = int(owner_id)
+            
             sub_app.add_handler(CommandHandler("start", start_handler))
             sub_app.add_handler(CallbackQueryHandler(contact_callback_handler))
             sub_app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_contact_message))
+            
+            # إضافة معالج تتبع الحظر للبوتات القديمة أيضاً
+            sub_app.add_handler(ChatMemberHandler(track_chats, ChatMemberHandler.MY_CHAT_MEMBER))
             
             await sub_app.initialize()
             await sub_app.start()
@@ -403,18 +402,15 @@ async def start_all_sub_bots():
 # بناء التطبيق
 app = ApplicationBuilder().token(TOKEN).build()
 
-# إضافة المعالجات (Handlers)
 app.add_handler(CommandHandler("start", start))
 app.add_handler(create_bot_conv) 
 app.add_handler(CallbackQueryHandler(button_callback))
 app.add_handler(MessageHandler(filters.Document.FileExtension("py"), handle_docs))
 app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
 
-# تشغيل البوت بنظام Polling
 if __name__ == "__main__":
     import asyncio
     try:
-        # استخدام حلقة أحداث مستقرة
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
