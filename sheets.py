@@ -201,3 +201,20 @@ def check_connection():
     except:
         print("🔄 محاولة إعادة الاتصال التلقائي بقاعدة البيانات...")
         return connect_to_google()
+
+
+# --------------------------------------------------------------------------
+
+
+def get_all_active_bots():
+    """جلب كافة البوتات التي حالتها 'نشط' لتشغيلها"""
+    global bots_sheet
+    if bots_sheet is None: connect_to_google()
+    try:
+        all_records = bots_sheet.get_all_records()
+        # جلب البوتات التي تحتوي على توكن وحالتها "نشط"
+        return [bot for bot in all_records if bot.get("التوكن") and bot.get("حالة التشغيل") == "نشط"]
+    except Exception as e:
+        print(f"❌ خطأ في جلب البوتات النشطة: {e}")
+        return []
+# --------------------------------------------------------------------------
