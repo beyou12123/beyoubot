@@ -105,111 +105,97 @@ async def receive_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return GETTING_NAME
 # --------------------------------------------------------------------------
 async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """حفظ البيانات، تشغيل المحرك، وإرسال الإشعارات الثلاثية (للمستخدم، للمطور، وللبوت الجديد)"""
+    """حفظ البيانات، وإرسال الإشعارات الثلاثية بشكل منفصل لضمان النجاح"""
     bot_token = update.message.text.strip()
     user = update.effective_user
     user_id = user.id
-    # جلب النوع المختار (📩 تواصل) لاستخدامه كاسم رسمي
     bot_type = context.user_data.get("type")
     
+    # التحقق من التوكن
     if not re.match(r'^\d+:[A-Za-z0-9_-]{35,}$', bot_token):
         await update.message.reply_text("❌ التوكن غير صحيح! يرجى إرسال توكن صالح من @BotFather")
         return GETTING_TOKEN
 
-    msg = await update.message.reply_text("⏳ جاري معالجة البيانات وتسجيل البوت في المصنع...")
+    msg = await update.message.reply_text("⏳ جاري تسجيل البوت وتشغيل المحرك...")
 
     try:
-        # 1. جلب معلومات البوت الجديد برمجياً
+        # 1. جلب معلومات البوت الجديد
         from telegram import Bot
         temp_bot = Bot(bot_token)
         bot_info = await temp_bot.get_me()
         bot_username = f"@{bot_info.username}"
-        bot_display_name = bot_type  # الاسم الرسمي هو النوع المختار
+        bot_display_name = bot_type  # الاسم هو النوع (تواصل)
 
-        # 2. عملية الحفظ في جوجل شيت
+        # 2. الحفظ في جوجل شيت
         from sheets import save_bot, get_total_bots_count
         success = save_bot(user_id, bot_type, bot_display_name, bot_token)
 
         if success:
-            # 3. تشغيل محرك البوت الجديد في الخلفية
+            # 3. تشغيل المحرك في الخلفية (بدون إرسال رسائل داخل التوكن الجديد لتجنب التعليق)
             from contact_bot import start_handler, handle_contact_message, contact_callback_handler
             
             async def run_new_bot():
                 try:
                     new_bot_app = ApplicationBuilder().token(bot_token).build()
                     new_bot_app.bot_data["owner_id"] = int(user_id)
-                    
-                    # ربط المعالجات الأساسية
                     new_bot_app.add_handler(CommandHandler("start", start_handler))
                     new_bot_app.add_handler(CallbackQueryHandler(contact_callback_handler))
                     new_bot_app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_contact_message))
-                    new_bot_app.add_handler(MessageHandler(filters.PHOTO, handle_contact_message))
-                    
                     await new_bot_app.initialize()
                     await new_bot_app.start()
                     await new_bot_app.updater.start_polling()
-                    
-                    # --- إرسال رسالة التهنئة داخل البوت الجديد للمالك ---
-                    factory_bot_info = await context.bot.get_me()
-                    factory_username = f"@{factory_bot_info.username}"
-                    
-                    congrats_text = (
-                        f"🎉 **الف مبروك! تم إنشاء بوتك بنجاح**\n\n"
-                        f"📦 النوع: {bot_type}\n"
-                        f"📛 الاسم: {bot_display_name}\n"
-                        f"🔑 تم ربط قاعدة البيانات وإعدادات المحتوى تلقائياً.\n"
-                        f"-----------------------\n"
-                        f"تم صنع البوت عبر : {factory_username}"
-                    )
-                    # إرسال الرسالة بدون أزرار لتجنب خطأ Inline keyboard expected
-                    await temp_bot.send_message(chat_id=user_id, text=congrats_text, parse_mode="Markdown")
-                    
                 except Exception as e:
-                    print(f"⚠️ خطأ في تشغيل المحرك الداخلي: {e}")
+                    print(f"⚠️ خطأ محرك: {e}")
 
-            # إطلاق المهمة فوراً
             asyncio.create_task(run_new_bot())
 
-            # 4. إرسال إشعار النجاح للمستخدم في "بوت المصنع"
+            # 4. إرسال إشعار النجاح للمستخدم في "المصنع" (بدون Markdown لتجنب أخطاء التنسيق)
             success_text = (
-                f"🎉 **مبروك! تم إنشاء بوتك بنجاح**\n\n"
+                f"🎉 مبروك! تم إنشاء بوتك بنجاح\n\n"
                 f"📦 النوع: {bot_type}\n"
-                f"📛 معرف البوت : {bot_username}\n"
+                f"📛 المعرف: {bot_username}\n"
                 f"🚀 البوت يعمل الآن، اذهب إليه وجربه!"
             )
             await msg.edit_text(
                 success_text,
-                reply_markup=ReplyKeyboardMarkup(main_menu if user_id == ADMIN_ID else [["➕ إنشاء بوت"]], resize_keyboard=True),
-                parse_mode="Markdown"
+                reply_markup=ReplyKeyboardMarkup(main_menu if user_id == ADMIN_ID else [["➕ إنشاء بوت"]], resize_keyboard=True)
             )
 
-            # 5. إرسال إشعار تفصيلي لمطور المصنع (أنت)
+            # 5. إرسال إشعار للمطور (أنت) - استخدام نص بسيط لضمان الوصول
             total_bots = get_total_bots_count()
             admin_notification = (
-                f"تم صنع بوت جديد في الصانع الخاص بك 📝\n"
-                f"            -----------------------\n"
-                f"• معلومات عن الشخص الذي صنع البوت .\n\n"
-                f"• الاسم : {user.full_name} ،\n"
-                f"• المعرف : @{user.username if user.username else 'لا يوجد'} ،\n"
-                f"• الايدي : `{user_id}` ،\n"
-                f"            -----------------------\n"
-                f"• نوع البوت المصنوع : {bot_type} ،\n"
-                f"• معرف البوت المُنشأ : {bot_username} ،\n"
-                f"            -----------------------\n\n"
-                f"• عدد البوتات المصنوعة : {total_bots}"
+                f"✅ بوت جديد تم صنعه!\n"
+                f"-----------------------\n"
+                f"👤 المالك: {user.full_name}\n"
+                f"🆔 الآيدي: {user_id}\n"
+                f"🔗 المعرف: @{user.username if user.username else 'لا يوجد'}\n"
+                f"-----------------------\n"
+                f"🤖 النوع: {bot_type}\n"
+                f"🎈 البوت: {bot_username}\n"
+                f"-----------------------\n"
+                f"📊 الإجمالي: {total_bots}"
             )
-            # تم استخدام try لتجنب توقف العملية إذا كان هناك مشكلة في إرسال رسالة الأدمن
-            try:
-                await context.bot.send_message(chat_id=ADMIN_ID, text=admin_notification, parse_mode="Markdown")
-            except Exception as admin_err:
-                print(f"⚠️ فشل إرسال إشعار للأدمن: {admin_err}")
+            # إرسال للأدمن عبر بوت المصنع الأساسي
+            await context.bot.send_message(chat_id=ADMIN_ID, text=admin_notification)
+
+            # 6. إرسال رسالة التهنئة داخل البوت الجديد (باستخدام كائن Bot منفصل تماماً)
+            factory_info = await context.bot.get_me()
+            congrats_text = (
+                f"🎉 الف مبروك! تم إنشاء بوتك بنجاح\n\n"
+                f"📦 النوع: {bot_type}\n"
+                f"📛 الاسم: {bot_display_name}\n"
+                f"🔑 تم ربط قاعدة البيانات تلقائياً.\n\n"
+                f"صنع عبر: @{factory_info.username}"
+            )
+            await temp_bot.send_message(chat_id=user_id, text=congrats_text)
 
         else:
-            await msg.edit_text("❌ حدث خطأ أثناء الحفظ في قاعدة البيانات.")
+            await msg.edit_text("❌ فشل الحفظ في قاعدة البيانات.")
 
     except Exception as e:
-        # إذا حدث خطأ "Inline keyboard expected" فغالباً سببه محاولة إرسال أزرار خاطئة
-        await msg.edit_text(f"❌ حدث خطأ تقني.\nالتفاصيل: {e}")
+        # تسجيل الخطأ في الكونسول ومعالجته بهدوء
+        print(f"❌ Error in finalize: {e}")
+        await msg.edit_text(f"⚠️ حدث خطأ تقني بسيط، لكن البوت قد يكون اشتغل. جربه الآن!\nالتفاصيل: {e}")
 
     context.user_data.clear()
     return ConversationHandler.END
