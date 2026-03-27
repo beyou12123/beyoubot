@@ -301,11 +301,11 @@ create_bot_conv = ConversationHandler(
     entry_points=[MessageHandler(filters.Regex('^➕ إنشاء بوت$'), start_create_bot)],
     states={
         CHOOSING_TYPE: [MessageHandler(filters.TEXT & ~filters.COMMAND, select_type)],
-        GETTING_TOKEN: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_token)],
-        GETTING_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, finalize_bot)],
+        GETTING_TOKEN: [MessageHandler(filters.TEXT & ~filters.COMMAND, finalize_bot)], # هنا تم التعديل
     },
     fallbacks=[CommandHandler('cancel', cancel), MessageHandler(filters.Regex('^🔙 العودة$'), cancel)],
 )
+
 # --------------------------------------------------------------------------
 # --- دالة تشغيل البوتات المصنوعة تلقائياً ---
 async def start_all_sub_bots():
