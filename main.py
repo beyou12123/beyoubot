@@ -105,38 +105,41 @@ async def receive_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return GETTING_NAME
 # --------------------------------------------------------------------------
 async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """حفظ البيانات، تشغيل المحرك، وإرسال إشعارات للمستخدم، المطور، وللبوت الجديد"""
+    """حفظ البيانات، تشغيل المحرك، وإرسال الإشعارات الثلاثية (للمستخدم، للمطور، وللبوت الجديد)"""
     bot_token = update.message.text.strip()
     user = update.effective_user
     user_id = user.id
+    # جلب النوع المختار (📩 تواصل) لاستخدامه كاسم رسمي
     bot_type = context.user_data.get("type")
     
     if not re.match(r'^\d+:[A-Za-z0-9_-]{35,}$', bot_token):
         await update.message.reply_text("❌ التوكن غير صحيح! يرجى إرسال توكن صالح من @BotFather")
         return GETTING_TOKEN
 
-    msg = await update.message.reply_text("⏳ جاري معالجة البيانات وتشغيل المحرك...")
+    msg = await update.message.reply_text("⏳ جاري معالجة البيانات وتسجيل البوت في المصنع...")
 
     try:
-        # 1. جلب معلومات البوت برمجياً
+        # 1. جلب معلومات البوت الجديد برمجياً
         from telegram import Bot
         temp_bot = Bot(bot_token)
         bot_info = await temp_bot.get_me()
         bot_username = f"@{bot_info.username}"
-        bot_display_name = bot_type # الاسم هو النوع المختار (📩 تواصل)
+        bot_display_name = bot_type  # الاسم الرسمي هو النوع المختار
 
-        # 2. الحفظ في جوجل شيت
+        # 2. عملية الحفظ في جوجل شيت
         from sheets import save_bot, get_total_bots_count
         success = save_bot(user_id, bot_type, bot_display_name, bot_token)
 
         if success:
-            # 3. تشغيل محرك البوت الجديد
+            # 3. تشغيل محرك البوت الجديد في الخلفية
             from contact_bot import start_handler, handle_contact_message, contact_callback_handler
             
             async def run_new_bot():
                 try:
                     new_bot_app = ApplicationBuilder().token(bot_token).build()
                     new_bot_app.bot_data["owner_id"] = int(user_id)
+                    
+                    # ربط المعالجات الأساسية
                     new_bot_app.add_handler(CommandHandler("start", start_handler))
                     new_bot_app.add_handler(CallbackQueryHandler(contact_callback_handler))
                     new_bot_app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_contact_message))
@@ -147,10 +150,10 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await new_bot_app.updater.start_polling()
                     
                     # --- إرسال رسالة التهنئة داخل البوت الجديد للمالك ---
-                    factory_bot = await context.bot.get_me()
-                    factory_username = f"@{factory_bot.username}"
+                    factory_bot_info = await context.bot.get_me()
+                    factory_username = f"@{factory_bot_info.username}"
                     
-                    congrats_msg = (
+                    congrats_text = (
                         f"🎉 **الف مبروك! تم إنشاء بوتك بنجاح**\n\n"
                         f"📦 النوع: {bot_type}\n"
                         f"📛 الاسم: {bot_display_name}\n"
@@ -158,24 +161,29 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         f"-----------------------\n"
                         f"تم صنع البوت عبر : {factory_username}"
                     )
-                    await temp_bot.send_message(chat_id=user_id, text=congrats_msg, parse_mode="Markdown")
+                    # إرسال الرسالة بدون أزرار لتجنب خطأ Inline keyboard expected
+                    await temp_bot.send_message(chat_id=user_id, text=congrats_text, parse_mode="Markdown")
                     
                 except Exception as e:
-                    print(f"⚠️ خطأ في تشغيل محرك البوت الجديد: {e}")
+                    print(f"⚠️ خطأ في تشغيل المحرك الداخلي: {e}")
 
+            # إطلاق المهمة فوراً
             asyncio.create_task(run_new_bot())
 
-            # 4. إشعار النجاح في "بوت المصنع"
-            await msg.edit_text(
+            # 4. إرسال إشعار النجاح للمستخدم في "بوت المصنع"
+            success_text = (
                 f"🎉 **مبروك! تم إنشاء بوتك بنجاح**\n\n"
                 f"📦 النوع: {bot_type}\n"
                 f"📛 معرف البوت : {bot_username}\n"
-                f"🚀 البوت يعمل الآن، اذهب إليه وجربه!",
+                f"🚀 البوت يعمل الآن، اذهب إليه وجربه!"
+            )
+            await msg.edit_text(
+                success_text,
                 reply_markup=ReplyKeyboardMarkup(main_menu if user_id == ADMIN_ID else [["➕ إنشاء بوت"]], resize_keyboard=True),
                 parse_mode="Markdown"
             )
 
-            # 5. إشعار المطور (أنت)
+            # 5. إرسال إشعار تفصيلي لمطور المصنع (أنت)
             total_bots = get_total_bots_count()
             admin_notification = (
                 f"تم صنع بوت جديد في الصانع الخاص بك 📝\n"
@@ -190,13 +198,18 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"            -----------------------\n\n"
                 f"• عدد البوتات المصنوعة : {total_bots}"
             )
-            await context.bot.send_message(chat_id=ADMIN_ID, text=admin_notification, parse_mode="Markdown")
+            # تم استخدام try لتجنب توقف العملية إذا كان هناك مشكلة في إرسال رسالة الأدمن
+            try:
+                await context.bot.send_message(chat_id=ADMIN_ID, text=admin_notification, parse_mode="Markdown")
+            except Exception as admin_err:
+                print(f"⚠️ فشل إرسال إشعار للأدمن: {admin_err}")
 
         else:
-            await msg.edit_text("❌ فشل الحفظ في السجلات.")
+            await msg.edit_text("❌ حدث خطأ أثناء الحفظ في قاعدة البيانات.")
 
     except Exception as e:
-        await msg.edit_text(f"❌ حدث خطأ أثناء التشغيل. تأكد من إعدادات التوكن.\nالتفاصيل: {e}")
+        # إذا حدث خطأ "Inline keyboard expected" فغالباً سببه محاولة إرسال أزرار خاطئة
+        await msg.edit_text(f"❌ حدث خطأ تقني.\nالتفاصيل: {e}")
 
     context.user_data.clear()
     return ConversationHandler.END
