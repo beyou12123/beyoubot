@@ -1,37 +1,127 @@
 import os
 import sys
-from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
-from sheets import save_user, save_bot, update_content_setting, get_bot_config # تأكد من وجود هذه الدوال في sheets.py
+import re
+from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove
+from telegram.ext import (
+    ApplicationBuilder, 
+    CommandHandler, 
+    MessageHandler, 
+    filters, 
+    ContextTypes, 
+    CallbackQueryHandler, 
+    ConversationHandler
+)
 
-# إعدادات البوت والتحقق
+# استيراد الدوال من ملف البرمجة الخاص بجوجل شيت (sheets.py)
+from sheets import save_user, save_bot, update_content_setting, get_bot_config, add_log_entry
+
+# --- الإعدادات الأساسية ---
 TOKEN = "8532487667:AAGeWhNyLZri9BxZMCw3AQZaJmOI5OVdxkE"
-ADMIN_ID = 873158772 # معرفك الخاص
+ADMIN_ID = 873158772  # معرف المطور والمالك
 
-# القوائم
+# تعريف مراحل محادثة إنشاء البوت (حالات الـ ConversationHandler)
+CHOOSING_TYPE, GETTING_TOKEN, GETTING_NAME = range(3)
+
+# --- القوائم (Keyboard Markups) ---
 main_menu = [["➕ إنشاء بوت"], ["🛠 لوحة التحكم (للمالك)"]]
 admin_options = [["📝 تعديل النصوص", "⚙️ إعدادات الموديولات"], ["🔙 العودة للقائمة الرئيسية"]]
+types_menu = [["📩 تواصل"], ["🛡 حماية"], ["🎓 منصة تعليمية"], ["🛒 متجر"]]
+
+# --------------------------------------------------------------------------
+# [مكان إضافة الدوال والوظائف البرمجية المستقبلية]
+# يمكنك كتابة أي دوال جديدة هنا (مثل دوال الإحصائيات المتقدمة أو أنظمة الدفع)
+# --------------------------------------------------------------------------
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """دالة الانطلاق وتسجيل المستخدم في قاعدة البيانات"""
     user = update.effective_user
+    # حفظ أو تحديث بيانات المستخدم في جوجل شيت
     save_user(user.id, user.username)
     
-    # إظهار زر لوحة التحكم فقط للمالك
+    # التحقق من الصلاحيات لإظهار لوحة التحكم للمالك فقط
     current_menu = main_menu if user.id == ADMIN_ID else [["➕ إنشاء بوت"]]
     
     await update.message.reply_text(
-        "أهلاً بك في مصنع البوتات المتطور 🤖",
+        "✨ أهلاً بك في مصنع البوتات المتطور 🤖\n\n"
+        "أنا بوت المصنع، يمكنني مساعدتك في إنشاء وإدارة بوتاتك الخاصة بسهولة وربطها بقاعدة بيانات جوجل.",
         reply_markup=ReplyKeyboardMarkup(current_menu, resize_keyboard=True)
     )
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text
-    user_id = update.effective_user.id
+# --- نظام إنشاء البوت (Conversation Flow) ---
+
+async def start_create_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """بدء عملية إنشاء بوت جديد وطلب اختيار النوع"""
+    await update.message.reply_text(
+        "🛠 **مرحباً بك في قسم التصنيع**\n\nاختر نوع البوت الذي تريد إنشاءه:",
+        reply_markup=ReplyKeyboardMarkup(types_menu, resize_keyboard=True, one_time_keyboard=True)
+    )
+    return CHOOSING_TYPE
+
+async def select_type(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """تخزين النوع المختار وطلب التوكن"""
+    bot_type = update.message.text
+    context.user_data["type"] = bot_type
     
-    # أضف هذا الجزء لملف main.py تحت handle_message
+    await update.message.reply_text(
+        f"✅ تم اختيار نوع: {bot_type}\n\n"
+        "الآن، من فضلك أرسل **API Token** الخاص بالبوت.\n"
+        "يمكنك الحصول عليه من @BotFather",
+        reply_markup=ReplyKeyboardRemove()
+    )
+    return GETTING_TOKEN
+
+async def receive_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """التحقق من صحة التوكن وطلب اسم البوت"""
+    token = update.message.text.strip()
+    
+    # التحقق من تنسيق التوكن باستخدام التعبيرات النمطية (Regex)
+    if not re.match(r'^\d+:[A-Za-z0-9_-]{35,}$', token):
+        await update.message.reply_text("❌ التوكن غير صحيح! يرجى إرسال توكن صالح من @BotFather")
+        return GETTING_TOKEN
+    
+    context.user_data["bot_token"] = token
+    await update.message.reply_text("✅ التوكن سليم. الآن أرسل **اسماً** لهذا البوت:")
+    return GETTING_NAME
+
+async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """حفظ البيانات النهائية في جوجل شيت وإنهاء المحادثة"""
+    bot_name = update.message.text.strip()
+    user_id = update.effective_user.id
+    bot_type = context.user_data.get("type")
+    bot_token = context.user_data.get("bot_token")
+    
+    await update.message.reply_text("⏳ جاري معالجة البيانات وتسجيل البوت في المصنع...")
+
+    # استدعاء دالة الحفظ المطورة في sheets.py
+    success = save_bot(user_id, bot_type, bot_name, bot_token)
+
+    if success:
+        await update.message.reply_text(
+            f"🎉 **مبروك! تم إنشاء بوتك بنجاح**\n\n"
+            f"📦 النوع: {bot_type}\n"
+            f"📛 الاسم: {bot_name}\n"
+            "🔑 تم ربط قاعدة البيانات وإعدادات المحتوى تلقائياً.",
+            reply_markup=ReplyKeyboardMarkup(main_menu if user_id == ADMIN_ID else [["➕ إنشاء بوت"]], resize_keyboard=True)
+        )
+    else:
+        await update.message.reply_text("❌ حدث خطأ أثناء الحفظ في جوجل شيت. يرجى التواصل مع المطور.")
+
+    context.user_data.clear()
+    return ConversationHandler.END
+
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """إلغاء عملية الإنشاء في أي وقت"""
+    user_id = update.effective_user.id
+    await update.message.reply_text(
+        "❌ تم إلغاء عملية الإنشاء.",
+        reply_markup=ReplyKeyboardMarkup(main_menu if user_id == ADMIN_ID else [["➕ إنشاء بوت"]], resize_keyboard=True)
+    )
+    return ConversationHandler.END
+
+# --- لوحة التحكم والعمليات الإدارية ---
 
 async def owner_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """لوحة تحكم خاصة بك أنت (المطور والمالك للمصنع)"""
+    """لوحة تحكم المطور (المالك)"""
     if update.effective_user.id != ADMIN_ID:
         return
 
@@ -40,75 +130,103 @@ async def owner_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("📢 إذاعة للمشتركين", callback_data="broadcast_owners")],
         [InlineKeyboardButton("🔄 تحديث السيرفر", callback_data="restart_factory")]
     ]
-    await update.message.reply_text("🛠 **لوحة تحكم المطور**\nإدارة المصنع والمشتركين:", 
-                                   reply_markup=InlineKeyboardMarkup(keyboard))
+    await update.message.reply_text(
+        "🛠 **لوحة تحكم المطور**\nإدارة المصنع والعمليات المركزية:", 
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
 
-# معالجة الضغط على الأزرار في لوحة التحكم
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """معالجة الرسائل النصية والأزرار الدائمة"""
+    text = update.message.text
+    user_id = update.effective_user.id
+    
+    # زر العودة للقائمة الرئيسية
+    if text == "🔙 العودة للقائمة الرئيسية":
+        await start(update, context)
+        return
+
+    # الدخول للوحة التحكم (للمالك فقط)
+    elif text == "🛠 لوحة التحكم (للمالك)" and user_id == ADMIN_ID:
+        await update.message.reply_text(
+            "مرحباً بك في غرفة القيادة 🕹️\nاختر القسم الذي تريد إدارته:", 
+            reply_markup=ReplyKeyboardMarkup(admin_options, resize_keyboard=True)
+        )
+        await owner_dashboard(update, context)
+
+    # تعديل النصوص (وظيفة للمالك)
+    elif text == "📝 تعديل النصوص" and user_id == ADMIN_ID:
+        await update.message.reply_text("أرسل ID البوت أو التوكن الذي تريد تعديل نصوصه:")
+        context.user_data["admin_action"] = "edit_texts"
+
+    # معالجة المدخلات الخاصة بالأدمن (تعديل المحتوى)
+    elif context.user_data.get("admin_action") == "edit_texts" and user_id == ADMIN_ID:
+        target_bot = text
+        context.user_data["target_bot"] = target_bot
+        keyboard = [
+            [InlineKeyboardButton("الرسالة الترحيبية", callback_data="set_welcome")],
+            [InlineKeyboardButton("القوانين", callback_data="set_rules")]
+        ]
+        await update.message.reply_text(
+            f"ماذا تريد أن تعدل في سجلات البوت {target_bot}؟", 
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        context.user_data["admin_action"] = None
+
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """معالجة ضغطات الأزرار الشفافة (Inline Buttons)"""
     query = update.callback_query
     await query.answer()
     
     if query.data == "restart_factory":
         await query.edit_message_text("🔄 جاري إعادة تشغيل المصنع لتطبيق التحديثات...")
+        # إعادة تشغيل البايثون فوراً
         os.execv(sys.executable, ['python'] + sys.argv)
-
     
-    
-    
-    # --- قسم المستخدم العادي ---
-    if text == "➕ إنشاء بوت":
-        keyboard = [["📩 تواصل"], ["🛡 حماية"], ["🎓 منصة تعليمية"], ["🛒 متجر"]]
-        await update.message.reply_text("اختر نوع البوت:", reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True))
-    
-    elif text in ["📩 تواصل", "🛡 حماية", "🎓 منصة تعليمية", "🛒 متجر"]:
-        context.user_data["type"] = text
-        await update.message.reply_text("أرسل اسم البوت:")
+    # يمكن إضافة معالجة بقية الأزرار هنا (stats_all, broadcast_owners, إلخ)
 
-    # --- قسم لوحة تحكم المالك ---
-    elif text == "🛠 لوحة التحكم (للمالك)" and user_id == ADMIN_ID:
-        await update.message.reply_text("مرحباً بك في غرفة القيادة 🕹️\nاختر القسم الذي تريد إدارته:", 
-                                       reply_markup=ReplyKeyboardMarkup(admin_options, resize_keyboard=True))
-
-    elif text == "📝 تعديل النصوص" and user_id == ADMIN_ID:
-        await update.message.reply_text("أرسل ID البوت الذي تريد تعديل نصوصه (ترحيب/قوانين):")
-        context.user_data["admin_action"] = "edit_texts"
-
-    elif text == "🔙 العودة للقائمة الرئيسية":
-        await start(update, context)
-
-    # معالجة إنشاء البوت أو إدخالات الأدمن
-    else:
-        # إذا كان الأدمن يريد تعديل نص
-        if context.user_data.get("admin_action") == "edit_texts":
-            bot_id_to_edit = text
-            context.user_data["target_bot"] = bot_id_to_edit
-            keyboard = [[InlineKeyboardButton("الرسالة الترحيبية", callback_data="set_welcome"),
-                         InlineKeyboardButton("القوانين", callback_data="set_rules")]]
-            await update.message.reply_text(f"ماذا تريد أن تعدل في البوت {bot_id_to_edit}؟", 
-                                           reply_markup=InlineKeyboardMarkup(keyboard))
-            context.user_data["admin_action"] = None
-            
-        # كود إنشاء البوت الأصلي (لا يحذف)
-        else:
-            bot_type = context.user_data.get("type")
-            if bot_type:
-                save_bot(user_id, bot_type, text)
-                await update.message.reply_text(f"✅ تم إنشاء بوت ({bot_type}) باسم: {text}")
-                context.user_data.clear()
-
-# معالج الملفات (المحرك القوي للتحديث)
 async def handle_docs(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID: return
+    """استقبال ملفات البرمجة وتحديث الموديولات برمجياً"""
+    if update.effective_user.id != ADMIN_ID: 
+        return
+        
     doc = update.message.document
     if doc.file_name.endswith(".py"):
         file = await doc.get_file()
-        if not os.path.exists("modules"): os.makedirs("modules")
-        await file.download_to_drive(f"modules/{doc.file_name}")
-        await update.message.reply_text(f"✅ تم تحديث موديول {doc.file_name} بنجاح!")
+        # التأكد من وجود مجلد الموديولات
+        if not os.path.exists("modules"): 
+            os.makedirs("modules")
+            
+        file_path = f"modules/{doc.file_name}"
+        await file.download_to_drive(file_path)
+        
+        await update.message.reply_text(f"✅ تم تحديث موديول {doc.file_name} بنجاح!\n🔄 جاري إعادة التشغيل...")
+        # إعادة التشغيل لتفعيل الموديول الجديد
         os.execv(sys.executable, ['python'] + sys.argv)
 
+# --- بناء وتشغيل التطبيق ---
+
+# إعداد الـ ConversationHandler لعملية إنشاء البوت
+create_bot_conv = ConversationHandler(
+    entry_points=[MessageHandler(filters.Regex('^➕ إنشاء بوت$'), start_create_bot)],
+    states={
+        CHOOSING_TYPE: [MessageHandler(filters.TEXT & ~filters.COMMAND, select_type)],
+        GETTING_TOKEN: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_token)],
+        GETTING_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, finalize_bot)],
+    },
+    fallbacks=[CommandHandler('cancel', cancel), MessageHandler(filters.Regex('^🔙 العودة$'), cancel)],
+)
+
+# بناء التطبيق
 app = ApplicationBuilder().token(TOKEN).build()
+
+# إضافة المعالجات (Handlers)
 app.add_handler(CommandHandler("start", start))
-app.add_handler(MessageHandler(filters.Document.FileExtension("py"), handle_docs))
-app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
-app.run_polling()
+app.add_handler(create_bot_conv)  # معالج محادثة الإنشاء
+app.add_handler(CallbackQueryHandler(button_callback))  # معالج أزرار لوحة التحكم
+app.add_handler(MessageHandler(filters.Document.FileExtension("py"), handle_docs))  # معالج ملفات البرمجة
+app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))  # معالج النصوص العام
+
+# تشغيل البوت بنظام Polling
+if __name__ == "__main__":
+    print("🚀 مصنع البوتات يعمل الآن...")
+    app.run_polling()
