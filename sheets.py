@@ -124,7 +124,7 @@ def save_bot(owner_id, bot_type, bot_name, bot_token):
         # 1. تسجيل البوت في ورقة "البوتات_المصنوعة" (تحديث الخانات بالتوكن والبيانات)
         # الترتيب حسب ملف التأسيس: ID المالك، نوع البوت، اسم البوت، التوكن، حالة التشغيل، ...الخ
         bot_row = [
-            str(owner_id), bot_type, bot_name, bot_token, "متوقف", 
+            str(owner_id), bot_type, bot_name, bot_token, "نشط", 
             "", "", now, "", 0, 0, "جيد", "", "polling", 
             "free", "", "true", ""
         ]
