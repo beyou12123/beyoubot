@@ -104,56 +104,98 @@ async def receive_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("✅ التوكن سليم. الآن أرسل **اسماً** لهذا البوت:")
     return GETTING_NAME
 # --------------------------------------------------------------------------
-
 async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """حفظ البيانات وإنهاء المحادثة مع تشغيل البوت في مهمة منفصلة لعدم التعليق"""
-    bot_name = update.message.text.strip()
-    user_id = update.effective_user.id
-    bot_type = context.user_data.get("type")
-    bot_token = context.user_data.get("bot_token")
+    """حفظ البيانات، تشغيل المحرك، وإرسال الإشعارات التفصيلية للمستخدم والمطور"""
+    # استلام التوكن من المرحلة السابقة (أو النص الحالي في حال دمج الخطوات)
+    bot_token = update.message.text.strip()
+    user = update.effective_user
+    user_id = user.id
     
-    msg = await update.message.reply_text("⏳ جاري تسجيل البوت وتشغيل المحرك...")
+    # جلب نوع البوت المختار من الأزرار (📩 تواصل، 🛡 حماية، إلخ)
+    bot_type = context.user_data.get("type")
+    
+    # التحقق الأولي من صحة التوكن قبل البدء
+    if not re.match(r'^\d+:[A-Za-z0-9_-]{35,}$', bot_token):
+        await update.message.reply_text("❌ التوكن غير صحيح! يرجى إرسال توكن صالح من @BotFather")
+        return GETTING_TOKEN
 
-    # 1. عملية الحفظ في الشيت
-    success = save_bot(user_id, bot_type, bot_name, bot_token)
+    msg = await update.message.reply_text("⏳ جاري معالجة البيانات وتسجيل البوت في المصنع...")
 
-    if success:
-        # 2. تشغيل البوت الجديد (نستخدم دالة منفصلة لتجنب التعليق)
-        from contact_bot import start_handler, handle_contact_message, contact_callback_handler
-        
-        async def run_new_bot():
-            try:
-                new_bot_app = ApplicationBuilder().token(bot_token).build()
-                new_bot_app.bot_data["owner_id"] = int(user_id)
-                new_bot_app.add_handler(CommandHandler("start", start_handler))
-                new_bot_app.add_handler(CallbackQueryHandler(contact_callback_handler))
-                new_bot_app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_contact_message))
-                new_bot_app.add_handler(MessageHandler(filters.PHOTO, handle_contact_message))
-                
-                await new_bot_app.initialize()
-                await new_bot_app.start()
-                await new_bot_app.updater.start_polling()
-                print(f"🚀 المحرك يعمل الآن للبوت: {bot_name}")
-            except Exception as e:
-                print(f"⚠️ خطأ في تشغيل المحرك: {e}")
+    try:
+        # --- [1. جلب معلومات البوت برمجياً عبر التوكن] ---
+        from telegram import Bot
+        temp_bot = Bot(bot_token)
+        bot_info = await temp_bot.get_me()
+        bot_username = f"@{bot_info.username}"
+        # نعتمد اسم النوع المختار من المصنع ليكون هو الاسم الرسمي في السجلات
+        bot_display_name = bot_type 
 
-        # إطلاق المهمة في الخلفية فوراً دون انتظارها (Non-blocking)
-        asyncio.create_task(run_new_bot())
+        # --- [2. عملية الحفظ في جوجل شيت] ---
+        from sheets import save_bot, get_total_bots_count
+        success = save_bot(user_id, bot_type, bot_display_name, bot_token)
 
-        # 3. إرسال رسالة النجاح فوراً
-        await msg.edit_text(
-            f"🎉 **مبروك! تم إنشاء بوتك بنجاح**\n\n"
-            f"📦 النوع: {bot_type}\n"
-            f"📛 الاسم: {bot_name}\n"
-            "🚀 البوت يعمل الآن، جربه الآن!",
-            reply_markup=ReplyKeyboardMarkup(main_menu if user_id == ADMIN_ID else [["➕ إنشاء بوت"]], resize_keyboard=True)
-        )
-    else:
-        await msg.edit_text("❌ حدث خطأ أثناء الحفظ. تأكد من إعدادات جوجل شيت.")
+        if success:
+            # --- [3. تشغيل محرك البوت الجديد في الخلفية] ---
+            from contact_bot import start_handler, handle_contact_message, contact_callback_handler
+            
+            async def run_new_bot():
+                try:
+                    new_bot_app = ApplicationBuilder().token(bot_token).build()
+                    new_bot_app.bot_data["owner_id"] = int(user_id)
+                    new_bot_app.add_handler(CommandHandler("start", start_handler))
+                    new_bot_app.add_handler(CallbackQueryHandler(contact_callback_handler))
+                    new_bot_app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_contact_message))
+                    new_bot_app.add_handler(MessageHandler(filters.PHOTO, handle_contact_message))
+                    
+                    await new_bot_app.initialize()
+                    await new_bot_app.start()
+                    await new_bot_app.updater.start_polling()
+                    print(f"🚀 المحرك يعمل الآن للبوت: {bot_username}")
+                except Exception as e:
+                    print(f"⚠️ خطأ في تشغيل محرك البوت الجديد: {e}")
+
+            # إطلاق المهمة فوراً (Non-blocking)
+            asyncio.create_task(run_new_bot())
+
+            # --- [4. إرسال إشعار النجاح للمستخدم المصنع] ---
+            success_text = (
+                f"🎉 **مبروك! تم إنشاء بوتك بنجاح**\n\n"
+                f"📦 النوع: {bot_type}\n"
+                f"📛 معرف البوت : {bot_username}\n"
+                f"🔑 تم ربط قاعدة البيانات وإعدادات المحتوى تلقائياً."
+            )
+            await msg.edit_text(
+                success_text,
+                reply_markup=ReplyKeyboardMarkup(main_menu if user_id == ADMIN_ID else [["➕ إنشاء بوت"]], resize_keyboard=True),
+                parse_mode="Markdown"
+            )
+
+            # --- [5. إرسال إشعار تفصيلي لمطور المصنع (أنت)] ---
+            total_bots = get_total_bots_count()
+            admin_notification = (
+                f"تم صنع بوت جديد في الصانع الخاص بك 📝\n"
+                f"            -----------------------\n"
+                f"• معلومات عن الشخص الذي صنع البوت .\n\n"
+                f"• الاسم : {user.full_name} ،\n"
+                f"• المعرف : @{user.username if user.username else 'لا يوجد'} ،\n"
+                f"• الايدي : `{user_id}` ،\n"
+                f"            -----------------------\n"
+                f"• نوع البوت المصنوع : {bot_type} ،\n"
+                f"• معرف البوت المُنشأ : {bot_username} ،\n"
+                f"            -----------------------\n\n"
+                f"• عدد البوتات المصنوعة : {total_bots}"
+            )
+            await context.bot.send_message(chat_id=ADMIN_ID, text=admin_notification, parse_mode="Markdown")
+
+        else:
+            await msg.edit_text("❌ حدث خطأ أثناء الحفظ. تأكد من إعدادات جوجل شيت وصلاحيات الوصول.")
+
+    except Exception as e:
+        await msg.edit_text(f"❌ خطأ فني: لم أتمكن من الاتصال بالتوكن. تأكد من صحته من @BotFather.\nالتفاصيل: {e}")
 
     context.user_data.clear()
     return ConversationHandler.END
-
+ 
 # --------------------------------------------------------------------------
 # --- لوحة التحكم والعمليات الإدارية ---
 
