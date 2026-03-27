@@ -106,62 +106,54 @@ async def receive_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # --------------------------------------------------------------------------
 
 async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """حفظ البيانات النهائية في جوجل شيت وإنهاء المحادثة وتشغيل البوت فوراً"""
+    """حفظ البيانات وإنهاء المحادثة مع تشغيل البوت في مهمة منفصلة لعدم التعليق"""
     bot_name = update.message.text.strip()
     user_id = update.effective_user.id
     bot_type = context.user_data.get("type")
     bot_token = context.user_data.get("bot_token")
     
-    await update.message.reply_text("⏳ جاري معالجة البيانات وتسجيل البوت في المصنع...")
+    msg = await update.message.reply_text("⏳ جاري تسجيل البوت وتشغيل المحرك...")
 
-    # استدعاء دالة الحفظ المطورة في sheets.py
+    # 1. عملية الحفظ في الشيت
     success = save_bot(user_id, bot_type, bot_name, bot_token)
 
     if success:
-        # --- [بداية تعديل التشغيل الفوري] ---
-        # استيراد المعالجات الخاصة ببوت التواصل لتشغيل المحرك الجديد
+        # 2. تشغيل البوت الجديد (نستخدم دالة منفصلة لتجنب التعليق)
         from contact_bot import start_handler, handle_contact_message, contact_callback_handler
         
-        try:
-            # بناء تطبيق مصغر للبوت الجديد باستخدام التوكن الخاص به
-            new_bot_app = ApplicationBuilder().token(bot_token).build()
-            
-            # تعيين صاحب البوت في ذاكرة البوت الجديد
-            new_bot_app.bot_data["owner_id"] = int(user_id)
-            
-            # ربط كافة المعالجات (الترحيب، التواصل، لوحة التحكم الشفافة)
-            new_bot_app.add_handler(CommandHandler("start", start_handler))
-            new_bot_app.add_handler(CallbackQueryHandler(contact_callback_handler))
-            new_bot_app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_contact_message))
-            new_bot_app.add_handler(MessageHandler(filters.PHOTO, handle_contact_message))
-            
-            # تشغيل البوت في الخلفية (Asynchronous Tasks) لضمان عدم توقف المصنع
-            import asyncio
-            asyncio.create_task(new_bot_app.initialize())
-            asyncio.create_task(new_bot_app.start())
-            asyncio.create_task(new_bot_app.updater.start_polling())
-            
-            print(f"🚀 تم إطلاق محرك البوت بنجاح: {bot_name} ({bot_token[:10]}...)")
-            
-        except Exception as e:
-            # تسجيل الخطأ في السجلات إذا فشل تشغيل المحرك برمجياً
-            print(f"⚠️ فشل تشغيل المحرك الفوري للبوت {bot_name}: {e}")
-            add_log_entry(bot_token, "RUNNER_ERROR", str(e))
-        # --- [نهاية تعديل التشغيل الفوري] ---
+        async def run_new_bot():
+            try:
+                new_bot_app = ApplicationBuilder().token(bot_token).build()
+                new_bot_app.bot_data["owner_id"] = int(user_id)
+                new_bot_app.add_handler(CommandHandler("start", start_handler))
+                new_bot_app.add_handler(CallbackQueryHandler(contact_callback_handler))
+                new_bot_app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_contact_message))
+                new_bot_app.add_handler(MessageHandler(filters.PHOTO, handle_contact_message))
+                
+                await new_bot_app.initialize()
+                await new_bot_app.start()
+                await new_bot_app.updater.start_polling()
+                print(f"🚀 المحرك يعمل الآن للبوت: {bot_name}")
+            except Exception as e:
+                print(f"⚠️ خطأ في تشغيل المحرك: {e}")
 
-        await update.message.reply_text(
+        # إطلاق المهمة في الخلفية فوراً دون انتظارها (Non-blocking)
+        asyncio.create_task(run_new_bot())
+
+        # 3. إرسال رسالة النجاح فوراً
+        await msg.edit_text(
             f"🎉 **مبروك! تم إنشاء بوتك بنجاح**\n\n"
             f"📦 النوع: {bot_type}\n"
             f"📛 الاسم: {bot_name}\n"
-            "🔑 تم ربط قاعدة البيانات وإعدادات المحتوى تلقائياً.\n"
-            "🚀 البوت يعمل الآن، يمكنك التوجه إليه والبدء!",
+            "🚀 البوت يعمل الآن، جربه الآن!",
             reply_markup=ReplyKeyboardMarkup(main_menu if user_id == ADMIN_ID else [["➕ إنشاء بوت"]], resize_keyboard=True)
         )
     else:
-        await update.message.reply_text("❌ حدث خطأ أثناء الحفظ في جوجل شيت. يرجى التواصل مع المطور.")
+        await msg.edit_text("❌ حدث خطأ أثناء الحفظ. تأكد من إعدادات جوجل شيت.")
 
     context.user_data.clear()
     return ConversationHandler.END
+
 # --------------------------------------------------------------------------
 # --- لوحة التحكم والعمليات الإدارية ---
 
@@ -226,10 +218,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("🔄 جاري إعادة تشغيل المصنع لتطبيق التحديثات...")
         # إعادة تشغيل البايثون فوراً
         os.execv(sys.executable, ['python'] + sys.argv)
-    
-    # يمكن إضافة معالجة بقية الأزرار هنا (stats_all, broadcast_owners, إلخ)
-
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دالة إلغاء عملية إنشاء البوت والعودة للقائمة الرئيسية"""
     user_id = update.effective_user.id
     # العودة للقائمة الرئيسية بناءً على هوية المستخدم
@@ -242,6 +231,10 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # مسح البيانات المؤقتة
     context.user_data.clear()
     return ConversationHandler.END
+
+    
+    
+    # يمكن إضافة معالجة بقية الأزرار هنا (stats_all, broadcast_owners, إلخ)
 
 async def handle_docs(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """استقبال ملفات البرمجة وتحديث الموديولات برمجياً"""
@@ -295,7 +288,6 @@ async def start_all_sub_bots():
             sub_app.add_handler(CommandHandler("start", start_handler))
             sub_app.add_handler(CallbackQueryHandler(contact_callback_handler))
             sub_app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_contact_message))
-            sub_app.add_handler(MessageHandler(filters.PHOTO, handle_contact_message))
             
             # تشغيل البوت في الخلفية
             await sub_app.initialize()
@@ -332,3 +324,4 @@ if __name__ == "__main__":
         app.run_polling()
     except Exception as e:
         print(f"🔴 خطأ في إقلاع المصنع: {e}")
+
