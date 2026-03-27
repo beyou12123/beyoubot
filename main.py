@@ -226,6 +226,21 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("🔄 جاري إعادة تشغيل المصنع لتطبيق التحديثات...")
         # إعادة تشغيل البايثون فوراً
         os.execv(sys.executable, ['python'] + sys.argv)
+    async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """دالة إلغاء عملية إنشاء البوت والعودة للقائمة الرئيسية"""
+    user_id = update.effective_user.id
+    # العودة للقائمة الرئيسية بناءً على هوية المستخدم
+    current_menu = main_menu if user_id == ADMIN_ID else [["➕ إنشاء بوت"]]
+    
+    await update.message.reply_text(
+        "❌ تم إلغاء عملية الإنشاء والعودة للقائمة الرئيسية.",
+        reply_markup=ReplyKeyboardMarkup(current_menu, resize_keyboard=True)
+    )
+    # مسح البيانات المؤقتة
+    context.user_data.clear()
+    return ConversationHandler.END
+
+    
     
     # يمكن إضافة معالجة بقية الأزرار هنا (stats_all, broadcast_owners, إلخ)
 
