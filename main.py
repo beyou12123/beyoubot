@@ -2,6 +2,7 @@ import os
 import sys
 import re
 import asyncio
+import importlib # استيراد الموديولات ديناميكياً لتشغيل الملفات المرفوعة
 
 # استيراد الأدوات الأساسية من مكتبة تليجرام
 from telegram import (
@@ -9,7 +10,8 @@ from telegram import (
     ReplyKeyboardMarkup, 
     InlineKeyboardButton, 
     InlineKeyboardMarkup, 
-    ReplyKeyboardRemove
+    ReplyKeyboardRemove,
+    Bot
 )
 
 # استيراد أدوات المعالجة والتشغيل من مكتبة telegram.ext
@@ -26,7 +28,15 @@ from telegram.ext import (
 )
 
 # استيراد الدوال من ملف البرمجة الخاص بجوجل شيت (sheets.py)
-from sheets import save_user, save_bot, update_content_setting, get_bot_config, add_log_entry, get_total_bots_count
+from sheets import (
+    save_user, 
+    save_bot, 
+    update_content_setting, 
+    get_bot_config, 
+    add_log_entry, 
+    get_total_bots_count,
+    get_total_factory_users # دالة إحصائيات مستخدمي المصنع
+)
 
 # --- الإعدادات الأساسية ---
 TOKEN = "8532487667:AAGYgoSw-S2G7ruf_To8LGGd5OGCfn_T6dw"
@@ -34,6 +44,8 @@ ADMIN_ID = 873158772  # معرف المطور والمالك
 
 # تعريف مراحل محادثة إنشاء البوت (حالات الـ ConversationHandler)
 CHOOSING_TYPE, GETTING_TOKEN, GETTING_NAME = range(3)
+# تعريف حالة انتظار اسم الموديول الجديد (خاصة بالمطور)
+WAITING_FOR_MODULE_NAME = 4
 
 # --- القوائم الشفافة المحدثة (Inline Keyboards) ---
 def get_main_menu_inline(user_id):
@@ -151,22 +163,18 @@ async def receive_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return GETTING_TOKEN
     
     context.user_data["bot_token"] = token
-    # ملاحظة: تم الإبقاء على الوظيفة كما هي بناءً على النسخة السابقة مع تفعيل التجاوز التلقائي لاحقاً
-    await finalize_bot(update, context)
-    return ConversationHandler.END
+    await update.message.reply_text("✅ تم قبول التوكن بنجاح.\n\nالآن، أرسل **الاسم** الذي تريده أن يظهر لمستخدمي بوتك:")
+    return GETTING_NAME
 
 # --------------------------------------------------------------------------
 # --------------------------------------------------------------------------
 async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """حفظ البيانات، فك تداخل التوكينات، وتشغيل الإشعارات الثلاثية بصيغ مميزة وتنسيق آمن"""
-    bot_token = update.message.text.strip()
+    bot_display_name = update.message.text.strip()
     user = update.effective_user
     user_id = user.id
     bot_type = context.user_data.get("type")
-    
-    if not re.match(r'^\d+:[A-Za-z0-9_-]{35,}$', bot_token):
-        await update.message.reply_text("❌ التوكن غير صحيح! يرجى إرسال توكن صالح.")
-        return GETTING_TOKEN
+    bot_token = context.user_data.get("bot_token")
 
     msg = await update.message.reply_text("⏳ جاري تهيئة المحرك وفك تداخل التوكينات...")
 
@@ -180,29 +188,36 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         bot_info = await temp_bot.get_me()
         bot_username = f"@{bot_info.username}"
-        bot_display_name = bot_type
 
         # حفظ البيانات في جوجل شيت
         from sheets import save_bot, get_total_bots_count
         success = save_bot(user_id, bot_type, bot_display_name, bot_token)
 
         if success:
-            from contact_bot import start_handler, handle_contact_message, contact_callback_handler, track_chats
-
             async def run_new_bot():
                 try:
                     # بناء تطبيق البوت الجديد بشكل منعزل
                     new_app = ApplicationBuilder().token(bot_token).build()
                     new_app.bot_data["owner_id"] = int(user_id)
                     
+                    # اختيار الموديول المناسب ديناميكياً
+                    module_map = {
+                        "📩 تواصل": "contact_bot",
+                        "🎓 منصة تعليمية": "education_bot",
+                        "🛡 حماية": "protection_bot",
+                        "🛒 متجر": "store_bot"
+                    }
+                    m_name = module_map.get(bot_type, "contact_bot")
+                    module = importlib.import_module(m_name)
+                    
                     # ربط المعالجات (Handlers)
-                    new_app.add_handler(CommandHandler("start", start_handler))
-                    new_app.add_handler(CallbackQueryHandler(contact_callback_handler))
-                    new_app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_contact_message))
-                    new_app.add_handler(MessageHandler(filters.PHOTO, handle_contact_message))
+                    new_app.add_handler(CommandHandler("start", module.start_handler))
+                    new_app.add_handler(CallbackQueryHandler(module.contact_callback_handler))
+                    new_app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), module.handle_contact_message))
+                    new_app.add_handler(MessageHandler(filters.PHOTO, module.handle_contact_message))
                     
                     # إضافة معالج تتبع الحظر وفك الحظر
-                    new_app.add_handler(ChatMemberHandler(track_chats, ChatMemberHandler.MY_CHAT_MEMBER))
+                    new_app.add_handler(ChatMemberHandler(module.track_chats, ChatMemberHandler.MY_CHAT_MEMBER))
                     
                     await new_app.initialize()
                     await new_app.start()
@@ -219,6 +234,7 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"<b>🎊 تمت العملية بنجاح!</b>\n\n"
                 f"لقد انتهينا من برمجة بوتك الجديد وإطلاقه في الفضاء الرقمي.\n\n"
                 f"📦 <b>نوع الموديول:</b> {bot_type}\n"
+                f"📛 <b>الاسم المخصص:</b> {bot_display_name}\n"
                 f"🤖 <b>يوزر البوت:</b> {bot_username}\n\n"
                 f"🚀 البوت الآن في وضع التشغيل، يمكنك التوجه إليه والبدء باستخدامه فوراً!"
             )
@@ -234,6 +250,7 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"<b>🎈 أهلاً بك في عالمك الخاص!</b>\n\n"
                 f"لقد تم ربط هذا البوت بنجاح بمصنع البوتات وقاعدة بيانات جوجل.\n\n"
                 f"📋 <b>الوظيفة الأساسية:</b> {bot_type}\n"
+                f"📛 <b>الاسم:</b> {bot_display_name}\n"
                 f"⚙️ <b>الحالة:</b> مرتبط وجاهز للعمل\n"
                 f"-----------------------\n"
                 f"تم الإنشاء بواسطة: @{factory_info.username}"
@@ -252,6 +269,7 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"🆔 <b>آيدي المالك:</b> <code>{user_id}</code>\n"
                 f"-----------------------\n"
                 f"🤖 <b>نوع البوت:</b> {bot_type}\n"
+                f"📛 <b>الاسم:</b> {bot_display_name}\n"
                 f"🎈 <b>يوزر البوت:</b> {bot_username}\n"
                 f"-----------------------\n\n"
                 f"📈 <b>إجمالي إنتاج المصنع:</b> {total_bots} بوت"
@@ -358,25 +376,51 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     context.user_data.clear()
     return ConversationHandler.END
-
-async def handle_docs(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """استقبال ملفات البرمجة وتحديث الموديولات برمجياً"""
-    if update.effective_user.id != ADMIN_ID: 
-        return
-        
+# --------------------------------------------------------------------------
+#دالة رفع ملف بوت جديد (تحديث تفاعلي للمطور)
+async def handle_module_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """الخطوة 1: استقبال الملف البرمجي من المطور"""
+    if update.effective_user.id != ADMIN_ID: return
+    
     doc = update.message.document
     if doc.file_name.endswith(".py"):
         file = await doc.get_file()
-        if not os.path.exists("modules"): 
-            os.makedirs("modules")
-            
-        file_path = f"modules/{doc.file_name}"
+        file_path = f"./{doc.file_name}"
         await file.download_to_drive(file_path)
         
-        await update.message.reply_text(f"✅ تم تحديث موديول {doc.file_name} بنجاح!\n🔄 جاري إعادة التشغيل...")
-        os.execv(sys.executable, ['python'] + sys.argv)
+        # حفظ اسم الملف مؤقتاً للخطوة التالية
+        context.user_data["uploaded_module_file"] = doc.file_name
+        
+        await update.message.reply_text(
+            f"✅ تم رفع الملف <code>{doc.file_name}</code> بنجاح.\n\n"
+            f"<b>الآن أرسل الاسم (النوع) الجديد الذي تريد ربطه بهذا الملف:</b>",
+            parse_mode="HTML"
+        )
+        return WAITING_FOR_MODULE_NAME
 
-# إعداد الـ ConversationHandler لإنشاء البوت
+async def finalize_module_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """الخطوة 2: استقبال اسم الموديول وإعادة تشغيل المصنع"""
+    if update.effective_user.id != ADMIN_ID: return
+    
+    module_display_name = update.message.text.strip()
+    file_name = context.user_data.get("uploaded_module_file")
+    
+    await update.message.reply_text(
+        f"<b>🚀 تم اعتماد الموديول الجديد!</b>\n"
+        f"-----------------------\n"
+        f"📛 <b>الاسم الجديد:</b> {module_display_name}\n"
+        f"📄 <b>الملف المربوط:</b> <code>{file_name}</code>\n"
+        f"-----------------------\n"
+        f"🔄 جاري إعادة تشغيل المصنع لتفعيل النوع الجديد فوراً...",
+        parse_mode="HTML"
+    )
+    
+    context.user_data.clear()
+    os.execv(sys.executable, ['python'] + sys.argv)
+
+# --------------------------------------------------------------------------
+
+# إعداد الـ ConversationHandler لإنشاء البوت (مع خطوة الاسم المخصص)
 create_bot_conv = ConversationHandler(
     entry_points=[
         MessageHandler(filters.Regex('^➕ إنشاء بوت$'), start_create_bot),
@@ -384,13 +428,23 @@ create_bot_conv = ConversationHandler(
     ],
     states={
         CHOOSING_TYPE: [CallbackQueryHandler(select_type, pattern="^set_type_")],
-        GETTING_TOKEN: [MessageHandler(filters.TEXT & ~filters.COMMAND, finalize_bot)],
+        GETTING_TOKEN: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_token)],
+        GETTING_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, finalize_bot)],
     },
     fallbacks=[
         CommandHandler('cancel', cancel), 
         CallbackQueryHandler(cancel, pattern="^cancel_action$"),
         MessageHandler(filters.Regex('^🔙 العودة$'), cancel)
     ],
+)
+
+# إعداد الـ ConversationHandler لرفع الموديولات للمطور
+admin_module_conv = ConversationHandler(
+    entry_points=[MessageHandler(filters.Document.FileExtension("py"), handle_module_upload)],
+    states={
+        WAITING_FOR_MODULE_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, finalize_module_name)],
+    },
+    fallbacks=[CommandHandler('cancel', cancel)],
 )
 
 # --- دالة تشغيل البوتات المصنوعة تلقائياً ---
@@ -404,16 +458,22 @@ async def start_all_sub_bots():
     for bot_data in active_bots:
         token = bot_data.get("التوكن")
         owner_id = bot_data.get("ID المالك")
+        bot_type = bot_data.get("نوع البوت")
         try:
             sub_app = ApplicationBuilder().token(token).build()
             sub_app.bot_data["owner_id"] = int(owner_id)
             
-            sub_app.add_handler(CommandHandler("start", start_handler))
-            sub_app.add_handler(CallbackQueryHandler(contact_callback_handler))
-            sub_app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_contact_message))
+            # تحميل الموديول المناسب ديناميكياً
+            module_map = {"📩 تواصل": "contact_bot", "🎓 منصة تعليمية": "education_bot"}
+            m_name = module_map.get(bot_type, "contact_bot")
+            mod = importlib.import_module(m_name)
+            
+            sub_app.add_handler(CommandHandler("start", mod.start_handler))
+            sub_app.add_handler(CallbackQueryHandler(mod.contact_callback_handler))
+            sub_app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), mod.handle_contact_message))
             
             # إضافة معالج تتبع الحظر للبوتات القديمة أيضاً
-            sub_app.add_handler(ChatMemberHandler(track_chats, ChatMemberHandler.MY_CHAT_MEMBER))
+            sub_app.add_handler(ChatMemberHandler(mod.track_chats, ChatMemberHandler.MY_CHAT_MEMBER))
             
             await sub_app.initialize()
             await sub_app.start()
@@ -427,8 +487,8 @@ app = ApplicationBuilder().token(TOKEN).build()
 
 app.add_handler(CommandHandler("start", start))
 app.add_handler(create_bot_conv) 
+app.add_handler(admin_module_conv) # محادثة الرفع الجديدة
 app.add_handler(CallbackQueryHandler(button_callback))
-app.add_handler(MessageHandler(filters.Document.FileExtension("py"), handle_docs))
 app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
 
 if __name__ == "__main__":
