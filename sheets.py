@@ -387,7 +387,7 @@ def add_new_course(bot_token, course_id, course_name, cat_id):
     except Exception as e:
         print(f"❌ Error adding course: {e}")
         return False
-        def get_courses_by_category(bot_token, cat_id):
+def get_courses_by_category(bot_token, cat_id):
     """جلب كافة الدورات المرتبطة بقسم محدد"""
     try:
         if courses_sheet is None: return []
