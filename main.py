@@ -163,9 +163,9 @@ async def receive_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return GETTING_TOKEN
     
     context.user_data["bot_token"] = token
-    await update.message.reply_text("✅ تم قبول التوكن بنجاح.\n\nالآن، أرسل **الاسم** الذي تريده أن يظهر لمستخدمي بوتك:")
-    return GETTING_NAME
-
+    # ملاحظة: تم الإبقاء على الوظيفة كما هي بناءً على النسخة السابقة مع تفعيل التجاوز التلقائي لاحقاً
+    await finalize_bot(update, context)
+    return ConversationHandler.END
 # --------------------------------------------------------------------------
 # --------------------------------------------------------------------------
 async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
