@@ -53,30 +53,46 @@ def get_main_menu_inline(user_id):
     if user_id == ADMIN_ID:
         keyboard.append([InlineKeyboardButton("🛠 لوحة التحكم (للمالك)", callback_data="open_admin_dashboard")])
     return InlineKeyboardMarkup(keyboard)
-
+# --------------------------------------------------------------------------
 def get_types_menu_inline():
-    # الأزرار الأساسية التي نريدها دائماً في البداية
+    # 1. الأزرار الأساسية (منظمة زرين في كل صف)
     keyboard = [
-        [InlineKeyboardButton("📩 تواصل", callback_data="set_type_contact_bot")],
-        [InlineKeyboardButton("🛡 حماية", callback_data="set_type_protection_bot")],
-        [InlineKeyboardButton("🎓 منصة تعليمية", callback_data="set_type_education_bot")],
-        [InlineKeyboardButton("🛒 متجر", callback_data="set_type_store_bot")]
+        [
+            InlineKeyboardButton("📩 تواصل", callback_data="set_type_contact_bot"),
+            InlineKeyboardButton("🛡 حماية", callback_data="set_type_protection_bot")
+        ],
+        [
+            InlineKeyboardButton("🎓 منصة تعليمية", callback_data="set_type_education_bot"),
+            InlineKeyboardButton("🛒 متجر", callback_data="set_type_store_bot")
+        ]
     ]
     
-    # --- الجزء الأوتوماتيكي المضاف ---
-    # البحث عن أي ملفات .py مرفوعة إضافية (مثل ai_bot.py)
-    exclude_files = ['main.py', 'sheets.py', 'contact_bot.py', 'education_bot.py', 'protection_bot.py', 'store_bot.py']
-    for file in os.listdir('.'):
-        if file.endswith('.py') and file not in exclude_files:
-            module_name = file[:-3] # إزالة .py من الاسم
-            # إضافة زر لكل موديول جديد مرفوع
-            keyboard.append([InlineKeyboardButton(f"🤖 {module_name}", callback_data=f"set_type_{module_name}")])
+    # 2. جلب الملفات المرفوعة ديناميكياً مع استثناء الملفات التقنية بدقة
+    # أضفت هنا الملفات التي ظهرت في صورتك (config, runner) لكي تختفي
+    exclude_files = [
+        'main.py', 'sheets.py', 'contact_bot.py', 'education_bot.py', 
+        'protection_bot.py', 'store_bot.py', 'config.py', 'runner.py', 
+        '__init__.py', 'utils.py'
+    ]
     
-    # زر الإلغاء في النهاية دائماً
+    dynamic_buttons = []
+    for file in os.listdir('.'):
+        # شرط إضافي: يجب أن يحتوي الملف على كلمة 'bot' في اسمه ليظهر (اختياري لزيادة الدقة)
+        if file.endswith('.py') and file not in exclude_files:
+            module_name = file[:-3]
+            dynamic_buttons.append(InlineKeyboardButton(f"🤖 {module_name}", callback_data=f"set_type_{module_name}"))
+    
+    # 3. تنظيم الأزرار الديناميكية المتبقية (كل 2 في صف)
+    for i in range(0, len(dynamic_buttons), 2):
+        row = dynamic_buttons[i:i + 2]
+        keyboard.append(row)
+    
+    # 4. زر الإلغاء في صف مستقل
     keyboard.append([InlineKeyboardButton("🔙 إلغاء", callback_data="cancel_action")])
     
     return InlineKeyboardMarkup(keyboard)
 
+# --------------------------------------------------------------------------
 
 # القوائم القديمة (للحفاظ على التوافق مع الوظائف التي قد تطلبها)
 main_menu = [["➕ إنشاء بوت"], ["🛠 لوحة التحكم (للمالك)"]]
