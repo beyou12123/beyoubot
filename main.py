@@ -170,6 +170,8 @@ async def receive_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # --------------------------------------------------------------------------
 async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """حفظ البيانات، فك تداخل التوكينات، وتشغيل الإشعارات الثلاثية بصيغ مميزة وتنسيق آمن"""
+    # تصحيح: في نظام المحادثة الحالي، النص المرسل هنا هو "اسم البوت" 
+    # لأن التوكن تم حفظه في الخطوة السابقة (receive_token)
     bot_display_name = update.message.text.strip()
     user = update.effective_user
     user_id = user.id
@@ -194,6 +196,7 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
         success = save_bot(user_id, bot_type, bot_display_name, bot_token)
 
         if success:
+            # تصحيح المسافات: هذه الدالة يجب أن تكون داخل بلوك النجاح
             async def run_new_bot():
                 try:
                     # بناء تطبيق البوت الجديد بشكل منعزل
@@ -226,7 +229,7 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception as e:
                     print(f"⚠️ خطأ في تشغيل محرك البوت الجديد: {e}")
 
-            # إطلاق مهمة التشغيل في الخلفية
+            # إطلاق مهمة التشغيل في الخلفية (يجب أن تكون مزاحة داخل الـ if)
             asyncio.create_task(run_new_bot())
 
             # --- [الرسالة الأولى: إشعار النجاح للمستخدم في المصنع] ---
@@ -297,6 +300,7 @@ async def owner_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [
         [InlineKeyboardButton("📊 إحصائيات البوتات", callback_data="stats_all")],
+        [InlineKeyboardButton("⚙️ تهيئة الجداول", callback_data="setup_db_menu")],
         [InlineKeyboardButton("📢 إذاعة للمشتركين", callback_data="broadcast_owners")],
         [InlineKeyboardButton("🔄 تحديث السيرفر", callback_data="restart_factory")],
         [InlineKeyboardButton("🔙 العودة", callback_data="back_to_main")]
@@ -309,6 +313,7 @@ async def owner_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
     else:
         await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """معالجة الرسائل النصية والأزرار الدائمة"""
@@ -353,7 +358,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("🔄 جاري إعادة تشغيل المصنع لتطبيق التحديثات...")
         os.execv(sys.executable, ['python'] + sys.argv)
         
-    elif data == "open_admin_panel":
+    elif data == "open_admin_panel" or data == "open_admin_dashboard":
         await owner_dashboard(update, context)
         
     elif data == "back_to_main":
@@ -362,6 +367,43 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "✨ أهلاً بك في مصنع البوتات المتطور 🤖\n\nاختر ما تريد القيام به:",
             reply_markup=get_main_menu_inline(user_id)
         )
+
+    # --- إضافة وظائف تهيئة الجداول الجديدة ---
+    elif data == "setup_db_menu":
+        await query.answer()
+        text = (
+            "⚠️ <b>عزيزي المطور:</b>\n\n"
+            "هذه الخدمة تُستخدم <b>فقط في بداية التهيئة</b> للمشروع.\n"
+            "ستقوم الدالة بفحص الجداول، إنشائها إذا نقصت، وتنسيق الهيدرز.\n\n"
+            "هل أنت متأكد من الاستمرار؟"
+        )
+        keyboard = [
+            [
+                InlineKeyboardButton("✅ أنشأ", callback_data="run_setup_db_now"),
+                InlineKeyboardButton("❌ رجوع", callback_data="open_admin_panel")
+            ]
+        ]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+    elif data == "run_setup_db_now":
+        await query.answer("🚀 بدأت عملية التهيئة الاحترافية...")
+        
+        # استدعاء المحرك المطور من ملف sheets دون تداخل
+        from sheets import setup_bot_factory_database
+        success = setup_bot_factory_database()
+        
+        if success:
+            result_text = (
+                "✅ <b>تمت العملية بنجاح!</b>\n\n"
+                "تم إنشاء وتنسيق كافة الجداول (14 ورقة) وتفعيل نظام الحماية "
+                "والتحقق من المخطط (Schema) بنجاح."
+            )
+        else:
+            result_text = "❌ <b>فشلت العملية!</b>\nحدث خطأ أثناء الاتصال بجوجل شيت، يرجى مراجعة سجلات السيرفر."
+            
+        keyboard = [[InlineKeyboardButton("🔙 العودة للوحة التحكم", callback_data="open_admin_panel")]]
+        await query.edit_message_text(result_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دالة إلغاء عملية إنشاء البوت والعودة للقائمة الرئيسية"""
