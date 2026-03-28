@@ -55,42 +55,38 @@ def get_main_menu_inline(user_id):
     return InlineKeyboardMarkup(keyboard)
 # --------------------------------------------------------------------------
 def get_types_menu_inline():
-    # 1. الأزرار الأساسية (منظمة زرين في كل صف)
     keyboard = [
-        [
-            InlineKeyboardButton("📩 تواصل", callback_data="set_type_contact_bot"),
-            InlineKeyboardButton("🛡 حماية", callback_data="set_type_protection_bot")
-        ],
-        [
-            InlineKeyboardButton("🎓 منصة تعليمية", callback_data="set_type_education_bot"),
-            InlineKeyboardButton("🛒 متجر", callback_data="set_type_store_bot")
-        ]
+        [InlineKeyboardButton("📩 تواصل", callback_data="set_type_contact_bot"),
+         InlineKeyboardButton("🛡 حماية", callback_data="set_type_protection_bot")],
+        [InlineKeyboardButton("🎓 منصة تعليمية", callback_data="set_type_education_bot"),
+         InlineKeyboardButton("🛒 متجر", callback_data="set_type_store_bot")]
     ]
     
-    # 2. جلب الملفات المرفوعة ديناميكياً مع استثناء الملفات التقنية بدقة
-    # أضفت هنا الملفات التي ظهرت في صورتك (config, runner) لكي تختفي
-    exclude_files = [
-        'main.py', 'sheets.py', 'contact_bot.py', 'education_bot.py', 
-        'protection_bot.py', 'store_bot.py', 'config.py', 'runner.py', 
-        '__init__.py', 'utils.py'
-    ]
+    # استيراد ورقة الميتا لجلب الأوصاف
+    from sheets import meta_sheet
+    descriptions = {}
+    try:
+        if meta_sheet:
+            records = meta_sheet.get_all_records()
+            descriptions = {r['key']: r['value'] for r in records if str(r['key']).startswith('desc_')}
+    except: pass
+
+    exclude_files = ['main.py', 'sheets.py', 'contact_bot.py', 'education_bot.py', 'protection_bot.py', 'store_bot.py', 'config.py', 'runner.py']
     
     dynamic_buttons = []
     for file in os.listdir('.'):
-        # شرط إضافي: يجب أن يحتوي الملف على كلمة 'bot' في اسمه ليظهر (اختياري لزيادة الدقة)
         if file.endswith('.py') and file not in exclude_files:
             module_name = file[:-3]
-            dynamic_buttons.append(InlineKeyboardButton(f"🤖 {module_name}", callback_data=f"set_type_{module_name}"))
+            # جلب الاسم الوصفي من الشيت، وإذا لم يوجد نستخدم اسم الملف كبديل
+            display_name = descriptions.get(f"desc_{file}", module_name)
+            dynamic_buttons.append(InlineKeyboardButton(f"🤖 {display_name}", callback_data=f"set_type_{module_name}"))
     
-    # 3. تنظيم الأزرار الديناميكية المتبقية (كل 2 في صف)
     for i in range(0, len(dynamic_buttons), 2):
-        row = dynamic_buttons[i:i + 2]
-        keyboard.append(row)
+        keyboard.append(dynamic_buttons[i:i + 2])
     
-    # 4. زر الإلغاء في صف مستقل
     keyboard.append([InlineKeyboardButton("🔙 إلغاء", callback_data="cancel_action")])
-    
     return InlineKeyboardMarkup(keyboard)
+
 
 # --------------------------------------------------------------------------
 
@@ -478,24 +474,55 @@ async def handle_module_upload(update: Update, context: ContextTypes.DEFAULT_TYP
         )
         return WAITING_FOR_MODULE_NAME
 
+# --------------------------------------------------------------------------
 async def finalize_module_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """الخطوة 2: استقبال اسم الموديول وإعادة تشغيل المصنع"""
+    """الخطوة 2: استقبال اسم الموديول، حفظ الوصف في الشيت، وإعادة تشغيل المصنع"""
     if update.effective_user.id != ADMIN_ID: return
     
     module_display_name = update.message.text.strip()
     file_name = context.user_data.get("uploaded_module_file")
+    key_name = f"desc_{file_name}"
     
+    # --- نظام الحفظ الذكي في شيت الميتا (تحديث أو إضافة) ---
+    status_msg = "تمت إضافته كنوع جديد"
+    try:
+        from sheets import meta_sheet
+        from datetime import datetime
+        if meta_sheet:
+            # البحث عن الملف إذا كان مسجلاً مسبقاً
+            cell = None
+            try:
+                cell = meta_sheet.find(key_name)
+            except:
+                pass
+
+            now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            if cell:
+                # إذا وجدناه، نقوم بتحديث العمود الثاني (الاسم الوصفي) والثالث (التاريخ)
+                meta_sheet.update_cell(cell.row, 2, module_display_name)
+                meta_sheet.update_cell(cell.row, 3, now_str)
+                status_msg = "تم تحديث بيانات الموديول الحالي"
+            else:
+                # إذا لم نجده، نضيف سطراً جديداً
+                meta_sheet.append_row([key_name, module_display_name, now_str])
+    except Exception as e:
+        print(f"⚠️ خطأ في مزامنة الميتا: {e}")
+        status_msg = "تم الرفع (مع تعذر تحديث قاعدة البيانات)"
+
+    # رسالة التأكيد الاحترافية التي طلبتها
     await update.message.reply_text(
-        f"<b>🚀 تم اعتماد الموديول الجديد!</b>\n"
+        f"<b>🚀 {status_msg} بنجاح!</b>\n"
         f"-----------------------\n"
-        f"📛 <b>الاسم الجديد:</b> {module_display_name}\n"
-        f"📄 <b>الملف المربوط:</b> <code>{file_name}</code>\n"
+        f"📛 <b>الاسم الوصفي:</b> {module_display_name}\n"
+        f"📄 <b>الملف البرمجي:</b> <code>{file_name}</code>\n"
+        f"⚙️ <b>الحالة:</b> مرتبط وجاهز للتشغيل\n"
         f"-----------------------\n"
-        f"🔄 جاري إعادة تشغيل المصنع لتفعيل النوع الجديد فوراً...",
+        f"🔄 جاري الآن إعادة تشغيل المصنع لتفعيل التحديثات فوراً...",
         parse_mode="HTML"
     )
     
     context.user_data.clear()
+    # إعادة التشغيل لتطبيق التغييرات برمجياً
     os.execv(sys.executable, ['python'] + sys.argv)
 
 # --------------------------------------------------------------------------
