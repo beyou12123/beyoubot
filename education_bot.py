@@ -89,11 +89,6 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         )
         await query.edit_message_text(stats_text, reply_markup=get_admin_panel(), parse_mode="HTML")
 
-    # --- إدارة الدورات ---
-    elif data == "manage_courses":
-        await query.edit_message_text("📚 <b>قسم إدارة المحتوى:</b>\n\nيمكنك رفع الفيديوهات، ملفات PDF، أو تحديد المقدمات المجانية.", 
-                                      reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("➕ إضافة دورة جديدة", callback_data="add_course")], [InlineKeyboardButton("🔙 عودة", callback_data="back_to_admin")]]), parse_mode="HTML")
-
     # --- إدارة الأقسام (العرض) ---
     elif data == "manage_courses":
         await query.edit_message_text(
@@ -132,11 +127,13 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         cat_id = data.replace("edit_cat_", "")
         context.user_data['selected_cat_id'] = cat_id
         
-        keyboard = [
+                keyboard = [
             [InlineKeyboardButton("📝 تعديل اسم القسم", callback_data="rename_cat")],
+            [InlineKeyboardButton("📚 عرض دورات القسم", callback_data=f"view_crs_in_{cat_id}")],
             [InlineKeyboardButton("🗑️ حذف القسم", callback_data="confirm_delete_cat")],
             [InlineKeyboardButton("🔙 عودة للقائمة", callback_data="manage_cats")]
         ]
+
         await query.edit_message_text(
             f"🛠 <b>إدارة القسم:</b>\n🆔 المعرف: <code>{cat_id}</code>\n\nاختر الإجراء المطلوب:",
             reply_markup=InlineKeyboardMarkup(keyboard),
