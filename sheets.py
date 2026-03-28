@@ -370,4 +370,66 @@ def update_category_name(bot_token, cat_id, new_name):
         return False
 
 # --------------------------------------------------------------------------
+
+#دالة اضافة الدورات_التدريبية
+
+def add_new_course(bot_token, course_id, course_name, cat_id):
+    """إضافة دورة جديدة لورقة الدورات"""
+    try:
+        if courses_sheet is None: return False
+        from datetime import datetime
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # الترتيب حسب الأعمدة في شيتك: bot_id, معرف_الدورة, اسم_الدورة, معرف_القسم (أو حسب ترتيبك)
+        # سأفترض الترتيب: [bot_token, course_id, course_name, cat_id, "نشط", now]
+        courses_sheet.append_row([bot_token, course_id, course_name, "", "", "", "", "", "", "", "", "", "", "", cat_id, now])
+        return True
+    except Exception as e:
+        print(f"❌ Error adding course: {e}")
+        return False
+        def get_courses_by_category(bot_token, cat_id):
+    """جلب كافة الدورات المرتبطة بقسم محدد"""
+    try:
+        if courses_sheet is None: return []
+        all_rows = courses_sheet.get_all_values()
+        courses = []
+        for row in all_rows[1:]:
+            # افترضنا أن bot_token في العمود 1 و cat_id في العمود 15 (أو حسب ترتيبك)
+            # سنقوم بالفحص بناءً على ID القسم
+            if row[0] == bot_token and row[14] == cat_id:
+                courses.append({
+                    "id": row[1],    # معرف الدورة
+                    "name": row[2]   # اسم الدورة
+                })
+        return courses
+    except Exception as e:
+        print(f"❌ Error fetching courses: {e}")
+        return []
+
+def delete_course_by_id(bot_token, course_id):
+    """حذف دورة محددة من الشيت بناءً على معرفها"""
+    try:
+        if courses_sheet is None: return False
+        all_rows = courses_sheet.get_all_values()
+        for i, row in enumerate(all_rows):
+            if row[0] == bot_token and row[1] == course_id:
+                courses_sheet.delete_rows(i + 1)
+                return True
+        return False
+    except Exception as e:
+        print(f"❌ Error deleting course: {e}")
+        return False
+
+
 # --------------------------------------------------------------------------
+
+# --------------------------------------------------------------------------
+
+# --------------------------------------------------------------------------
+
+# --------------------------------------------------------------------------
+
+# --------------------------------------------------------------------------
+
+
+
