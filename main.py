@@ -198,65 +198,82 @@ async def receive_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # --------------------------------------------------------------------------
 
 async def run_dynamic_bot(bot_token, bot_type, user_id):
-    """تشغيل أي بوت تلقائياً بناءً على نوعه مع ضمان أولوية الموديول المرفوع"""
+    """الحل الجذري: ربط الاسم الوصفي بالملف البرمجي وتشغيل المحرك"""
     try:
-        # 1. تحديد اسم الملف البرمجي (الموديول)
-        # إذا كان النوع يحتوي على رموز أو مسافات، نأخذ اسم الملف المربوط
-        module_name = bot_type.strip()
+        from sheets import meta_sheet
+        import importlib
         
-        # تصحيح ذكي: إذا كان المستخدم اختار "تواصل" نستخدم الملف القديم، وإذا رفع ملف جديد نستخدم اسمه
-        if "تواصل" in module_name: module_name = "contact_bot"
-        elif "تعليمية" in module_name: module_name = "education_bot"
+        # 1. تحديد اسم الملف البرمجي الحقيقي (Mapping)
+        module_file_name = None
+        
+        # البحث في قاعدة البيانات (الميتا) عن اسم الملف المرتبط بهذا النوع
+        try:
+            if meta_sheet:
+                records = meta_sheet.get_all_records()
+                # نبحث عن السطر الذي يحتوي على الاسم الوصفي في العمود الثاني
+                for r in records:
+                    if str(r.get('value')) == bot_type.strip():
+                        # نأخذ اسم الملف من الـ key (نزيل منه desc_)
+                        module_file_name = str(r.get('key')).replace('desc_', '').replace('.py', '')
+                        break
+        except Exception as e:
+            print(f"⚠️ خطأ أثناء فحص الميتا: {e}")
 
-        # 2. استيراد الموديول ديناميكياً
-        module = importlib.import_module(module_name)
+        # إذا لم يجد في الميتا، نستخدم التحويلات اليدوية كخطة بديلة
+        if not module_file_name:
+            if "تواصل" in bot_type: module_file_name = "contact_bot"
+            elif "حماية" in bot_type: module_file_name = "protection_bot"
+            elif "تعليمية" in bot_type: module_file_name = "education_bot"
+            elif "متجر" in bot_type: module_file_name = "store_bot"
+            else: module_file_name = bot_type.strip() # آخر محاولة
+
+        # 2. استيراد الموديول برمجياً
+        print(f"📦 محاولة تحميل الملف: {module_file_name}.py للنوع: {bot_type}")
+        module = importlib.import_module(module_file_name)
         importlib.reload(module) 
 
-        # 3. بناء تطبيق البوت
+        # 3. بناء تطبيق البوت وتجهيزه
         new_app = ApplicationBuilder().token(bot_token).build()
         new_app.bot_data["owner_id"] = int(user_id)
 
-        # 4. ترتيب ربط الدوال (الأولوية القصوى للموديول)
+        # 4. ربط المعالجات (Handlers) - الترتيب هنا هو سر النجاح
         
-        # أ: معالج الأمر /start
+        # أ: معالج /start
         if hasattr(module, 'start_handler'):
             new_app.add_handler(CommandHandler("start", module.start_handler))
         
-        # ب: معالج الأزرار الشفافة
+        # ب: معالج الأزرار (Callback)
         if hasattr(module, 'callback_handler'):
             new_app.add_handler(CallbackQueryHandler(module.callback_handler))
-        elif hasattr(module, 'contact_callback_handler'): # توافق مع بوت التواصل
+        elif hasattr(module, 'contact_callback_handler'):
             new_app.add_handler(CallbackQueryHandler(module.contact_callback_handler))
 
-        # ج: معالج الرسائل النصية (هنا يتم الاتصال بالذكاء الاصطناعي)
-        # نستخدم فلاتر محددة لضمان عدم التداخل مع الأوامر
-        text_filter = filters.TEXT & (~filters.COMMAND)
+        # ج: الحل الجذري للرسائل (توجيه شامل للموديول)
+        # نضع filters.ALL لضمان أن الموديول هو من يتحكم بكل شيء (نصوص، صور، الخ)
+        main_filter = filters.ALL & (~filters.COMMAND)
         
         if hasattr(module, 'handle_message'):
-            # هذه الدالة هي التي ستشغل محرك AI في ملف ai_bot.py
-            new_app.add_handler(MessageHandler(text_filter, module.handle_message))
+            # هذا السطر هو الذي سيشغل موديول الذكاء الاصطناعي
+            new_app.add_handler(MessageHandler(main_filter, module.handle_message))
         elif hasattr(module, 'handle_contact_message'):
-            # هذه لبوت التواصل القديم
-            new_app.add_handler(MessageHandler(text_filter, module.handle_contact_message))
-        
-        # د: معالج الصور (إذا كان الموديول يدعمها)
-        if hasattr(module, 'handle_message'):
-            new_app.add_handler(MessageHandler(filters.PHOTO, module.handle_message))
+            # هذا لبوت التواصل
+            new_app.add_handler(MessageHandler(main_filter, module.handle_contact_message))
 
-        # هـ: معالج تتبع الحظر
+        # د: معالج الحظر
         if hasattr(module, 'track_chats'):
             new_app.add_handler(ChatMemberHandler(module.track_chats, ChatMemberHandler.MY_CHAT_MEMBER))
 
-        # 5. تشغيل المحرك
+        # 5. تشغيل البوت
         await new_app.initialize()
         await new_app.start()
         await new_app.updater.start_polling(drop_pending_updates=True)
-        print(f"🚀 [المحرك الديناميكي]: تم تشغيل موديول {module_name} بنجاح.")
+        print(f"🚀 [نجاح]: البوت بنوع [{bot_type}] يعمل الآن عبر ملف [{module_file_name}.py]")
 
     except ModuleNotFoundError:
-        print(f"❌ [خطأ]: لم يتم العثور على الملف {module_name}.py في المجلد الرئيسي.")
+        print(f"❌ [خطأ]: تعذر العثور على ملف باسم {module_file_name}.py")
     except Exception as e:
-        print(f"⚠️ [خطأ تقني]: فشل تشغيل البوت {bot_token[:10]}: {e}")
+        print(f"⚠️ [خطأ]: في تشغيل البot الديناميكي: {e}")
+
 
 # --------------------------------------------------------------------------
 async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
