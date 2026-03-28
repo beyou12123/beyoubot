@@ -166,12 +166,52 @@ async def receive_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ملاحظة: تم الإبقاء على الوظيفة كما هي بناءً على النسخة السابقة مع تفعيل التجاوز التلقائي لاحقاً
     await finalize_bot(update, context)
     return ConversationHandler.END
+
 # --------------------------------------------------------------------------
+# --- المحرك الديناميكي الأوتوماتيكي المطور ---
+# --------------------------------------------------------------------------
+async def run_dynamic_bot(bot_token, bot_type, user_id):
+    """تشغيل أي بوت تلقائياً بناءً على نوعه دون تعديل الكود الرئيسي"""
+    try:
+        # تنظيف اسم النوع ليتوافق مع أسماء الملفات
+        module_name = bot_type.strip() 
+
+        # استيراد الموديول ديناميكياً
+        module = importlib.import_module(module_name)
+        importlib.reload(module) 
+
+        # بناء تطبيق البوت
+        new_app = ApplicationBuilder().token(bot_token).build()
+        new_app.bot_data["owner_id"] = int(user_id)
+
+        # ربط الدوال الأساسية (يجب أن تكون موحدة الأسماء في كل ملفات الموديولات)
+        if hasattr(module, 'start_handler'):
+            new_app.add_handler(CommandHandler("start", module.start_handler))
+        
+        if hasattr(module, 'handle_message'):
+            new_app.add_handler(MessageHandler(filters.ALL & (~filters.COMMAND), module.handle_message))
+        
+        if hasattr(module, 'callback_handler'):
+            new_app.add_handler(CallbackQueryHandler(module.callback_handler))
+
+        # إضافة معالج تتبع الحظر (ثابت لكل البوتات)
+        if hasattr(module, 'track_chats'):
+            new_app.add_handler(ChatMemberHandler(module.track_chats, ChatMemberHandler.MY_CHAT_MEMBER))
+
+        # الانطلاق
+        await new_app.initialize()
+        await new_app.start()
+        await new_app.updater.start_polling(drop_pending_updates=True)
+        print(f"🚀 تم تشغيل موديول [{module_name}] للبوت بنجاح.")
+
+    except ModuleNotFoundError:
+        print(f"❌ خطأ: لم يتم العثور على ملف برمجي باسم {bot_type}.py")
+    except Exception as e:
+        print(f"⚠️ خطأ أثناء تشغيل الموديول الديناميكي {bot_type}: {e}")
+
 # --------------------------------------------------------------------------
 async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """حفظ البيانات، فك تداخل التوكينات، وتشغيل الإشعارات الثلاثية بصيغ مميزة وتنسيق آمن"""
-    # تصحيح: في نظام المحادثة الحالي، النص المرسل هنا هو "اسم البوت" 
-    # لأن التوكن تم حفظه في الخطوة السابقة (receive_token)
     bot_display_name = update.message.text.strip()
     user = update.effective_user
     user_id = user.id
@@ -185,7 +225,7 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # إنشاء كائن بوت مستقل للتعامل مع التوكن الجديد
         temp_bot = Bot(bot_token)
         
-        # حماية: إلغاء أي جلسات نشطة ومسح الرسائل العالقة لإنهاء مشكلة Conflict و Keyboard Expected
+        # حماية: إلغاء أي جلسات نشطة ومسح الرسائل العالقة لإنهاء مشكلة Conflict
         await temp_bot.delete_webhook(drop_pending_updates=True)
         
         bot_info = await temp_bot.get_me()
@@ -196,41 +236,8 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
         success = save_bot(user_id, bot_type, bot_display_name, bot_token)
 
         if success:
-            # تصحيح المسافات: هذه الدالة يجب أن تكون داخل بلوك النجاح
-            async def run_new_bot():
-                try:
-                    # بناء تطبيق البوت الجديد بشكل منعزل
-                    new_app = ApplicationBuilder().token(bot_token).build()
-                    new_app.bot_data["owner_id"] = int(user_id)
-                    
-                    # اختيار الموديول المناسب ديناميكياً
-                    module_map = {
-                        "📩 تواصل": "contact_bot",
-                        "🎓 منصة تعليمية": "education_bot",
-                        "🛡 حماية": "protection_bot",
-                        "🛒 متجر": "store_bot"
-                    }
-                    m_name = module_map.get(bot_type, "contact_bot")
-                    module = importlib.import_module(m_name)
-                    
-                    # ربط المعالجات (Handlers)
-                    new_app.add_handler(CommandHandler("start", module.start_handler))
-                    new_app.add_handler(CallbackQueryHandler(module.contact_callback_handler))
-                    new_app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), module.handle_contact_message))
-                    new_app.add_handler(MessageHandler(filters.PHOTO, module.handle_contact_message))
-                    
-                    # إضافة معالج تتبع الحظر وفك الحظر
-                    new_app.add_handler(ChatMemberHandler(module.track_chats, ChatMemberHandler.MY_CHAT_MEMBER))
-                    
-                    await new_app.initialize()
-                    await new_app.start()
-                    # البدء بصفحة بيضاء تماماً
-                    await new_app.updater.start_polling(drop_pending_updates=True)
-                except Exception as e:
-                    print(f"⚠️ خطأ في تشغيل محرك البوت الجديد: {e}")
-
-            # إطلاق مهمة التشغيل في الخلفية (يجب أن تكون مزاحة داخل الـ if)
-            asyncio.create_task(run_new_bot())
+            # تشغيل البوت أوتوماتيكياً باستخدام المحرك الديناميكي الجديد
+            asyncio.create_task(run_dynamic_bot(bot_token, bot_type, user_id))
 
             # --- [الرسالة الأولى: إشعار النجاح للمستخدم في المصنع] ---
             user_success_text = (
@@ -418,8 +425,9 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     context.user_data.clear()
     return ConversationHandler.END
+
 # --------------------------------------------------------------------------
-#دالة رفع ملف بوت جديد (تحديث تفاعلي للمطور)
+# دالة رفع ملف بوت جديد (تحديث تفاعلي للمطور)
 async def handle_module_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """الخطوة 1: استقبال الملف البرمجي من المطور"""
     if update.effective_user.id != ADMIN_ID: return
@@ -492,7 +500,6 @@ admin_module_conv = ConversationHandler(
 # --- دالة تشغيل البوتات المصنوعة تلقائياً ---
 async def start_all_sub_bots():
     from sheets import get_all_active_bots
-    from contact_bot import start_handler, handle_contact_message, contact_callback_handler, track_chats
     
     active_bots = get_all_active_bots()
     print(f"🔄 جاري محاولة تشغيل {len(active_bots)} بوت مصنوع...")
@@ -501,28 +508,9 @@ async def start_all_sub_bots():
         token = bot_data.get("التوكن")
         owner_id = bot_data.get("ID المالك")
         bot_type = bot_data.get("نوع البوت")
-        try:
-            sub_app = ApplicationBuilder().token(token).build()
-            sub_app.bot_data["owner_id"] = int(owner_id)
-            
-            # تحميل الموديول المناسب ديناميكياً
-            module_map = {"📩 تواصل": "contact_bot", "🎓 منصة تعليمية": "education_bot"}
-            m_name = module_map.get(bot_type, "contact_bot")
-            mod = importlib.import_module(m_name)
-            
-            sub_app.add_handler(CommandHandler("start", mod.start_handler))
-            sub_app.add_handler(CallbackQueryHandler(mod.contact_callback_handler))
-            sub_app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), mod.handle_contact_message))
-            
-            # إضافة معالج تتبع الحظر للبوتات القديمة أيضاً
-            sub_app.add_handler(ChatMemberHandler(mod.track_chats, ChatMemberHandler.MY_CHAT_MEMBER))
-            
-            await sub_app.initialize()
-            await sub_app.start()
-            await sub_app.updater.start_polling()
-            print(f"✅ تم تشغيل بوت التوكن: {token[:10]}...")
-        except Exception as e:
-            print(f"❌ فشل تشغيل بوت {token[:10]}: {e}")
+        
+        # تشغيل البوتات تلقائياً باستخدام المحرك الديناميكي
+        asyncio.create_task(run_dynamic_bot(token, bot_type, owner_id))
 
 # بناء التطبيق
 app = ApplicationBuilder().token(TOKEN).build()
