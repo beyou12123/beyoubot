@@ -12,15 +12,19 @@ from sheets import (
     get_all_categories,
     add_new_category,
     delete_category_by_id,
-    update_category_name
+    update_category_name,
+    add_new_course,
+    get_courses_by_category,
+    delete_course_by_id
 )
 
-# إعداد السجلات
+# إعداد السجلات (Logging) لمراقبة أداء البوت وتتبع الأخطاء
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
-# --- [ القوائم الرئيسية للمنصة ] ---
+# --- [ القوائم الرئيسية للمنصة - أزرار واجهة المستخدم ] ---
 
 def get_student_menu():
+    """قائمة الأزرار الرئيسية التي تظهر للطلاب"""
     keyboard = [
         [InlineKeyboardButton("📚 استعراض الدورات", callback_data="view_courses")],
         [InlineKeyboardButton("👤 ملفي الدراسي", callback_data="my_profile"), InlineKeyboardButton("🎟 تفعيل دورة", callback_data="redeem_code")],
@@ -29,6 +33,7 @@ def get_student_menu():
     return InlineKeyboardMarkup(keyboard)
 
 def get_admin_panel():
+    """قائمة الأزرار الرئيسية للوحة تحكم الإدارة"""
     keyboard = [
         [InlineKeyboardButton("📊 الإحصائيات الذكية", callback_data="admin_stats")],
         [InlineKeyboardButton("📁 إدارة الأقسام", callback_data="manage_cats"), InlineKeyboardButton("📚 إدارة الدورات", callback_data="manage_courses")],
@@ -38,24 +43,27 @@ def get_admin_panel():
     ]
     return InlineKeyboardMarkup(keyboard)
 
-# --- [ المعالجات الأساسية ] ---
+# --- [ المعالجات الأساسية - أمر البداية ] ---
 
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """معالجة أمر /start وتسجيل المستخدم وعرض القائمة المناسبة"""
     user = update.effective_user
     bot_token = context.bot.token
     config = get_bot_config(bot_token)
     bot_owner_id = int(config.get("admin_ids", 0))
 
-    # تسجيل الطالب في قاعدة البيانات
+    # تسجيل الطالب في قاعدة البيانات (Google Sheets)
     save_user(user.id, user.username)
 
     if user.id == bot_owner_id:
+        # واجهة المسؤول
         await update.message.reply_text(
             f"<b>مرحباً بك يا دكتور {user.first_name} في لوحة تحكم منصتك</b> 🎓\n\nيمكنك إدارة الطلاب، الدورات، والمبيعات من هنا:",
             reply_markup=get_admin_panel(),
             parse_mode="HTML"
         )
     else:
+        # واجهة الطالب
         welcome_msg = config.get("الرسالة الترحيبية", "مرحباً بك في المنصة التعليمية! ابدأ رحلة تعلمك الآن.")
         await update.message.reply_text(
             f"<b>{welcome_msg}</b>",
@@ -64,8 +72,11 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 # --------------------------------------------------------------------------
+# --- [ معالج ضغطات الأزرار (Callback Query Handler) ] ---
+# --------------------------------------------------------------------------
 
 async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """التحكم في كافة عمليات الضغط على الأزرار الشفافة Inline Buttons"""
     query = update.callback_query
     data = query.data
     user_id = query.from_user.id
@@ -75,7 +86,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 
     await query.answer()
 
-    # --- إدارة الإحصائيات ---
+    # --- 1. إدارة الإحصائيات ---
     if data == "admin_stats":
         total_students = get_bot_users_count(bot_token)
         blocks = get_bot_blocks_count(bot_token)
@@ -89,7 +100,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         )
         await query.edit_message_text(stats_text, reply_markup=get_admin_panel(), parse_mode="HTML")
 
-    # --- إدارة الأقسام (العرض) ---
+    # --- 2. إدارة الدورات التدريبية (الواجهة الرئيسية) ---
     elif data == "manage_courses":
         await query.edit_message_text(
             "📚 <b>إدارة الدورات التدريبية:</b>\n\nيمكنك إضافة دورات جديدة وربطها بالأقسام المتاحة.", 
@@ -100,8 +111,8 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             parse_mode="HTML"
         )
 
-        elif data == "start_add_course":
-        # جلب الأقسام ليختار المسؤول أين يضع الدورة
+    # --- 3. بدء عملية إضافة دورة جديدة (اختيار القسم أولاً) ---
+    elif data == "start_add_course":
         from sheets import get_all_categories
         categories = get_all_categories(bot_token)
         if not categories:
@@ -114,44 +125,80 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         
         await query.edit_message_text("🎯 <b>اختر القسم الذي تريد إضافة الدورة إليه:</b>", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
+    # --- 4. معالجة القسم المختار للدورة وبدء طلب الاسم ---
     elif data.startswith("sel_cat_for_crs_"):
         cat_id = data.replace("sel_cat_for_crs_", "")
-        context.user_data['temp_course_cat'] = cat_id # حفظ القسم مؤقتاً
-        context.user_data['action'] = 'awaiting_course_name'
+        context.user_data['temp_course_cat'] = cat_id # حفظ القسم مؤقتاً في الذاكرة
+        context.user_data['action'] = 'awaiting_course_name' # تغيير حالة البوت لانتظار اسم الدورة
         
-        await query.edit_message_text("✍️ <b>ممتاز! الآن أرسل اسم الدورة الجديدة:</b>", 
+        await query.edit_message_text("✍️ <b>ممتاز! الآن أرسل اسم الدورة الجديدة كرسالة نصية:</b>", 
                                       reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ إلغاء", callback_data="manage_courses")]]), parse_mode="HTML")
 
-    # --- عرض خيارات القسم المختار (تعديل/حذف) ---
+    # --- 5. إدارة الأقسام (عرض القائمة) ---
+    elif data == "manage_cats":
+        from sheets import get_all_categories 
+        categories = get_all_categories(bot_token)
+        
+        keyboard = []
+        if categories:
+            for cat in categories:
+                keyboard.append([InlineKeyboardButton(f"📂 {cat['name']}", callback_data=f"edit_cat_{cat['id']}")])
+        
+        keyboard.append([InlineKeyboardButton("➕ إضافة قسم جديد", callback_data="add_cat_start")])
+        keyboard.append([InlineKeyboardButton("🔙 عودة", callback_data="back_to_admin")])
+        
+        await query.edit_message_text(
+            "🗂 <b>قائمة الأقسام الحالية:</b>\nاختر قسماً للتعديل أو اضغط إضافة:",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
+        )
+
+    # --- 6. عرض خيارات القسم المختار (تعديل/حذف/عرض دورات) ---
     elif data.startswith("edit_cat_"):
         cat_id = data.replace("edit_cat_", "")
         context.user_data['selected_cat_id'] = cat_id
         
-                keyboard = [
+        keyboard = [
             [InlineKeyboardButton("📝 تعديل اسم القسم", callback_data="rename_cat")],
             [InlineKeyboardButton("📚 عرض دورات القسم", callback_data=f"view_crs_in_{cat_id}")],
             [InlineKeyboardButton("🗑️ حذف القسم", callback_data="confirm_delete_cat")],
             [InlineKeyboardButton("🔙 عودة للقائمة", callback_data="manage_cats")]
         ]
-
         await query.edit_message_text(
             f"🛠 <b>إدارة القسم:</b>\n🆔 المعرف: <code>{cat_id}</code>\n\nاختر الإجراء المطلوب:",
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode="HTML"
         )
 
-    # --- بدء عملية إضافة قسم جديد ---
+    # --- 7. عرض الدورات التابعة لقسم محدد ---
+    elif data.startswith("view_crs_in_"):
+        cat_id = data.replace("view_crs_in_", "")
+        from sheets import get_courses_by_category
+        courses = get_courses_by_category(bot_token, cat_id)
+        
+        keyboard = []
+        if courses:
+            for crs in courses:
+                keyboard.append([InlineKeyboardButton(f"📖 {crs['name']}", callback_data=f"manage_crs_{crs['id']}")])
+        
+        keyboard.append([InlineKeyboardButton("🔙 عودة للقسم", callback_data=f"edit_cat_{cat_id}")])
+        
+        await query.edit_message_text(
+            f"📚 <b>الدورات التابعة للقسم {cat_id}:</b>",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
+        )
+
+    # --- 8. بدء عملية إضافة قسم جديد ---
     elif data == "add_cat_start":
         context.user_data['action'] = 'awaiting_cat_name'
         await query.edit_message_text(
             "✍️ <b>إضافة قسم جديد:</b>\n\nيرجى إرسال اسم القسم الذي تريد إنشاءه الآن:",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("❌ إلغاء العملية", callback_data="manage_cats")]
-            ]),
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ إلغاء العملية", callback_data="manage_cats")]]),
             parse_mode="HTML"
         )
 
-    # --- تأكيد حذف القسم ---
+    # --- 9. تأكيد حذف القسم ---
     elif data == "confirm_delete_cat":
         keyboard = [
             [InlineKeyboardButton("✅ نعم، احذف", callback_data="exec_delete_cat")],
@@ -163,20 +210,16 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             parse_mode="HTML"
         )
 
-    # --- تنفيذ الحذف النهائي ---
+    # --- 10. تنفيذ الحذف النهائي للقسم ---
     elif data == "exec_delete_cat":
         cat_id = context.user_data.get('selected_cat_id')
-        from sheets import delete_category_by_id
         if delete_category_by_id(bot_token, cat_id):
-            await query.edit_message_text(
-                "✅ <b>تم حذف القسم بنجاح!</b>",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 العودة للأقسام", callback_data="manage_cats")]]),
-                parse_mode="HTML"
-            )
-    else:
+            await query.edit_message_text("✅ <b>تم حذف القسم بنجاح!</b>", 
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 العودة للأقسام", callback_data="manage_cats")]]), parse_mode="HTML")
+        else:
             await query.edit_message_text("❌ حدث خطأ أثناء محاولة الحذف.")
 
-    # --- بدء عملية تعديل الاسم ---
+    # --- 11. بدء عملية تعديل اسم القسم ---
     elif data == "rename_cat":
         context.user_data['action'] = 'awaiting_new_cat_name'
         await query.edit_message_text(
@@ -185,6 +228,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             parse_mode="HTML"
         )
 
+    # --- 12. واجهة إدارة دورة محددة ---
     elif data.startswith("manage_crs_"):
         course_id = data.replace("manage_crs_", "")
         context.user_data['selected_course_id'] = course_id
@@ -193,132 +237,74 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             [InlineKeyboardButton("🗑️ حذف هذه الدورة", callback_data="confirm_delete_crs")],
             [InlineKeyboardButton("🔙 عودة لقائمة الدورات", callback_data="manage_courses")]
         ]
-        
-        await query.edit_message_text(
-            f"📖 <b>إدارة الدورة:</b>\n🆔 المعرف: <code>{course_id}</code>\n\nاختر الإجراء المطلوب:",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="HTML"
-        )
+        await query.edit_message_text(f"📖 <b>إدارة الدورة:</b>\n🆔 المعرف: <code>{course_id}</code>", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
-    # --- تأكيد وحذف الدورة ---
+    # --- 13. تأكيد وحذف الدورة ---
     elif data == "confirm_delete_crs":
         keyboard = [
             [InlineKeyboardButton("✅ نعم، احذف الدورة", callback_data="exec_delete_crs")],
             [InlineKeyboardButton("❌ تراجع", callback_data="manage_courses")]
         ]
-        await query.edit_message_text("⚠️ <b>تأكيد الحذف:</b>\nهل أنت متأكد من حذف هذه الدورة نهائياً؟", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+        await query.edit_message_text("⚠️ <b>تأكيد الحذف:</b>\nهل أنت متأكد من حذف هذه الدورة؟", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
     elif data == "exec_delete_crs":
         course_id = context.user_data.get('selected_course_id')
-        from sheets import delete_course_by_id
-        
         if delete_course_by_id(bot_token, course_id):
             await query.edit_message_text("✅ <b>تم حذف الدورة بنجاح!</b>", 
-                                          reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 العودة للإدارة", callback_data="manage_courses")]]), parse_mode="HTML")
-        else:
-            await query.edit_message_text("❌ فشل الحذف، تأكد من وجود الدورة في الشيت.")
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 العودة", callback_data="manage_courses")]]), parse_mode="HTML")
 
-
-    # --- بقية وظائف اللوحة ---
+    # --- 14. الإذاعة والتنقل العام ---
     elif data == "smart_broadcast":
         await query.edit_message_text("📡 <b>الإذاعة الذكية:</b>", 
-                                      reply_markup=InlineKeyboardMarkup([
-                                          [InlineKeyboardButton("📢 للكل", callback_data="bc_all"), InlineKeyboardButton("🎓 لمشتركي دورة", callback_data="bc_course")]
-                                      ]), parse_mode="HTML")
-                                          elif data.startswith("view_crs_in_"):
-                                              
-        cat_id = data.replace("view_crs_in_", "")
-        from sheets import get_courses_by_category
-        courses = get_courses_by_category(bot_token, cat_id)
-        
-        
-        keyboard = []
-        if courses:
-            for crs in courses:
-                keyboard.append([InlineKeyboardButton(f"📖 {crs['name']}", callback_data=f"manage_crs_{crs['id']}")])
-        else:
-            stats_text = "ℹ️ لا توجد دورات في هذا القسم حالياً."
-            
-        keyboard.append([InlineKeyboardButton("🔙 عودة للقسم", callback_data=f"edit_cat_{cat_id}")])
-        
-        await query.edit_message_text(
-            f"📚 <b>الدورات التابعة للقسم {cat_id}:</b>",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="HTML"
-        )
-
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📢 للكل", callback_data="bc_all"), InlineKeyboardButton("🎓 لمشتركي دورة", callback_data="bc_course")]]), parse_mode="HTML")
 
     elif data == "close_panel":
         await query.edit_message_text("🔒 تم إغلاق لوحة التحكم.")
 
-    # --- التنقل والعودة ---
     elif data == "back_to_admin":
-        await query.edit_message_text(
-            f"<b>مرحباً بك مجدداً يا دكتور {query.from_user.first_name}</b> 🎓",
-            reply_markup=get_admin_panel(),
-            parse_mode="HTML"
-        )
+        await query.edit_message_text(f"<b>مرحباً بك مجدداً يا دكتور {query.from_user.first_name}</b>", reply_markup=get_admin_panel(), parse_mode="HTML")
 
-    elif data == "main_menu":
-        welcome_msg = config.get("الرسالة الترحيبية", "مرحباً بك في المنصة التعليمية!")
-        await query.edit_message_text(
-            f"<b>{welcome_msg}</b>",
-            reply_markup=get_student_menu(),
-            parse_mode="HTML"
-        )
-
+# --------------------------------------------------------------------------
+# --- [ معالج الرسائل النصية (Message Handler) ] ---
 # --------------------------------------------------------------------------
 
 async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """معالجة كافة الرسائل النصية الواردة للبوت وتوجيهها حسب الحالة"""
     text = update.message.text
     user = update.effective_user
     bot_token = context.bot.token
     config = get_bot_config(bot_token)
     bot_owner_id = int(config.get("admin_ids", 0))
+    action = context.user_data.get('action')
 
-    # --- [ فحص الحالات الخاصة بالمسؤول (إضافة وتعديل) ] ---
+    # --- [ الجزء الخاص بالمسؤول (إدارة المحتوى) ] ---
     if user.id == bot_owner_id:
-        action = context.user_data.get('action')
-        
+        # حالة 1: إضافة قسم جديد
         if action == 'awaiting_cat_name':
             cat_id = f"C{str(uuid.uuid4().int)[:4]}"
-            cat_name = text.strip()
-            if add_new_category(bot_token, cat_id, cat_name):
+            if add_new_category(bot_token, cat_id, text.strip()):
                 context.user_data['action'] = None
-                await update.message.reply_text(f"✅ تم إنشاء القسم: <b>{cat_name}</b>", reply_markup=get_admin_panel(), parse_mode="HTML")
+                await update.message.reply_text(f"✅ تم إنشاء القسم: <b>{text}</b>", reply_markup=get_admin_panel(), parse_mode="HTML")
             return
             
+        # حالة 2: تعديل اسم قسم
         elif action == 'awaiting_new_cat_name':
             cat_id = context.user_data.get('selected_cat_id')
-            new_name = text.strip()
-            if update_category_name(bot_token, cat_id, new_name):
+            if update_category_name(bot_token, cat_id, text.strip()):
                 context.user_data['action'] = None
-                await update.message.reply_text(f"✅ تم تحديث الاسم إلى: <b>{new_name}</b>", reply_markup=get_admin_panel(), parse_mode="HTML")
-            return
-        # --- معالجة استلام اسم الدورة الجديدة ---
-        elif action == 'awaiting_course_name':
-            import uuid
-            from sheets import add_new_course 
-            
-            course_cat = context.user_data.get('temp_course_cat')
-            course_id = f"CRS{str(uuid.uuid4().int)[:4]}"
-            course_name = text.strip()
-            
-            if add_new_course(bot_token, course_id, course_name, course_cat):
-                context.user_data['action'] = None
-                await update.message.reply_text(
-                    f"✅ <b>تم إضافة الدورة بنجاح!</b>\n\n"
-                    f"📚 الاسم: {course_name}\n"
-                    f"🆔 المعرف: <code>{course_id}</code>\n"
-                    f"📂 القسم: <code>{course_cat}</code>",
-                    reply_markup=get_admin_panel(),
-                    parse_mode="HTML"
-                )
-            else:
-                await update.message.reply_text("❌ حدث خطأ أثناء حفظ الدورة.")
+                await update.message.reply_text(f"✅ تم تحديث الاسم إلى: <b>{text}</b>", reply_markup=get_admin_panel(), parse_mode="HTML")
             return
 
-    # نظام الرد الآلي الذكي (Smart FAQ)
+        # حالة 3: إضافة دورة جديدة
+        elif action == 'awaiting_course_name':
+            course_cat = context.user_data.get('temp_course_cat')
+            course_id = f"CRS{str(uuid.uuid4().int)[:4]}"
+            if add_new_course(bot_token, course_id, text.strip(), course_cat):
+                context.user_data['action'] = None
+                await update.message.reply_text(f"✅ تم إضافة الدورة: <b>{text}</b>", reply_markup=get_admin_panel(), parse_mode="HTML" )
+            return
+
+    # --- [ الجزء الخاص بالطلاب والردود الآلية ] ---
     faq_keywords = {
         "طريقة الدفع": "💳 يمكنك الدفع عبر (زين كاش، بايبال، أو كروت التعبئة).",
         "تفعيل": "🎟 لتفعيل الدورة، يرجى إرسال الكود الذي حصلت عليه.",
@@ -331,26 +317,19 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
                 await update.message.reply_text(response)
                 return
 
-        info = f"📩 <b>سؤال جديد من طالب:</b>\nالاسم: {user.full_name}\nID: <code>{user.id}</code>\n\n{text}"
+        # توجيه الرسالة للمدرب
+        info = f"📩 <b>سؤال جديد من طالب:</b>\n{user.full_name}\n\n{text}"
         try:
             await context.bot.send_message(chat_id=bot_owner_id, text=info, parse_mode="HTML")
-            await update.message.reply_text("✅ تم إرسال استفسارك للمدرب، سيتم الرد عليك قريباً.")
+            await update.message.reply_text("✅ تم إرسال استفسارك للمدرب.")
         except:
-            await update.message.reply_text("⚠️ فشل التواصل مع الإدارة حالياً.")
-
-
+            await update.message.reply_text("⚠️ فشل التواصل مع الإدارة.")
 
 async def track_chats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """تتبع الطلاب (حظر/إلغاء حظر البوت)"""
     result = update.my_chat_member
-    user = result.from_user
     bot_owner_id = int(get_bot_config(context.bot.token).get("admin_ids", 0))
-
-    if result.new_chat_member.status == ChatMember.BANNED:
-        msg = f"<b>🚫 قام الطالب {user.full_name} بحظر المنصة.</b>"
-        try: await context.bot.send_message(chat_id=bot_owner_id, text=msg, parse_mode="HTML")
-        except: pass
-    elif result.new_chat_member.status == ChatMember.MEMBER:
-        msg = f"<b>📶 عاد الطالب {user.full_name} لاستخدام المنصة.</b>"
-        try: await context.bot.send_message(chat_id=bot_owner_id, text=msg, parse_mode="HTML")
-        except: pass
-    
+    status = "حظر البوت 🚫" if result.new_chat_member.status == ChatMember.BANNED else "عاد للبوت ✅"
+    msg = f"👤 الطالب {result.from_user.full_name} قام بـ {status}"
+    try: await context.bot.send_message(chat_id=bot_owner_id, text=msg, parse_mode="HTML")
+    except: pass
