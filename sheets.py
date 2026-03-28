@@ -300,5 +300,74 @@ def verify_setup(structures):
         if not ws or set(ws.row_values(1)) != set(config["cols"]): return False
     return True
 # --------------------------------------------------------------------------
+def add_new_category(bot_token, cat_id, cat_name):
+    """إضافة قسم جديد باستخدام المتغير departments_sheet"""
+    try:
+        from datetime import datetime
+        current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # التأكد أن المتغير ليس None
+        if departments_sheet is not None:
+            # إضافة: التوكن، المعرف، الاسم، التاريخ
+            departments_sheet.append_row([bot_token, cat_id, cat_name, current_date])
+            return True
+        return False
+    except Exception as e:
+        print(f"❌ Error in add_new_category: {e}")
+        return False
 
+def get_all_categories(bot_token):
+    """جلب الأقسام باستخدام المتغير departments_sheet"""
+    try:
+        if departments_sheet is None:
+            return []
+            
+        all_rows = departments_sheet.get_all_values()
+        categories = []
+        for row in all_rows[1:]: # تخطي العنوان
+            if row[0] == bot_token:
+                categories.append({
+                    "id": row[1],
+                    "name": row[2]
+                })
+        return categories
+    except Exception as e:
+        print(f"❌ Error in get_all_categories: {e}")
+        return []
+#دالة حذف القسم والبحث 
+def delete_category_by_id(bot_token, cat_id):
+    """حذف صف القسم من جوجل شيت بناءً على ID القسم والتوكن"""
+    try:
+        if departments_sheet is None: return False
+        
+        all_rows = departments_sheet.get_all_values()
+        for i, row in enumerate(all_rows):
+            # التأكد من مطابقة التوكن (العمود 1) والـ ID (العمود 2)
+            if row[0] == bot_token and row[1] == cat_id:
+                # i+1 لأن جوجل شيت يبدأ العد من 1 وليس 0
+                departments_sheet.delete_rows(i + 1)
+                return True
+        return False
+    except Exception as e:
+        print(f"❌ Error in delete_category: {e}")
+        return False
+ # دالة تبحث عن الـ ID وتقوم بتغيير الاسم في ذلك الصف
+def update_category_name(bot_token, cat_id, new_name):
+    """تحديث اسم قسم موجود في جوجل شيت"""
+    try:
+        if departments_sheet is None: return False
+        
+        all_rows = departments_sheet.get_all_values()
+        for i, row in enumerate(all_rows):
+            # العمود 1 توكن، العمود 2 ID
+            if row[0] == bot_token and row[1] == cat_id:
+                # تحديث العمود الثالث (Index 3 في الشيت يبدأ من 1)
+                departments_sheet.update_cell(i + 1, 3, new_name)
+                return True
+        return False
+    except Exception as e:
+        print(f"❌ Error in update_category_name: {e}")
+        return False
+
+# --------------------------------------------------------------------------
 # --------------------------------------------------------------------------
