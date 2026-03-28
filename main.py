@@ -55,14 +55,28 @@ def get_main_menu_inline(user_id):
     return InlineKeyboardMarkup(keyboard)
 
 def get_types_menu_inline():
+    # الأزرار الأساسية التي نريدها دائماً في البداية
     keyboard = [
-        [InlineKeyboardButton("📩 تواصل", callback_data="set_type_📩 تواصل")],
-        [InlineKeyboardButton("🛡 حماية", callback_data="set_type_🛡 حماية")],
-        [InlineKeyboardButton("🎓 منصة تعليمية", callback_data="set_type_🎓 منصة تعليمية")],
-        [InlineKeyboardButton("🛒 متجر", callback_data="set_type_🛒 متجر")],
-        [InlineKeyboardButton("🔙 إلغاء", callback_data="cancel_action")]
+        [InlineKeyboardButton("📩 تواصل", callback_data="set_type_contact_bot")],
+        [InlineKeyboardButton("🛡 حماية", callback_data="set_type_protection_bot")],
+        [InlineKeyboardButton("🎓 منصة تعليمية", callback_data="set_type_education_bot")],
+        [InlineKeyboardButton("🛒 متجر", callback_data="set_type_store_bot")]
     ]
+    
+    # --- الجزء الأوتوماتيكي المضاف ---
+    # البحث عن أي ملفات .py مرفوعة إضافية (مثل ai_bot.py)
+    exclude_files = ['main.py', 'sheets.py', 'contact_bot.py', 'education_bot.py', 'protection_bot.py', 'store_bot.py']
+    for file in os.listdir('.'):
+        if file.endswith('.py') and file not in exclude_files:
+            module_name = file[:-3] # إزالة .py من الاسم
+            # إضافة زر لكل موديول جديد مرفوع
+            keyboard.append([InlineKeyboardButton(f"🤖 {module_name}", callback_data=f"set_type_{module_name}")])
+    
+    # زر الإلغاء في النهاية دائماً
+    keyboard.append([InlineKeyboardButton("🔙 إلغاء", callback_data="cancel_action")])
+    
     return InlineKeyboardMarkup(keyboard)
+
 
 # القوائم القديمة (للحفاظ على التوافق مع الوظائف التي قد تطلبها)
 main_menu = [["➕ إنشاء بوت"], ["🛠 لوحة التحكم (للمالك)"]]
