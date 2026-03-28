@@ -196,44 +196,67 @@ async def receive_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # --------------------------------------------------------------------------
 # --- المحرك الديناميكي الأوتوماتيكي المطور ---
 # --------------------------------------------------------------------------
-async def run_dynamic_bot(bot_token, bot_type, user_id):
-    """تشغيل أي بوت تلقائياً بناءً على نوعه دون تعديل الكود الرئيسي"""
-    try:
-        # تنظيف اسم النوع ليتوافق مع أسماء الملفات
-        module_name = bot_type.strip() 
 
-        # استيراد الموديول ديناميكياً
+async def run_dynamic_bot(bot_token, bot_type, user_id):
+    """تشغيل أي بوت تلقائياً بناءً على نوعه مع ضمان أولوية الموديول المرفوع"""
+    try:
+        # 1. تحديد اسم الملف البرمجي (الموديول)
+        # إذا كان النوع يحتوي على رموز أو مسافات، نأخذ اسم الملف المربوط
+        module_name = bot_type.strip()
+        
+        # تصحيح ذكي: إذا كان المستخدم اختار "تواصل" نستخدم الملف القديم، وإذا رفع ملف جديد نستخدم اسمه
+        if "تواصل" in module_name: module_name = "contact_bot"
+        elif "تعليمية" in module_name: module_name = "education_bot"
+
+        # 2. استيراد الموديول ديناميكياً
         module = importlib.import_module(module_name)
         importlib.reload(module) 
 
-        # بناء تطبيق البوت
+        # 3. بناء تطبيق البوت
         new_app = ApplicationBuilder().token(bot_token).build()
         new_app.bot_data["owner_id"] = int(user_id)
 
-        # ربط الدوال الأساسية (يجب أن تكون موحدة الأسماء في كل ملفات الموديولات)
+        # 4. ترتيب ربط الدوال (الأولوية القصوى للموديول)
+        
+        # أ: معالج الأمر /start
         if hasattr(module, 'start_handler'):
             new_app.add_handler(CommandHandler("start", module.start_handler))
         
-        if hasattr(module, 'handle_message'):
-            new_app.add_handler(MessageHandler(filters.ALL & (~filters.COMMAND), module.handle_message))
-        
+        # ب: معالج الأزرار الشفافة
         if hasattr(module, 'callback_handler'):
             new_app.add_handler(CallbackQueryHandler(module.callback_handler))
+        elif hasattr(module, 'contact_callback_handler'): # توافق مع بوت التواصل
+            new_app.add_handler(CallbackQueryHandler(module.contact_callback_handler))
 
-        # إضافة معالج تتبع الحظر (ثابت لكل البوتات)
+        # ج: معالج الرسائل النصية (هنا يتم الاتصال بالذكاء الاصطناعي)
+        # نستخدم فلاتر محددة لضمان عدم التداخل مع الأوامر
+        text_filter = filters.TEXT & (~filters.COMMAND)
+        
+        if hasattr(module, 'handle_message'):
+            # هذه الدالة هي التي ستشغل محرك AI في ملف ai_bot.py
+            new_app.add_handler(MessageHandler(text_filter, module.handle_message))
+        elif hasattr(module, 'handle_contact_message'):
+            # هذه لبوت التواصل القديم
+            new_app.add_handler(MessageHandler(text_filter, module.handle_contact_message))
+        
+        # د: معالج الصور (إذا كان الموديول يدعمها)
+        if hasattr(module, 'handle_message'):
+            new_app.add_handler(MessageHandler(filters.PHOTO, module.handle_message))
+
+        # هـ: معالج تتبع الحظر
         if hasattr(module, 'track_chats'):
             new_app.add_handler(ChatMemberHandler(module.track_chats, ChatMemberHandler.MY_CHAT_MEMBER))
 
-        # الانطلاق
+        # 5. تشغيل المحرك
         await new_app.initialize()
         await new_app.start()
         await new_app.updater.start_polling(drop_pending_updates=True)
-        print(f"🚀 تم تشغيل موديول [{module_name}] للبوت بنجاح.")
+        print(f"🚀 [المحرك الديناميكي]: تم تشغيل موديول {module_name} بنجاح.")
 
     except ModuleNotFoundError:
-        print(f"❌ خطأ: لم يتم العثور على ملف برمجي باسم {bot_type}.py")
+        print(f"❌ [خطأ]: لم يتم العثور على الملف {module_name}.py في المجلد الرئيسي.")
     except Exception as e:
-        print(f"⚠️ خطأ أثناء تشغيل الموديول الديناميكي {bot_type}: {e}")
+        print(f"⚠️ [خطأ تقني]: فشل تشغيل البوت {bot_token[:10]}: {e}")
 
 # --------------------------------------------------------------------------
 async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -577,6 +600,8 @@ app.add_handler(create_bot_conv)
 app.add_handler(admin_module_conv) # محادثة الرفع الجديدة
 app.add_handler(CallbackQueryHandler(button_callback))
 app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
+
+
 
 if __name__ == "__main__":
     import asyncio
