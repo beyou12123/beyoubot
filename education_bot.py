@@ -689,17 +689,24 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
 
         # 2. إدارة ذاكرة المحادثة
         # نستخدم القاموس العالمي المعرف خارج الدالة
+                # 2. إدارة ذاكرة المحادثة
         global user_messages
-        # محاولة الوصول للقاموس، إذا لم يكن موجوداً ننشئه لتفادي تعليق البوت
-        try:
-            if user.id not in user_messages:
-                user_messages[user.id] = []
-        except NameError:
-            user_messages = {user.id: []}
+        if user.id not in user_messages:
+            user_messages[user.id] = []
+
+        # جلب البيانات من الشيت (تأكد من المحاذاة هنا)
+        from sheets import get_courses_knowledge_base
+        courses_knowledge = get_courses_knowledge_base(bot_token)
+        
+        # إضافة رسالة الطالب للذاكرة
+        user_messages[user.id].append({"role": "user", "content": text})
+
 
         # جلب البيانات من الشيت لتغذية المحرك
-        from sheets import get_all_courses_for_ai
-        courses_knowledge = get_all_courses_for_ai(bot_token)
+        from sheets import get_courses_knowledge_base
+        courses_knowledge = get_courses_knowledge_base(bot_token)
+
+
         
         # إضافة رسالة الطالب للذاكرة
         user_messages[user.id].append({"role": "user", "content": text})
