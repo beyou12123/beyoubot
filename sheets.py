@@ -442,6 +442,25 @@ def delete_course_by_id(bot_token, course_id):
 
 
 # --------------------------------------------------------------------------
+def find_user_by_username(bot_token, username):
+    """البحث عن بيانات المدرب في شيت المستخدمين باستخدام اليوزرنايم"""
+    try:
+        # ورقة المستخدمين (تأكد من تسميتها حسب ملفك، سأفترض أنها users_sheet)
+        if users_sheet is None: return None
+        all_rows = users_sheet.get_all_values()
+        search_name = username.replace("@", "").lower()
+        
+        for row in all_rows[1:]:
+            # فحص التوكن واليوزرنايم (العمود 1 والعمود 3 عادةً)
+            if row[0] == bot_token and row[2].lower() == search_name:
+                return {
+                    "id": row[1],   # معرف المستخدم الرقمي
+                    "name": row[3] if len(row) > 3 else "مدرب" # الاسم (العمود الرابع)
+                }
+        return None
+    except Exception as e:
+        print(f"❌ Error finding user in sheets: {e}")
+        return None
 
 # --------------------------------------------------------------------------
 
