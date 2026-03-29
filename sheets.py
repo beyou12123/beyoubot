@@ -251,8 +251,8 @@ def get_sheets_structure():
         {"name": "الأسئلة_الشائعة", "cols": ["bot_id", "معرف_القسم","معرف_الدورة","اسم_الدورة", "محتوى_السؤال_مع_الإجابة","الحالة","ترتيب_العرض","تاريخ_الإنشاء","معرف_الفرع","اسم_الفرع","ملاحظات"]},
         {"name": "السجلات", "cols": ["bot_id","type","message","time"], "color": {"red": 0.93, "green": 0.93, "blue": 0.93}},
         {"name": "_meta", "cols": ["key", "value", "updated_at"], "color": {"red": 1, "green": 0.8, "blue": 0.8}}, 
-        {"name": "المدربين", "cols": ["ID_المدرب", "اسم_المدرب", "التخصص", "رقم_الهاتف", "البريد_الإلكتروني", "السيرة_الذاتية", "رابط_الصورة", "الحالة", "bot_id", "معرف_الفرع", "اسم_الفرع", "عدد_الدورات_الحالية", "تاريخ_التعاقد", "ملاحظات"], "color": {"red": 0.88, "green": 0.95, "blue": 0.88}}
-
+        {"name": "المدربين", "cols": ["ID_المدرب", "اسم_المدرب", "التخصص", "رقم_الهاتف", "البريد_الإلكتروني", "السيرة_الذاتية", "رابط_الصورة", "الحالة", "bot_id", "معرف_الفرع", "اسم_الفرع", "عدد_الدورات_الحالية", "تاريخ_التعاقد", "ملاحظات"], "color": {"red": 0.88, "green": 0.95, "blue": 0.88}}, 
+        { "name": "الذكاء_الإصطناعي", "cols": ["توكن_البوت","ID_المستخدم","اسم_المستخدم","تاريخ_التسجيل","الحالة","نوع_الاشتراك","عدد_البوتات","آخر_نشاط","اللغة","مصدر_التسجيل","كود_إحالة","رصيد","اسم_المؤسسة","تعليمات_AI"]}
     ]
     return sheets_config
 
@@ -578,6 +578,74 @@ def get_courses_knowledge_base(bot_token):
         print(f"❌ Error in KB: {e}")
         return "المعلومات قيد التحديث."
 
+# دالة جلب إعدادات الذكاء الاصطناعي
+def get_ai_config(bot_token):
+    try:
+        sheet = ss.worksheet("الذكاء_الإصطناعي")
+        records = sheet.get_all_records()
+        for r in records:
+            if str(r.get('توكن_البوت')) == str(bot_token):
+                return r
+        return None
+    except: return None
+
+# دالة حفظ أو تحديث إعدادات الذكاء الاصطناعي
+def save_ai_config(bot_token, user_id, username, institution_name=None, ai_instructions=None):
+    try:
+        sheet = ss.worksheet("الذكاء_الإصطناعي")
+        cell = None
+        try: cell = sheet.find(str(bot_token))
+        except: pass
+
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        if cell:
+            # تحديث الخانات الموجودة
+            if institution_name: sheet.update_cell(cell.row, 13, institution_name)
+            if ai_instructions: sheet.update_cell(cell.row, 14, ai_instructions)
+            sheet.update_cell(cell.row, 8, now) # آخر نشاط
+        else:
+            # إضافة صف جديد لأول مرة حسب ترتيب الأعمدة التي أرسلتها
+            row = [bot_token, str(user_id), username, now, "نشط", "إداري", 0, now, "ar", "Direct", "", 0, institution_name or "", ai_instructions or ""]
+            sheet.append_row(row)
+        return True
+    except Exception as e:
+        print(f"❌ Error saving AI config: {e}")
+        return False
+# دالة جلب إعدادات الذكاء الاصطناعي
+def get_ai_config(bot_token):
+    try:
+        sheet = ss.worksheet("الذكاء_الإصطناعي")
+        records = sheet.get_all_records()
+        for r in records:
+            if str(r.get('توكن_البوت')) == str(bot_token):
+                return r
+        return None
+    except: return None
+
+# دالة حفظ أو تحديث إعدادات الذكاء الاصطناعي
+def save_ai_config(bot_token, user_id, username, institution_name=None, ai_instructions=None):
+    try:
+        sheet = ss.worksheet("الذكاء_الإصطناعي")
+        cell = None
+        try: cell = sheet.find(str(bot_token))
+        except: pass
+
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        if cell:
+            # تحديث الخانات الموجودة
+            if institution_name: sheet.update_cell(cell.row, 13, institution_name)
+            if ai_instructions: sheet.update_cell(cell.row, 14, ai_instructions)
+            sheet.update_cell(cell.row, 8, now) # آخر نشاط
+        else:
+            # إضافة صف جديد لأول مرة حسب ترتيب الأعمدة التي أرسلتها
+            row = [bot_token, str(user_id), username, now, "نشط", "إداري", 0, now, "ar", "Direct", "", 0, institution_name or "", ai_instructions or ""]
+            sheet.append_row(row)
+        return True
+    except Exception as e:
+        print(f"❌ Error saving AI config: {e}")
+        return False
 
 
 # --------------------------------------------------------------------------
