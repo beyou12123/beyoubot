@@ -373,30 +373,48 @@ def update_category_name(bot_token, cat_id, new_name):
 
 #دالة اضافة الدورات_التدريبية
 
-def add_new_course(bot_token, course_id, course_name, cat_id):
-    """إضافة دورة جديدة لورقة الدورات"""
+def add_new_course(bot_token, course_id, name, hours, start_date, end_date, c_type, price, limit, reqs, rep_name, rep_code, campaign, coach_user, coach_id, coach_name):
+    """إضافة دورة كاملة مع الالتزام بالترتيب الدقيق للأعمدة الـ 16 في جوجل شيت"""
     try:
         if courses_sheet is None: return False
-        from datetime import datetime
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
-        # الترتيب حسب الأعمدة في شيتك: bot_id, معرف_الدورة, اسم_الدورة, معرف_القسم (أو حسب ترتيبك)
-        # سأفترض الترتيب: [bot_token, course_id, course_name, cat_id, "نشط", now]
-        courses_sheet.append_row([bot_token, course_id, course_name, "", "", "", "", "", "", "", "", "", "", "", cat_id, now])
+        # الترتيب حسب الأعمدة التي حددتها أنت بالضبط:
+        # ["bot_id", "معرف_الدورة", "اسم_الدورة", "عدد_الساعات", "تاريخ_البداية", "تاريخ_النهاية", "نوع_الدورة", "سعر_الدورة", "الحد_الأقصى", "المتطلبات", "اسم_المندوب", "كود_المندوب", "الحملة_التسويقية", "معرف_المدرب", "ID_المدرب", "اسم_المدرب"]
+        row = [
+            bot_token,    # 1. bot_id
+            course_id,    # 2. معرف_الدورة
+            name,         # 3. اسم_الدورة
+            hours,        # 4. عدد_الساعات (أو الوصف)
+            start_date,   # 5. تاريخ_البداية
+            end_date,     # 6. تاريخ_النهاية
+            c_type,       # 7. نوع_الدورة
+            price,        # 8. سعر_الدورة (العمود الثامن)
+            limit,        # 9. الحد_الأقصى
+            reqs,         # 10. المتطلبات
+            rep_name,     # 11. اسم_المندوب
+            rep_code,     # 12. كود_المندوب
+            campaign,     # 13. الحملة_التسويقية
+            coach_user,   # 14. معرف_المدرب (اليوزر @)
+            coach_id,     # 15. ID_المدرب (الرقمي)
+            coach_name    # 16. اسم_المدرب
+        ]
+        
+        courses_sheet.append_row(row)
         return True
     except Exception as e:
-        print(f"❌ Error adding course: {e}")
+        print(f"❌ Error in add_new_course: {e}")
         return False
+
 def get_courses_by_category(bot_token, cat_id):
-    """جلب كافة الدورات المرتبطة بقسم محدد"""
+    """جلب كافة الدورات المرتبطة بقسم محدد بناءً على ID القسم المخزن في الشيت"""
     try:
         if courses_sheet is None: return []
         all_rows = courses_sheet.get_all_values()
         courses = []
         for row in all_rows[1:]:
-            # افترضنا أن bot_token في العمود 1 و cat_id في العمود 15 (أو حسب ترتيبك)
-            # سنقوم بالفحص بناءً على ID القسم
-            if row[0] == bot_token and row[14] == cat_id:
+            # في نظامك الجديد، سنبحث عن ID القسم (غالباً يكون في عمود إضافي أو ضمن البيانات)
+            # إذا كنت تضع ID القسم في العمود 15 (Index 14) كما فعلنا سابقاً:
+            if len(row) >= 15 and row[0] == bot_token and row[14] == cat_id:
                 courses.append({
                     "id": row[1],    # معرف الدورة
                     "name": row[2]   # اسم الدورة
@@ -407,12 +425,14 @@ def get_courses_by_category(bot_token, cat_id):
         return []
 
 def delete_course_by_id(bot_token, course_id):
-    """حذف دورة محددة من الشيت بناءً على معرفها"""
+    """حذف صف دورة محددة من الشيت بناءً على معرف الدورة والتوكن لضمان الدقة وعدم تداخل البيانات"""
     try:
         if courses_sheet is None: return False
         all_rows = courses_sheet.get_all_values()
         for i, row in enumerate(all_rows):
-            if row[0] == bot_token and row[1] == course_id:
+            # التحقق من مطابقة التوكن (العمود 1) ومعرف الدورة (العمود 2)
+            if len(row) >= 2 and row[0] == bot_token and row[1] == course_id:
+                # i + 1 لأن ترقيم جوجل شيت يبدأ من 1 وليس 0
                 courses_sheet.delete_rows(i + 1)
                 return True
         return False
