@@ -674,36 +674,19 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
         if user.id not in user_messages: user_messages[user.id] = []
         
         try:
-            # اختبار الربط مع الشيت
-            from sheets import get_courses_knowledge_base
-            courses_knowledge = get_courses_knowledge_base(bot_token)
-            
-            user_messages[user.id].append({"role": "user", "content": text})
-            
-            await update.message.reply_chat_action("typing")
-
-            # محاولة الرد عبر g4f
-            import g4f
+            # الخيار الأفضل: ترك المكتبة تختار المزود المتاح تلقائياً
             response = await g4f.ChatCompletion.create_async(
-                model="gpt-3.5-turbo", # تحديد موديل صريح لزيادة الاستقرار
-                provider=g4f.Provider.DuckDuckGo,
-                messages=[{"role": "system", "content": f"معلوماتك: {courses_knowledge}"}] + user_messages[user.id][-4:]
+                model=g4f.models.default,
+                messages=messages_to_send,
+                # حذفنا سطر provider=g4f.Provider.DuckDuckGo لأنه سبب الخطأ
             )
 
-            if response:
-                await update.message.reply_text(response)
+            if response and len(response) > 0:
                 user_messages[user.id].append({"role": "assistant", "content": response})
+                await update.message.reply_text(response)
+                return
             else:
-                await update.message.reply_text("⚠️ المحرك استجاب بنص فارغ.")
-
-        except Exception as e:
-            # التعديل الجوهري: إرسال الخطأ الحقيقي لك
-            error_trace = str(e)
-            print(f"❌ Actual Error: {error_trace}")
-            await update.message.reply_text(f"🛑 حدث خطأ تقني حقيقي:\n`{error_trace}`", parse_mode="Markdown")
-            # إرسال تنبيه للمسؤول بالخطأ
-            if bot_owner_id:
-                await context.bot.send_message(chat_id=bot_owner_id, text=f"⚠️ خطأ في بوت الطالب {user.id}:\n{error_trace}")
+                raise Exception("Empty AI Response")
 
 # --------------------------------------------------------------------------
 
