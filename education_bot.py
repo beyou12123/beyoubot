@@ -124,7 +124,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         )
 # --------------------------------------------------------------------------
     # --- 3. بدء عملية إضافة مدرب  جديد  ---
-        elif data == "manage_coaches":
+    elif data == "manage_coaches":
         await query.edit_message_text(
             "👨‍🏫 <b>إدارة شؤون المدربين:</b>\nيمكنك إضافة مدربين جدد أو استعراض القائمة الحالية للحذف.",
             reply_markup=InlineKeyboardMarkup([
