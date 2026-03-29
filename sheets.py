@@ -26,7 +26,7 @@ coupons_sheet = None            # 11. الكوبونات
 courses_sheet = None            # 12. الدورات_التدريبية
 faq_sheet = None                # 13. الأسئلة_الشائعة
 meta_sheet = None               # 14. _meta (الإصدار والتحقق)
-
+coaches_sheet = None            # 15. ورقة المدربين (الإضافة الجديدة)
 # معرف ملف Google Sheet الخاص بمصنع البوتات
 SPREADSHEET_ID = "1e0tREOyfmZgQ_iCvWXJL2GpR_I4WfCpBlU7DYUclsfY"
 
@@ -70,7 +70,7 @@ def connect_to_google():
     global client, ss, users_sheet, bots_sheet, content_sheet, logs_sheet
     global stats_sheet, payments_sheet, students_db_sheet, registrations_logs_sheet
     global departments_sheet, discount_codes_sheet, coupons_sheet, courses_sheet, faq_sheet, meta_sheet
-    
+    global courses_sheet, coaches_sheet, faq_sheet # أضف coaches_sheet هنا
     config = get_config()
     if not config: return False
 
@@ -99,6 +99,7 @@ def connect_to_google():
         courses_sheet = safe_get_sheet("الدورات_التدريبية")
         faq_sheet = safe_get_sheet("الأسئلة_الشائعة")
         meta_sheet = safe_get_sheet("_meta")
+        coaches_sheet = spreadsheet.worksheet("المدربين") 
         
         print("✅ تم الاتصال بنجاح وربط كافة المتغيرات بالأوراق المتاحة.")
         return True
@@ -249,6 +250,8 @@ def get_sheets_structure():
         {"name": "الأسئلة_الشائعة", "cols": ["bot_id", "معرف_القسم","معرف_الدورة","اسم_الدورة", "محتوى_السؤال_مع_الإجابة","الحالة","ترتيب_العرض","تاريخ_الإنشاء","معرف_الفرع","اسم_الفرع","ملاحظات"]},
         {"name": "السجلات", "cols": ["bot_id","type","message","time"], "color": {"red": 0.93, "green": 0.93, "blue": 0.93}},
         {"name": "_meta", "cols": ["key", "value", "updated_at"], "color": {"red": 1, "green": 0.8, "blue": 0.8}}
+        {"name": "المدربين", "cols": ["ID_المدرب", "اسم_المدرب", "التخصص", "رقم_الهاتف", "البريد_الإلكتروني", "السيرة_الذاتية", "رابط_الصورة", "الحالة", "bot_id", "معرف_الفرع", "اسم_الفرع", "عدد_الدورات_الحالية", "تاريخ_التعاقد", "ملاحظات"], "color": {"red": 0.88, "green": 0.95, "blue": 0.88}}
+
     ]
     return sheets_config
 
@@ -463,7 +466,74 @@ def find_user_by_username(bot_token, username):
         return None
 
 # --------------------------------------------------------------------------
+#دالة إضافة المدربين
+  # تأكد من وجود هذا الاستيراد في بداية الملف
 
+def add_new_coach_advanced(bot_token, coach_id, name, specialty, phone, **kwargs):
+    """
+    إضافة مدرب جديد لورقة المدربين بنظام متطور.
+    kwargs: تتيح لك إرسال قيم اختيارية مثل (email, bio, photo, status, branch_name, notes)
+    """
+    try:
+        if coaches_sheet is None:
+            print("⚠️ خطأ: ورقة المدربين غير متصلة.")
+            return False
+
+        # 1. التوليد التلقائي لتاريخ اليوم
+        today_date = datetime.now().strftime('%Y-%m-%d')
+
+        # 2. تجهيز البيانات مع تنظيفها (strip) ووضع قيم افتراضية ذكية
+        # نستخدم kwargs.get لكي نأخذ القيمة إذا أرسلتها، وإلا نضع القيمة الافتراضية
+        row = [
+            str(coach_id).strip(),                    # 1. ID_المدرب
+            str(name).strip(),                        # 2. اسم_المدرب
+            str(specialty).strip(),                   # 3. التخصص
+            str(phone).strip(),                       # 4. رقم_الهاتف
+            kwargs.get('email', "لا يوجد"),           # 5. البريد_الإلكتروني
+            kwargs.get('bio', "لا يوجد"),             # 6. السيرة_الذاتية
+            kwargs.get('photo', "لا يوجد"),           # 7. رابط_الصورة
+            kwargs.get('status', "نشط"),              # 8. الحالة
+            str(bot_token),                           # 9. bot_id
+            kwargs.get('branch_id', "001"),           # 10. معرف_الفرع
+            kwargs.get('branch_name', "الرئيسي"),      # 11. اسم_الفرع
+            kwargs.get('courses_count', "0"),         # 12. عدد_الدورات_الحالية
+            today_date,                               # 13. تاريخ_التعاقد (تلقائي)
+            kwargs.get('notes', "إضافة عبر البوت")      # 14. ملاحظات
+        ]
+
+        # 3. إضافة الصف للشيت
+        coaches_sheet.append_row(row)
+        
+        # 4. تسجيل العملية في سجل العمليات (Logging) لزيادة الاحترافية
+        print(f"✅ تم تسجيل المدرب {name} بنجاح بتاريخ {today_date}")
+        return True
+
+    except Exception as e:
+        print(f"❌ خطأ برمي في إضافة المدرب: {e}")
+        return False
+
+
+#جلب بيانات المدربين
+def get_all_coaches(bot_token):
+    """جلب قائمة المدربين المخصصين لهذا البوت من ورقة المدربين"""
+    try:
+        # تأكد أن اسم الورقة في المتغير هو coaches_sheet أو جلبها بالاسم
+        # coaches_sheet = client.open_by_key(SPREADSHEET_ID).worksheet("المدربين")
+        if coaches_sheet is None: return []
+        all_rows = coaches_sheet.get_all_values()
+        coaches = []
+        for row in all_rows[1:]:
+            # العمود 9 هو bot_id (Index 8) والعمود 1 هو ID_المدرب (Index 0) والعمود 2 هو الاسم (Index 1)
+            if len(row) >= 9 and row[8] == bot_token:
+                coaches.append({
+                    "id": row[0],    # ID_المدرب
+                    "name": row[1]   # اسم_المدرب
+                })
+        return coaches
+    except Exception as e:
+        print(f"❌ Error fetching coaches: {e}")
+        return []
+ 
 # --------------------------------------------------------------------------
 
 # --------------------------------------------------------------------------
