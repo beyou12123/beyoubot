@@ -122,29 +122,99 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             ]), 
             parse_mode="HTML"
         )
-
+# --------------------------------------------------------------------------
     # --- 3. بدء عملية إضافة مدرب  جديد  ---
-    elif data == "manage_coaches":
+        elif data == "manage_coaches":
         await query.edit_message_text(
-            "👨‍🏫 <b>إدارة المدربين:</b>\nيمكنك إضافة مدربين جدد ليظهروا لاحقاً عند إضافة الدورات.",
+            "👨‍🏫 <b>إدارة شؤون المدربين:</b>\nيمكنك إضافة مدربين جدد أو استعراض القائمة الحالية للحذف.",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("➕ إضافة مدرب جديد", callback_data="start_add_coach")],
-                [InlineKeyboardButton("🔙 عودة", callback_data="back_to_admin")]
+                [InlineKeyboardButton("📋 عرض قائمة المدربين", callback_data="list_coaches")],
+                [InlineKeyboardButton("🔙 عودة للوحة التحكم", callback_data="back_to_admin")]
             ]), parse_mode="HTML"
         )
 
+    # 1. عرض قائمة المدربين كأزرار
+    elif data == "list_coaches":
+        from sheets import get_all_coaches
+        coaches = get_all_coaches(bot_token)
+        if not coaches:
+            await query.edit_message_text("⚠️ لا يوجد مدربون مسجلون حالياً.", 
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 عودة", callback_data="manage_coaches")]]))
+            return
+
+        keyboard = [[InlineKeyboardButton(f"👤 {c['name']}", callback_data=f"view_coach_{c['id']}")] for c in coaches]
+        keyboard.append([InlineKeyboardButton("🔙 عودة", callback_data="manage_coaches")])
+        await query.edit_message_text("🎯 **اختر مدرباً لعرض تفاصيله أو حذفه:**", reply_markup=InlineKeyboardMarkup(keyboard))
+
+    # 2. عرض تفاصيل مدرب محدد مع زر الحذف
+    elif data.startswith("view_coach_"):
+        coach_id = data.replace("view_coach_", "")
+        from sheets import get_all_coaches
+        coaches = get_all_coaches(bot_token)
+        coach = next((c for c in coaches if str(c['id']) == str(coach_id)), None)
+        
+        if coach:
+            text = f"👤 **معلومات المدرب:**\n━━━━━━━━━━━━━━\nالاسم: {coach['name']}\nID: <code>{coach['id']}</code>"
+            keyboard = [
+                [InlineKeyboardButton("🗑️ حذف المدرب نهائياً", callback_data=f"del_coach_{coach['id']}")],
+                [InlineKeyboardButton("🔙 عودة للقائمة", callback_data="list_coaches")]
+            ]
+            await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+    # 3. تنفيذ الحذف الفعلي
+    elif data.startswith("del_coach_"):
+        coach_id = data.replace("del_coach_", "")
+        from sheets import delete_coach_from_sheet
+        if delete_coach_from_sheet(bot_token, coach_id):
+            await query.answer("✅ تم حذف المدرب بنجاح", show_alert=True)
+            # العودة للقائمة بعد الحذف
+            await query.edit_message_text("✅ تم الحذف. هل تريد إدارة مدرب آخر؟", 
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📋 عرض القائمة", callback_data="list_coaches")]]))
+        else:
+            await query.answer("❌ فشل الحذف", show_alert=True)
+
+
     elif data == "start_add_coach":
         context.user_data['action'] = 'await_coach_name'
-        await query.edit_message_text("✍️ <b>الخطوة 1:</b> أرسل اسم المدرب الثلاثي:")
+        await query.edit_message_text("✍️ <b>الخطوة 1:</b> أرسل اسم المدرب الثلاثي:", parse_mode="HTML")
 
     elif data == "confirm_save_coach":
-        from sheets import add_new_coach_to_sheet
+        # دمجنا الوظيفتين هنا واستخدمنا النسخة المتطورة
+        from sheets import add_new_coach_advanced
+        
+        # 1. جلب بيانات المدرب من الذاكرة المؤقتة
         c = context.user_data.get('temp_coach')
-        if add_new_coach_to_sheet(bot_token, c['id'], c['name'], c['spec'], c['phone']):
-            await query.edit_message_text("✅ <b>تم تسجيل المدرب في النظام بنجاح!</b>", reply_markup=get_admin_panel())
-        else:
-            await query.edit_message_text("❌ حدث خطأ أثناء الحفظ.")
+        
+        if not c:
+            await query.edit_message_text("⚠️ خطأ: تعذر العثور على البيانات، يرجى إعادة المحاولة من جديد.")
+            return
 
+        # 2. تنفيذ الحفظ الفعلي باستخدام الدالة المتطورة
+        success = add_new_coach_advanced(
+            bot_token=bot_token,
+            coach_id=c['id'],
+            name=c['name'],
+            specialty=c['spec'],
+            phone=c['phone'],
+            notes="تمت الإضافة عبر لوحة التحكم"
+        )
+        
+        if success:
+            await query.edit_message_text(
+                f"✅ <b>تم تسجيل المدرب بنجاح!</b>\n\n"
+                f"👤 الاسم: {c['name']}\n"
+                f"🎓 التخصص: {c['spec']}\n"
+                f"🆔 المعرف: <code>{c['id']}</code>",
+                reply_markup=get_admin_panel(),
+                parse_mode="HTML"
+            )
+            # مسح البيانات المؤقتة لضمان نظافة الذاكرة
+            context.user_data.pop('temp_coach', None)
+        else:
+            await query.edit_message_text("❌ حدث خطأ تقني أثناء الحفظ في جوجل شيت. تأكد من إعدادات الملف.")
+
+# --------------------------------------------------------------------------
     # --- 4. معالجة القسم المختار للدورة وبدء طلب الاسم ---
     elif data.startswith("set_crs_cat_"):
         cat_id = data.replace("set_crs_cat_", "")
