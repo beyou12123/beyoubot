@@ -675,71 +675,61 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
             return
 
     # --- [ الجزء الخاص بالطلاب والردود التفاعلية باستخدام g4f والذاكرة ] ---
-    if user.id != bot_owner_id:
-        # 1. فحص الكلمات المفتاحية (FAQ) لسرعة الرد
-        faq_keywords = {
-            "طريقة الدفع": "💳 يمكنك الدفع عبر (زين كاش، بايبال، أو كروت التعبئة).",
-            "تفعيل": "🎟 لتفعيل الدورة، يرجى إرسال الكود الذي حصلت عليه.",
-            "قائمة": "📚 يمكنك استعراض كافة الدورات المتاحة عبر الزر المخصص."
-        }
-        for key, response in faq_keywords.items():
-            if key in text:
-                await update.message.reply_text(response)
-                return
+    # --- [ الجزء الخاص بالمسؤول ] ---
+    if user.id == bot_owner_id:
+        # (أبقِ على كافة شروط المسؤول هنا كما هي في ملفك الأصلي)
+        if action == 'awaiting_cat_name':
+            import uuid
+            cat_id = f"C{str(uuid.uuid4().int)[:4]}"
+            from sheets import add_new_category
+            if add_new_category(bot_token, cat_id, text):
+                context.user_data['action'] = None
+                await update.message.reply_text(f"✅ تم إنشاء القسم: {text}", reply_markup=get_admin_panel(), parse_mode="HTML")
+            return
+        # (بقية شروط المسؤول...)
 
-        # 2. إدارة ذاكرة المحادثة وجلب البيانات من الشيت
+    # --- [ الجزء الخاص بالطلاب: الرد الذكي g4f ] ---
+    else:
+        # 1. فحص الكلمات المفتاحية
+        faq = {"طريقة الدفع": "💳 زين كاش، بايبال.", "تفعيل": "🎟 أرسل الكود."}
+        if text in faq:
+            await update.message.reply_text(faq[text])
+            return
+
+        # 2. إدارة الذاكرة وقاعدة المعرفة
         global user_messages
-        if user.id not in user_messages:
-            user_messages[user.id] = []
+        if user.id not in user_messages: user_messages[user.id] = []
 
-        # جلب البيانات من الشيت لتغذية المحرك (تم تصحيح المحاذاة ومنع التكرار)
         from sheets import get_courses_knowledge_base
         courses_knowledge = get_courses_knowledge_base(bot_token)
         
-        # إضافة رسالة الطالب للذاكرة (مرة واحدة فقط)
         user_messages[user.id].append({"role": "user", "content": text})
 
-        # بناء سياق المحادثة الكامل مع التعليمات (آخر 6 رسائل للحفاظ على السياق)
         messages_to_send = [
-            {
-                "role": "system", 
-                "content": (
-                    f"أنت المساعد الذكي الرسمي لمنصة الدكتور التعليمية. "
-                    f"إليك معلومات الدورات المتاحة حالياً:\n{courses_knowledge}\n\n"
-                    f"أجب بذكاء ولباقة واستخدم الرموز التعبيرية 🎓. "
-                    f"اعتمد على البيانات المقدمة فقط في الرد على الدورات."
-                )
-            }
-        ] + user_messages[user.id][-6:] 
+            {"role": "system", "content": f"أنت المساعد الذكي. معلومات الدورات:\n{courses_knowledge}\nأجب بلباقة."}
+        ] + user_messages[user.id][-6:]
 
         await update.message.reply_chat_action("typing")
 
         try:
-            # استخدام g4f مع مزود DuckDuckGo لضمان الاستقرار
+            # طلب الرد من g4f بشكل صحيح ومحاذٍ
             response = await g4f.ChatCompletion.create_async(
                 model=g4f.models.default,
                 provider=g4f.Provider.DuckDuckGo, 
                 messages=messages_to_send,
             )
 
-            if response and len(response) > 0:
-                # إضافة رد البوت للذاكرة
+            if response:
                 user_messages[user.id].append({"role": "assistant", "content": response})
                 await update.message.reply_text(response)
-                return
-            else:
-                raise Exception("Empty g4f Response")
+            else: raise Exception("Empty Response")
             
         except Exception as e:
-            # الخطة البديلة عند فشل المحرك تماماً
+            # التنبيه الذي وصلك الآن هو بسبب الوصول لهذا الجزء
             print(f"❌ AI Error: {e}")
             info = f"📩 <b>استفسار طالب (فشل الـ AI):</b>\nالاسم: {user.full_name}\nالرسالة: {text}"
-            try:
-                await context.bot.send_message(chat_id=bot_owner_id, text=info, parse_mode="HTML")
-                await update.message.reply_text("💡 شكراً لسؤالك! لقد استلمت استفسارك وسيتم الرد عليك قريباً.")
-            except Exception as send_err:
-                print(f"❌ Failed to notify admin: {send_err}")
-                await update.message.reply_text("⚠️ المعذرة، هناك ضغط حالياً. يرجى المحاولة لاحقاً.")
+            await context.bot.send_message(chat_id=bot_owner_id, text=info, parse_mode="HTML")
+            await update.message.reply_text("💡 شكراً لسؤالك! لقد استلمت استفسارك وسيقوم الدكتور بالرد عليك فوراً.")
 
 
 # --------------------------------------------------------------------------
