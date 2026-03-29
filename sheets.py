@@ -252,7 +252,7 @@ def get_sheets_structure():
         {"name": "السجلات", "cols": ["bot_id","type","message","time"], "color": {"red": 0.93, "green": 0.93, "blue": 0.93}},
         {"name": "_meta", "cols": ["key", "value", "updated_at"], "color": {"red": 1, "green": 0.8, "blue": 0.8}}, 
         {"name": "المدربين", "cols": ["ID_المدرب", "اسم_المدرب", "التخصص", "رقم_الهاتف", "البريد_الإلكتروني", "السيرة_الذاتية", "رابط_الصورة", "الحالة", "bot_id", "معرف_الفرع", "اسم_الفرع", "عدد_الدورات_الحالية", "تاريخ_التعاقد", "ملاحظات"], "color": {"red": 0.88, "green": 0.95, "blue": 0.88}}, 
-        { "name": "الذكاء_الإصطناعي", "cols": ["توكن_البوت","ID_المستخدم","اسم_المستخدم","تاريخ_التسجيل","الحالة","نوع_الاشتراك","عدد_البوتات","آخر_نشاط","اللغة","مصدر_التسجيل","كود_إحالة","رصيد","اسم_المؤسسة","تعليمات_AI"]}
+        { "name": "الذكاء_الإصطناعي", "cols": ["توكن_البوت","ID_المستخدم","اسم_المستخدم","تاريخ_التسجيل","الحالة","نوع_الاشتراك","عدد_البوتات","آخر_نشاط","اللغة","مصدر_التسجيل","كود_إحالة","رصيد","اسم_المؤسسة","تعليمات_AI"] }
     ]
     return sheets_config
 
@@ -552,101 +552,52 @@ def delete_coach_from_sheet(bot_token, coach_id):
         return False
 
 # --------------------------------------------------------------------------
-#دالة  الذكاء الاصطناعي 
-def get_courses_knowledge_base(bot_token):
-    """تحويل كافة الدورات المتاحة إلى قاعدة معرفية نصية للذكاء الاصطناعي"""
+# دالة جلب إعدادات الذكاء الاصطناعي (تم توحيد المسمى لـ setup)
+def get_ai_setup(bot_token):
+    """جلب إعدادات الهوية والذكاء من ورقة الذكاء_الإصطناعي"""
     try:
-        if courses_sheet is None: return "المعلومات غير متوفرة حالياً."
-        all_courses = courses_sheet.get_all_records()
-        
-        # فلترة الدورات التابعة لهذا البوت فقط
-        bot_courses = [c for c in all_courses if str(c.get('bot_id')) == str(bot_token)]
-        
-        if not bot_courses:
-            return "لا توجد دورات متاحة حالياً."
-
-        kb_text = "قائمة الدورات المتاحة:\n"
-        for c in bot_courses:
-            # استخدام .get للحماية من أخطاء أسماء الأعمدة
-            name = c.get('اسم_الدورة', c.get('course_name', 'دورة غير مسمى'))
-            price = c.get('سعر_الدورة', c.get('price', 'غير محدد'))
-            coach = c.get('اسم_المدرب', c.get('coach_name', 'غير محدد'))
-            
-            kb_text += f"- دورة: {name}، السعر: {price}، المدرب: {coach}.\n"
-        return kb_text
-    except Exception as e:
-        print(f"❌ Error in KB: {e}")
-        return "المعلومات قيد التحديث."
-
-# دالة جلب إعدادات الذكاء الاصطناعي
-def get_ai_config(bot_token):
-    try:
+        # التأكد من مطابقة اسم الورقة تماماً لما في جوجل شيت
         sheet = ss.worksheet("الذكاء_الإصطناعي")
         records = sheet.get_all_records()
         for r in records:
-            if str(r.get('توكن_البوت')) == str(bot_token):
+            # تنظيف التوكن من أي مسافات زائدة للمقارنة الدقيقة
+            if str(r.get('توكن_البوت', '')).strip() == str(bot_token).strip():
                 return r
         return None
-    except: return None
+    except Exception as e:
+        print(f"❌ Error fetching AI setup: {e}")
+        return None
 
-# دالة حفظ أو تحديث إعدادات الذكاء الاصطناعي
-def save_ai_config(bot_token, user_id, username, institution_name=None, ai_instructions=None):
+# دالة حفظ أو تحديث إعدادات الذكاء الاصطناعي (تم توحيد المسمى لـ setup)
+def save_ai_setup(bot_token, user_id, username, institution_name=None, ai_instructions=None):
+    """حفظ أو تحديث بيانات المؤسسة وتعليمات الذكاء الاصطناعي"""
     try:
         sheet = ss.worksheet("الذكاء_الإصطناعي")
         cell = None
-        try: cell = sheet.find(str(bot_token))
+        try: 
+            # البحث عن التوكن في العمود الأول فقط (A) لتجنب الأخطاء
+            cell = sheet.find(str(bot_token).strip(), in_column=1)
         except: pass
 
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
         if cell:
-            # تحديث الخانات الموجودة
+            # تحديث البيانات في الأعمدة 13 و 14 (حسب ترتيبك)
             if institution_name: sheet.update_cell(cell.row, 13, institution_name)
             if ai_instructions: sheet.update_cell(cell.row, 14, ai_instructions)
-            sheet.update_cell(cell.row, 8, now) # آخر نشاط
+            sheet.update_cell(cell.row, 8, now) # تحديث عمود آخر نشاط (H)
         else:
-            # إضافة صف جديد لأول مرة حسب ترتيب الأعمدة التي أرسلتها
-            row = [bot_token, str(user_id), username, now, "نشط", "إداري", 0, now, "ar", "Direct", "", 0, institution_name or "", ai_instructions or ""]
+            # إضافة صف جديد (14 عنصراً لتتطابق مع تصميم الورقة الخاص بك)
+            row = [
+                str(bot_token).strip(), str(user_id), username, now, 
+                "نشط", "إداري", 0, now, "ar", "Direct", 
+                "", 0, institution_name or "", ai_instructions or ""
+            ]
             sheet.append_row(row)
         return True
     except Exception as e:
-        print(f"❌ Error saving AI config: {e}")
+        print(f"❌ Error saving AI setup: {e}")
         return False
-# دالة جلب إعدادات الذكاء الاصطناعي
-def get_ai_config(bot_token):
-    try:
-        sheet = ss.worksheet("الذكاء_الإصطناعي")
-        records = sheet.get_all_records()
-        for r in records:
-            if str(r.get('توكن_البوت')) == str(bot_token):
-                return r
-        return None
-    except: return None
-
-# دالة حفظ أو تحديث إعدادات الذكاء الاصطناعي
-def save_ai_config(bot_token, user_id, username, institution_name=None, ai_instructions=None):
-    try:
-        sheet = ss.worksheet("الذكاء_الإصطناعي")
-        cell = None
-        try: cell = sheet.find(str(bot_token))
-        except: pass
-
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
-        if cell:
-            # تحديث الخانات الموجودة
-            if institution_name: sheet.update_cell(cell.row, 13, institution_name)
-            if ai_instructions: sheet.update_cell(cell.row, 14, ai_instructions)
-            sheet.update_cell(cell.row, 8, now) # آخر نشاط
-        else:
-            # إضافة صف جديد لأول مرة حسب ترتيب الأعمدة التي أرسلتها
-            row = [bot_token, str(user_id), username, now, "نشط", "إداري", 0, now, "ar", "Direct", "", 0, institution_name or "", ai_instructions or ""]
-            sheet.append_row(row)
-        return True
-    except Exception as e:
-        print(f"❌ Error saving AI config: {e}")
-        return False
-
 
 # --------------------------------------------------------------------------
 
