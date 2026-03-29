@@ -240,33 +240,36 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         from sheets import add_new_course 
         import uuid
         
+        # 1. جلب البيانات المؤقتة (البيانات + معرف القسم)
         d = context.user_data.get('temp_crs')
-        cat_id = context.user_data.get('temp_crs_cat')
+        cat_id = context.user_data.get('temp_crs_cat') # هذا هو الرابط الضروري
         
-        if not d:
+        if not d or not cat_id:
             await query.edit_message_text("⚠️ خطأ: تعذر العثور على البيانات المؤقتة، يرجى المحاولة مجدداً.")
             return
 
+        # 2. توليد معرف فريد للدورة
         c_id = f"CRS{str(uuid.uuid4().int)[:4]}"
         
-        # تنفيذ الحفظ الفعلي للأعمدة الـ 16 بالترتيب الصحيح
+        # 3. تنفيذ الحفظ الفعلي (إرسال الـ 17 متغير بالترتيب)
         success = add_new_course(
-            bot_token,          # 1. bot_id
-            c_id,               # 2. معرف_الدورة
-            d['name'],          # 3. اسم_الدورة
-            d['hours'],         # 4. عدد_الساعات
-            d['start_date'],    # 5. تاريخ_البداية
-            "",                 # 6. تاريخ_النهاية
-            "أونلاين",          # 7. نوع_الدورة
-            d['price'],         # 8. سعر_الدورة
-            "100",              # 9. الحد_الأقصى
-            "لا يوجد",          # 10. المتطلبات
-            "إدارة المنصة",      # 11. اسم_المندوب
-            "ADMIN01",          # 12. كود_المندوب
-            "عام",              # 13. الحملة_التسويقية
-            d['coach_user'],    # 14. معرف_المدرب (اليوزر)
-            d['coach_id'],      # 15. ID_المدرب (الرقمي)
-            d['coach_name']     # 16. اسم_المدرب
+            bot_token,          # 1
+            c_id,               # 2
+            d['name'],          # 3
+            d['hours'],         # 4
+            d['start_date'],    # 5
+            "",                 # 6
+            "أونلاين",          # 7
+            d['price'],         # 8
+            "100",              # 9
+            "لا يوجد",          # 10
+            "إدارة المنصة",      # 11
+            "ADMIN01",          # 12
+            "عام",              # 13
+            d['coach_user'],    # 14
+            d['coach_id'],      # 15
+            d['coach_name'],    # 16
+            cat_id              # 17. تم إضافة معرف القسم هنا بنجاح!
         )
         
         if success:
@@ -278,10 +281,11 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
                 reply_markup=get_admin_panel(),
                 parse_mode="HTML"
             )
+            # تنظيف الذاكرة بعد النجاح
             context.user_data.pop('temp_crs', None)
+            context.user_data.pop('temp_crs_cat', None)
         else:
-            await query.edit_message_text("❌ فشل الحفظ في جوجل شيت، تأكد من صلاحيات الملف.")
-
+            await query.edit_message_text("❌ فشل الحفظ في جوجل شيت، تأكد من إعدادات دالة add_new_course.")
 
     # --- 5. إدارة الأقسام (عرض القائمة) ---
     elif data == "manage_cats":
