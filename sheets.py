@@ -1,545 +1,635 @@
-import os
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-from datetime import datetime
-import time
 import logging
+import re
+import uuid
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Bot, ChatMember
+from telegram.ext import ContextTypes, ChatMemberHandler
+from sheets import (
+    get_bot_config, 
+    add_log_entry, 
+    get_bot_users_count, 
+    get_bot_blocks_count,
+    save_user,
+    get_all_categories,
+    add_new_category,
+    delete_category_by_id,
+    update_category_name,
+    add_new_course,
+    get_courses_by_category,
+    delete_course_by_id
+)
 
-# إعداد اللوجر الاحترافي مع التسلسل الهرمي (Hierarchy Logging)
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - [CORE:DB] %(message)s')
-logger = logging.getLogger(__name__)
+# إعداد السجلات (Logging) لمراقبة أداء البوت وتتبع الأخطاء
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
-# --- إعداد المتغيرات العالمية لكافة أوراق العمل (14 ورقة كاملة) ---
-client = None
-ss = None
-users_sheet = None           # 1. المستخدمين
-bots_sheet = None            # 2. البوتات_المصنوعة
-content_sheet = None         # 3. إعدادات_المحتوى
-logs_sheet = None            # 4. السجلات
-stats_sheet = None           # 5. الإحصائيات
-payments_sheet = None        # 6. المدفوعات
-students_db_sheet = None      # 7. قاعدة_بيانات_الطلاب
-registrations_logs_sheet = None # 8. سجل_التسجيلات
-departments_sheet = None        # 9. الأقسام
-discount_codes_sheet = None     # 10. أكواد_الخصم
-coupons_sheet = None            # 11. الكوبونات
-courses_sheet = None            # 12. الدورات_التدريبية
-faq_sheet = None                # 13. الأسئلة_الشائعة
-meta_sheet = None               # 14. _meta (الإصدار والتحقق)
-coaches_sheet = None            # 15. ورقة المدربين (الإضافة الجديدة)
-# معرف ملف Google Sheet الخاص بمصنع البوتات
-SPREADSHEET_ID = "1e0tREOyfmZgQ_iCvWXJL2GpR_I4WfCpBlU7DYUclsfY"
+# --- [ القوائم الرئيسية للمنصة - أزرار واجهة المستخدم ] ---
 
-# --- إعدادات النظام المتقدمة (Production Core) ---
-STRICT_SCHEMA = True
-SCHEMA_VERSION = "1.3"
-BATCH_SIZE = 50
-RETRY_ATTEMPTS = 3
-AUTO_RESIZE = True 
-SENSITIVE_FIELDS = {"التوكن", "كلمة_المرور", "token", "api_key", "credentials", "private_key"}
-
-# كاش داخلي لتسريع العمليات
-_ws_cache = {}
-
-def get_config():
-    """جلب وتصحيح مفاتيح الوصول من متغيرات البيئة لضمان توافق RSA و JWT الرقمي"""
-    raw_key = os.getenv("G_PRIVATE_KEY")
-    if not raw_key:
-        print("❌ خطأ حرج: G_PRIVATE_KEY مفقود من إعدادات السيرفر!")
-        return None
-    try:
-        clean_key = raw_key.replace('\\n', '\n').strip().strip('"').strip("'")
-        return {
-            "type": "service_account",
-            "project_id": os.getenv("G_PROJECT_ID"),
-            "private_key_id": os.getenv("G_PRIVATE_KEY_ID"),
-            "private_key": clean_key,
-            "client_email": os.getenv("G_CLIENT_EMAIL"),
-            "client_id": os.getenv("G_CLIENT_ID"),
-            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-            "token_uri": "https://oauth2.googleapis.com/token",
-            "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-            "client_x509_cert_url": os.getenv("G_CLIENT_CERT_URL")
-        }
-    except Exception as e:
-        print(f"❌ خطأ في معالجة القاموس البرمجي للاعتمادات: {e}")
-        return None
-
-def connect_to_google():
-    """تأسيس الاتصال بجوجل وتعيين أوراق العمل مع نظام فحص استباقي للصلاحيات"""
-    global client, ss, users_sheet, bots_sheet, content_sheet, logs_sheet
-    global stats_sheet, payments_sheet, students_db_sheet, registrations_logs_sheet
-    global departments_sheet, discount_codes_sheet, coupons_sheet, courses_sheet, faq_sheet, meta_sheet
-    global courses_sheet, coaches_sheet, faq_sheet # أضف coaches_sheet هنا
-    config = get_config()
-    if not config: return False
-
-    try:
-        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(config, scope)
-        client = gspread.authorize(creds)
-        ss = client.open_by_key(SPREADSHEET_ID)
-        
-        def safe_get_sheet(name):
-            try: return ss.worksheet(name)
-            except: return None
-
-        # ربط كافة المتغيرات بالأوراق الـ 14
-        users_sheet = safe_get_sheet("المستخدمين")
-        bots_sheet = safe_get_sheet("البوتات_المصنوعة")
-        content_sheet = safe_get_sheet("إعدادات_المحتوى")
-        logs_sheet = safe_get_sheet("السجلات")
-        stats_sheet = safe_get_sheet("الإحصائيات")
-        payments_sheet = safe_get_sheet("المدفوعات")
-        students_db_sheet = safe_get_sheet("قاعدة_بيانات_الطلاب")
-        registrations_logs_sheet = safe_get_sheet("سجل_التسجيلات")
-        departments_sheet = safe_get_sheet("الأقسام")
-        discount_codes_sheet = safe_get_sheet("أكواد_الخصم")
-        coupons_sheet = safe_get_sheet("الكوبونات")
-        courses_sheet = safe_get_sheet("الدورات_التدريبية")
-        faq_sheet = safe_get_sheet("الأسئلة_الشائعة")
-        meta_sheet = safe_get_sheet("_meta")
-        coaches_sheet = ss.worksheet("المدربين") 
-
-        
-        print("✅ تم الاتصال بنجاح وربط كافة المتغيرات بالأوراق المتاحة.")
-        return True
-    except Exception as e:
-        print(f"❌ فشل الاتصال النهائي: {str(e)}")
-        return False
-
-def safe_api_call(func, *args, **kwargs):
-    """نظام إعادة المحاولة التلقائي لضمان استقرار العمليات"""
-    for attempt in range(RETRY_ATTEMPTS):
-        try:
-            return func(*args, **kwargs)
-        except Exception as e:
-            wait_time = (attempt + 1) * 2
-            print(f"⚠️ API Retry {attempt+1}/{RETRY_ATTEMPTS} failed: {e}. Retrying in {wait_time}s...")
-            time.sleep(wait_time)
-    raise Exception("❌ Critical API Failure after multiple attempts.")
-
-# تنفيذ محاولة الاتصال الفورية
-connect_to_google()
-
-# --- الدوال الوظيفية الأساسية ---
-
-def save_user(user_id, username):
-    global users_sheet
-    if users_sheet is None:
-        if not connect_to_google(): return False
-    try:
-        try:
-            exists = users_sheet.find(str(user_id))
-            if exists: return False
-        except: pass
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        row = [str(user_id), str(username), now, "نشط", "مجاني", 0, now, "ar", "Direct", "", 0]
-        users_sheet.insert_row(row, 2)
-        return True
-    except Exception as e:
-        print(f"❌ خطأ تسجيل مستخدم: {e}")
-        return False
-
-def save_bot(owner_id, bot_type, bot_name, bot_token):
-    global bots_sheet, content_sheet
-    if bots_sheet is None or content_sheet is None:
-        if not connect_to_google(): return False
-    try:
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        bot_row = [str(owner_id), bot_type, bot_name, bot_token, "نشط", "", "", now, "", 0, 0, "جيد", "", "polling", "free", "", "true", ""]
-        bots_sheet.append_row(bot_row)
-        content_row = [bot_token, "أهلاً بك في بوتك الجديد! 🤖", "لا توجد قوانين حالياً.", "عذراً، البوت متوقف مؤقتاً.", "false", "false", "true", "[]", "[]", str(owner_id), "ar", "default", "0", "true", "[]"]
-        content_sheet.append_row(content_row)
-        return True
-    except Exception as e:
-        print(f"❌ خطأ حفظ بوت: {e}")
-        return False
-
-def update_content_setting(bot_id, column_name, new_value):
-    global content_sheet
-    if content_sheet is None:
-        if not connect_to_google(): return False
-    try:
-        cell = content_sheet.find(str(bot_id))
-        if cell:
-            headers = content_sheet.row_values(1)
-            if column_name in headers:
-                col_index = headers.index(column_name) + 1
-                content_sheet.update_cell(cell.row, col_index, new_value)
-                return True
-    except Exception as e:
-        print(f"❌ خطأ تحديث إعدادات: {e}")
-    return False
-
-def get_bot_config(bot_id):
-    global content_sheet
-    if content_sheet is None:
-        if not connect_to_google(): return False
-    try:
-        cell = content_sheet.find(str(bot_id))
-        if cell:
-            values = content_sheet.row_values(cell.row)
-            headers = content_sheet.row_values(1)
-            return dict(zip(headers, values))
-    except Exception as e:
-        print(f"❌ خطأ جلب تكوين: {e}")
-    return {}
-
-def add_log_entry(bot_id, log_type, message):
-    global logs_sheet
-    if logs_sheet is None:
-        if not connect_to_google(): return False
-    try:
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        logs_sheet.append_row([str(bot_id), log_type, message, now])
-        return True
-    except Exception as e:
-        print(f"❌ خطأ تدوين سجل: {e}")
-        return False
-
-def check_connection():
-    try:
-        ss.title
-        return True
-    except:
-        return connect_to_google()
-
-def get_all_active_bots():
-    global bots_sheet
-    if bots_sheet is None: connect_to_google()
-    try:
-        all_records = bots_sheet.get_all_records()
-        return [bot for bot in all_records if bot.get("التوكن") and bot.get("حالة التشغيل") == "نشط"]
-    except Exception as e:
-        print(f"❌ خطأ جلب البوتات: {e}")
-        return []
-
-def get_total_bots_count():
-    global bots_sheet
-    if bots_sheet is None: connect_to_google()
-    try: return len(bots_sheet.col_values(1)) - 1
-    except: return 0
-
-def get_bot_users_count(bot_token):
-    return 1
-
-def get_bot_blocks_count(bot_token):
-    return 0
-
-def get_total_factory_users():
-    global users_sheet
-    if users_sheet is None: connect_to_google()
-    try: return len(users_sheet.col_values(1)) - 1
-    except: return 0
-
-# --- نظام إدارة المخطط الاحترافي (Schema Engine) ---
-
-def get_sheets_structure():
-    sheets_config = [
-        {"name": "المستخدمين", "cols": ["ID المستخدم","اسم المستخدم","تاريخ التسجيل","الحالة","نوع الاشتراك","عدد البوتات","آخر نشاط","اللغة","مصدر التسجيل","كود إحالة","رصيد"], "color": {"red": 0.85, "green": 0.92, "blue": 0.83}},
-        {"name": "البوتات_المصنوعة", "cols": ["ID المالك","نوع البوت","اسم البوت","التوكن","حالة التشغيل","bot_id","username_bot","تاريخ الإنشاء","آخر تشغيل","عدد المستخدمين","عدد الرسائل","الحالة التقنية","webhook_url","api_type","plan","expiration_date","is_active","errors_log"], "color": {"red": 0.81, "green": 0.88, "blue": 0.95}},
-        {"name": "إعدادات_المحتوى", "cols": ["ID البوت","الرسالة الترحيبية","القوانين","رد التوقف","auto_reply","ai_enabled","welcome_enabled","buttons","banned_words","admin_ids","language","theme","delay_response","broadcast_enabled","custom_commands"], "color": {"red": 1.0, "green": 0.95, "blue": 0.8}},
-        {"name": "الإحصائيات", "cols": ["bot_id","daily_users","messages_count","new_users","blocked_users","date"], "color": {"red": 0.92, "green": 0.82, "blue": 0.86}},
-        {"name": "المدفوعات", "cols": ["user_id","amount","method","date","status"], "color": {"red": 0.99, "green": 0.9, "blue": 0.8}},
-        {"name": "قاعدة_بيانات_الطلاب", "cols": ["طابع_زمني","معرف_الطلاب","ID_المستخدم_تيليجرام","الاسم_بالإنجليزي","الاسم_بالعربي","العمر","البلد","المدينة","رقم_الهاتف","البريد_الإلكتروني","تاريخ_الميلاد","المستوى","الحالة","كلمة_المرور","رابط_الصورة","معرف_الدورة","اسم_الدورة","الجنس","اسم_ ولي_الأمر","رقم_تواصل_ولي_الأمر","المؤهل_العلمي","التخصص","سنوات_الخبرة","دورات_سابقة","رابط_LinkedIn","رابط_Telegram","الرسوم","طريقة_الدفع","رابط_الإيصال","سبب_الرفض","النسبة%","المبلغ_المستحق","حالة_الحظر","كود_المندوب","اسم_المندوب","الحملة_التسويقية","معرف_الفرع","اسم_الفرع","ملاحظات"]},
-        {"name": "سجل_التسجيلات", "cols": ["معرف_التسجيل","طابع_زمني","معرف_الطالب","اسم_الطالب","ID_المستخدم_تيليجرام","معرف_الدورة","اسم_الدورة","معرف_المجموعة","اسم_المجموعة","تاريخ_التسجيل","حالة_التسجيل","طريقة_التسجيل","كود_الخصم","قيمة_الخصم","السعر_الأصلي","السعر_بعد_الخصم","المبلغ_المدفوع","المبلغ_المتبقي","حالة_الدفع","طريقة_الدفع","رابط_الإيصال","اسم_المندوب","كود_المندوب","الحملة_التسويقية","معرف_الفرع","اسم_الفرع","حالة_القبول","سبب_الرفض","تاريخ_آخر_تحديث","ملاحظات","تاريخ_الانسحاب","حالة_الترقية","الدورة_السابقة","المجموعة_السابقة","ملاحظات_الإدارة","تاريخ_تأكيد_الدفع","تاريخ_تذكير_الدفع"]},
-        {"name": "الأقسام", "cols": ["معرف_القسم","اسم_القسم","الوصف","الحالة","ترتيب_العرض","تاريخ_الإنشاء","معرف_الفرع","اسم_الفرع","ملاحظات"]},
-        {"name": "أكواد_الخصم", "cols": ["كود_الخصم","نوع_الخصم","قيمة_الخصم","الحد_الأقصى_للاستخدام","عدد_الاستخدامات","تاريخ_البداية","تاريخ_الانتهاء","الحالة","معرف_الدورة","اسم_المندوب","الحملة_التسويقية","ملاحظات"]},
-        {"name": "الكوبونات", "cols": ["معرف_الكوبون","كود_الكوبون","معرف_الطالب","اسم_الطالب","قيمة_الخصم","نوع_الخصم","الحد_الأقصى_للاستخدام","حالة_الكوبون","تاريخ_الإنشاء","تاريخ_الانتهاء","ملاحظات"]},
-        {"name": "الدورات_التدريبية", "cols": ["bot_id", "معرف_الدورة","اسم_الدورة","عدد_الساعات","تاريخ_البداية","تاريخ_النهاية","نوع_الدورة","سعر_الدورة","الحد_الأقصى","المتطلبات","اسم_المندوب","كود_المندوب","الحملة_التسويقية","معرف_المدرب","ID_المدرب", "اسم_المدرب" ]},
-        {"name": "الأسئلة_الشائعة", "cols": ["bot_id", "معرف_القسم","معرف_الدورة","اسم_الدورة", "محتوى_السؤال_مع_الإجابة","الحالة","ترتيب_العرض","تاريخ_الإنشاء","معرف_الفرع","اسم_الفرع","ملاحظات"]},
-        {"name": "السجلات", "cols": ["bot_id","type","message","time"], "color": {"red": 0.93, "green": 0.93, "blue": 0.93}},
-        {"name": "_meta", "cols": ["key", "value", "updated_at"], "color": {"red": 1, "green": 0.8, "blue": 0.8}}, 
-        {"name": "المدربين", "cols": ["ID_المدرب", "اسم_المدرب", "التخصص", "رقم_الهاتف", "البريد_الإلكتروني", "السيرة_الذاتية", "رابط_الصورة", "الحالة", "bot_id", "معرف_الفرع", "اسم_الفرع", "عدد_الدورات_الحالية", "تاريخ_التعاقد", "ملاحظات"], "color": {"red": 0.88, "green": 0.95, "blue": 0.88}}
-
+def get_student_menu():
+    """قائمة الأزرار الرئيسية التي تظهر للطلاب"""
+    keyboard = [
+        [InlineKeyboardButton("📚 استعراض الدورات", callback_data="view_courses")],
+        [InlineKeyboardButton("👤 ملفي الدراسي", callback_data="my_profile"), InlineKeyboardButton("🎟 تفعيل دورة", callback_data="redeem_code")],
+        [InlineKeyboardButton("❓ الأسئلة الشائعة", callback_data="edu_faq"), InlineKeyboardButton("💬 الدعم الفني", callback_data="edu_support")]
     ]
-    return sheets_config
+    return InlineKeyboardMarkup(keyboard)
 
-def setup_bot_factory_database():
-    global ss, _ws_cache
-    if 'ss' not in globals() or ss is None: connect_to_google()
-    all_requests = []
-    structures = get_sheets_structure()
-    _ws_cache = {ws.title: ws for ws in ss.worksheets()}
-    for config in structures:
-        try:
-            sheet_name = config["name"]
-            headers = config["cols"]
-            if sheet_name not in _ws_cache:
-                worksheet = safe_api_call(ss.add_worksheet, title=sheet_name, rows="500", cols=str(len(headers) + 2))
-                _ws_cache[sheet_name] = worksheet
-            else:
-                worksheet = _ws_cache[sheet_name]
-            current_headers = worksheet.row_values(1)
-            if set(current_headers) != set(headers):
-                if STRICT_SCHEMA:
-                    safe_api_call(worksheet.update, '1:1', [headers])
-            sheet_id = worksheet.id
-            all_requests.extend([
-                {"repeatCell": {"range": {"sheetId": sheet_id, "startRowIndex": 0, "endRowIndex": 1}, "cell": {"userEnteredFormat": {"backgroundColor": config.get("color", {"red": 1, "green": 1, "blue": 1}), "textFormat": {"bold": True}, "horizontalAlignment": "CENTER"}}, "fields": "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)"}},
-                {"updateSheetProperties": {"properties": {"sheetId": sheet_id, "gridProperties": {"frozenRowCount": 1}}, "fields": "gridProperties.frozenRowCount"}}
-            ])
-            if AUTO_RESIZE and (not current_headers or set(current_headers) != set(headers)):
-                safe_api_call(worksheet.columns_auto_resize, 0, len(headers))
-        except Exception as e: print(f"❌ خطأ تهيئة {sheet_name}: {e}")
-    if all_requests:
-        for i in range(0, len(all_requests), BATCH_SIZE):
-            safe_api_call(ss.batch_update, {"requests": all_requests[i:i+BATCH_SIZE]})
-    update_meta_info()
-    return verify_setup(structures)
+def get_admin_panel():
+    """قائمة الأزرار الرئيسية للوحة تحكم الإدارة - النسخة الشاملة"""
+    keyboard = [
+        # الصف الأول: الإحصائيات
+        [InlineKeyboardButton("📊 الإحصائيات الذكية", callback_data="admin_stats")],
+        [
+            InlineKeyboardButton("📁 إدارة الأقسام", callback_data="manage_cats"),
+            InlineKeyboardButton("📚 إدارة الدورات", callback_data="manage_courses")
+        ],
+        [InlineKeyboardButton("👨‍🏫 إدارة شؤون المدربين", callback_data="manage_coaches")],
+        [
+            InlineKeyboardButton("🎟 الكوبونات", callback_data="manage_coupons"),
+            InlineKeyboardButton("📢 الإعلانات", callback_data="manage_ads")
+        ],
+        [InlineKeyboardButton("📡 الإذاعة المستهدفة", callback_data="smart_broadcast")],
+        [
+            InlineKeyboardButton("🛠 الإعدادات التقنية", callback_data="tech_settings"),
+            InlineKeyboardButton("❌ إغلاق", callback_data="close_panel")
+        ]
+    ]
+    return InlineKeyboardMarkup(keyboard)
 
-def update_meta_info():
-    try:
-        meta_ws = _ws_cache.get("_meta")
-        if meta_ws:
-            meta_ws.clear()
-            meta_data = [["key", "value", "updated_at"], ["version", SCHEMA_VERSION, datetime.now().isoformat()], ["engine_status", "HEALTHY", datetime.now().isoformat()]]
-            safe_api_call(meta_ws.update, 'A1', meta_data)
-    except Exception as e: print(f"❌ فشل ميتا: {e}")
 
-def verify_setup(structures):
-    for config in structures:
-        ws = _ws_cache.get(config["name"])
-        if not ws or set(ws.row_values(1)) != set(config["cols"]): return False
-    return True
+# --- [ المعالجات الأساسية - أمر البداية ] ---
+
+async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """معالجة أمر /start وتسجيل المستخدم وعرض القائمة المناسبة"""
+    user = update.effective_user
+    bot_token = context.bot.token
+    config = get_bot_config(bot_token)
+    bot_owner_id = int(config.get("admin_ids", 0))
+
+    # تسجيل الطالب في قاعدة البيانات (Google Sheets)
+    save_user(user.id, user.username)
+
+    if user.id == bot_owner_id:
+        # واجهة المسؤول
+        await update.message.reply_text(
+            f"<b>مرحباً بك يا دكتور {user.first_name} في لوحة تحكم منصتك</b> 🎓\n\nيمكنك إدارة الطلاب، الدورات، والمبيعات من هنا:",
+            reply_markup=get_admin_panel(),
+            parse_mode="HTML"
+        )
+    else:
+        # واجهة الطالب
+        welcome_msg = config.get("الرسالة الترحيبية", "مرحباً بك في المنصة التعليمية! ابدأ رحلة تعلمك الآن.")
+        await update.message.reply_text(
+            f"<b>{welcome_msg}</b>",
+            reply_markup=get_student_menu(),
+            parse_mode="HTML"
+        )
+
 # --------------------------------------------------------------------------
-def add_new_category(bot_token, cat_id, cat_name):
-    """إضافة قسم جديد باستخدام المتغير departments_sheet"""
-    try:
-        from datetime import datetime
-        current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
-        # التأكد أن المتغير ليس None
-        if departments_sheet is not None:
-            # إضافة: التوكن، المعرف، الاسم، التاريخ
-            departments_sheet.append_row([bot_token, cat_id, cat_name, current_date])
-            return True
-        return False
-    except Exception as e:
-        print(f"❌ Error in add_new_category: {e}")
-        return False
+# --- [ معالج ضغطات الأزرار (Callback Query Handler) ] ---
+# --------------------------------------------------------------------------
 
-def get_all_categories(bot_token):
-    """جلب الأقسام باستخدام المتغير departments_sheet"""
-    try:
-        if departments_sheet is None:
-            return []
+async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """التحكم في كافة عمليات الضغط على الأزرار الشفافة Inline Buttons"""
+    query = update.callback_query
+    data = query.data
+    user_id = query.from_user.id
+    bot_token = context.bot.token
+    config = get_bot_config(bot_token)
+    bot_owner_id = int(config.get("admin_ids", 0))
+
+    await query.answer()
+
+    # --- 1. إدارة الإحصائيات ---
+    if data == "admin_stats":
+        total_students = get_bot_users_count(bot_token)
+        blocks = get_bot_blocks_count(bot_token)
+        stats_text = (
+            f"<b>📊 تقرير المنصة الحالي:</b>\n"
+            f"-----------------------\n"
+            f"👥 إجمالي الطلاب: {total_students}\n"
+            f"🚫 عدد المحظورين: {blocks}\n"
+            f"💰 مبيعات اليوم: 0.00$\n"
+            f"📈 أكثر دورة طلباً: لا يوجد بيانات بعد"
+        )
+        await query.edit_message_text(stats_text, reply_markup=get_admin_panel(), parse_mode="HTML")
+
+    # --- 2. إدارة الدورات التدريبية (الواجهة الرئيسية) ---
+    elif data == "manage_courses":
+        await query.edit_message_text(
+            "📚 <b>إدارة الدورات التدريبية:</b>\n\nيمكنك إضافة دورات جديدة وربطها بالأقسام المتاحة.", 
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("➕ إضافة دورة جديدة", callback_data="start_add_course")],
+                [InlineKeyboardButton("🔙 عودة", callback_data="back_to_admin")]
+            ]), 
+            parse_mode="HTML"
+        )
+# --------------------------------------------------------------------------
+    # --- 3. بدء عملية إضافة مدرب  جديد  ---
+        elif data == "manage_coaches":
+        await query.edit_message_text(
+            "👨‍🏫 <b>إدارة شؤون المدربين:</b>\nيمكنك إضافة مدربين جدد أو استعراض القائمة الحالية للحذف.",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("➕ إضافة مدرب جديد", callback_data="start_add_coach")],
+                [InlineKeyboardButton("📋 عرض قائمة المدربين", callback_data="list_coaches")],
+                [InlineKeyboardButton("🔙 عودة للوحة التحكم", callback_data="back_to_admin")]
+            ]), parse_mode="HTML"
+        )
+
+    # 1. عرض قائمة المدربين كأزرار
+    elif data == "list_coaches":
+        from sheets import get_all_coaches
+        coaches = get_all_coaches(bot_token)
+        if not coaches:
+            await query.edit_message_text("⚠️ لا يوجد مدربون مسجلون حالياً.", 
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 عودة", callback_data="manage_coaches")]]))
+            return
+
+        keyboard = [[InlineKeyboardButton(f"👤 {c['name']}", callback_data=f"view_coach_{c['id']}")] for c in coaches]
+        keyboard.append([InlineKeyboardButton("🔙 عودة", callback_data="manage_coaches")])
+        await query.edit_message_text("🎯 **اختر مدرباً لعرض تفاصيله أو حذفه:**", reply_markup=InlineKeyboardMarkup(keyboard))
+
+    # 2. عرض تفاصيل مدرب محدد مع زر الحذف
+    elif data.startswith("view_coach_"):
+        coach_id = data.replace("view_coach_", "")
+        from sheets import get_all_coaches
+        coaches = get_all_coaches(bot_token)
+        coach = next((c for c in coaches if str(c['id']) == str(coach_id)), None)
+        
+        if coach:
+            text = f"👤 **معلومات المدرب:**\n━━━━━━━━━━━━━━\nالاسم: {coach['name']}\nID: <code>{coach['id']}</code>"
+            keyboard = [
+                [InlineKeyboardButton("🗑️ حذف المدرب نهائياً", callback_data=f"del_coach_{coach['id']}")],
+                [InlineKeyboardButton("🔙 عودة للقائمة", callback_data="list_coaches")]
+            ]
+            await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+    # 3. تنفيذ الحذف الفعلي
+    elif data.startswith("del_coach_"):
+        coach_id = data.replace("del_coach_", "")
+        from sheets import delete_coach_from_sheet
+        if delete_coach_from_sheet(bot_token, coach_id):
+            await query.answer("✅ تم حذف المدرب بنجاح", show_alert=True)
+            # العودة للقائمة بعد الحذف
+            await query.edit_message_text("✅ تم الحذف. هل تريد إدارة مدرب آخر؟", 
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📋 عرض القائمة", callback_data="list_coaches")]]))
+        else:
+            await query.answer("❌ فشل الحذف", show_alert=True)
+
+
+    elif data == "start_add_coach":
+        context.user_data['action'] = 'await_coach_name'
+        await query.edit_message_text("✍️ <b>الخطوة 1:</b> أرسل اسم المدرب الثلاثي:", parse_mode="HTML")
+
+    elif data == "confirm_save_coach":
+        # دمجنا الوظيفتين هنا واستخدمنا النسخة المتطورة
+        from sheets import add_new_coach_advanced
+        
+        # 1. جلب بيانات المدرب من الذاكرة المؤقتة
+        c = context.user_data.get('temp_coach')
+        
+        if not c:
+            await query.edit_message_text("⚠️ خطأ: تعذر العثور على البيانات، يرجى إعادة المحاولة من جديد.")
+            return
+
+        # 2. تنفيذ الحفظ الفعلي باستخدام الدالة المتطورة
+        success = add_new_coach_advanced(
+            bot_token=bot_token,
+            coach_id=c['id'],
+            name=c['name'],
+            specialty=c['spec'],
+            phone=c['phone'],
+            notes="تمت الإضافة عبر لوحة التحكم"
+        )
+        
+        if success:
+            await query.edit_message_text(
+                f"✅ <b>تم تسجيل المدرب بنجاح!</b>\n\n"
+                f"👤 الاسم: {c['name']}\n"
+                f"🎓 التخصص: {c['spec']}\n"
+                f"🆔 المعرف: <code>{c['id']}</code>",
+                reply_markup=get_admin_panel(),
+                parse_mode="HTML"
+            )
+            # مسح البيانات المؤقتة لضمان نظافة الذاكرة
+            context.user_data.pop('temp_coach', None)
+        else:
+            await query.edit_message_text("❌ حدث خطأ تقني أثناء الحفظ في جوجل شيت. تأكد من إعدادات الملف.")
+
+# --------------------------------------------------------------------------
+    # --- 4. معالجة القسم المختار للدورة وبدء طلب الاسم ---
+    elif data.startswith("set_crs_cat_"):
+        cat_id = data.replace("set_crs_cat_", "")
+        context.user_data['temp_crs_cat'] = cat_id
+        context.user_data['action'] = 'awaiting_crs_name'
+        await query.edit_message_text("✍️ **الخطوة 2:** أرسل اسم الدورة الآن:")
+
+    elif data == "confirm_save_full_crs":
+        from sheets import add_new_course 
+        import uuid
+        
+        # 1. جلب البيانات المؤقتة
+        d = context.user_data.get('temp_crs')
+        cat_id = context.user_data.get('temp_crs_cat')
+        
+        if not d:
+            await query.edit_message_text("⚠️ خطأ: تعذر العثور على البيانات المؤقتة، يرجى المحاولة مجدداً.")
+            return
+
+        # 2. توليد معرف فريد للدورة
+        c_id = f"CRS{str(uuid.uuid4().int)[:4]}"
+        
+        # 3. تنفيذ الحفظ الفعلي (إرسال الـ 16 متغير بالترتيب للأعمدة)
+        success = add_new_course(
+            bot_token,          # 1. bot_id
+            c_id,               # 2. معرف_الدورة
+            d['name'],          # 3. اسم_الدورة
+            d['hours'],         # 4. عدد_الساعات
+            d['start_date'],    # 5. تاريخ_البداية
+            "",                 # 6. تاريخ_النهاية
+            "أونلاين",          # 7. نوع_الدورة
+            d['price'],         # 8. سعر_الدورة
+            "100",              # 9. الحد_الأقصى
+            "لا يوجد",          # 10. المتطلبات
+            "إدارة المنصة",      # 11. اسم_المندوب
+            "ADMIN01",          # 12. كود_المندوب
+            "عام",              # 13. الحملة_التسويقية
+            d['coach_user'],    # 14. معرف_المدرب (اليوزر)
+            d['coach_id'],      # 15. ID_المدرب (الرقمي)
+            d['coach_name']     # 16. اسم_المدرب
+        )
+        
+        if success:
+            await query.edit_message_text(
+                f"✅ <b>تم اعتماد الدورة وحفظها بنجاح!</b>\n\n"
+                f"🆔 المعرف: <code>{c_id}</code>\n"
+                f"📂 القسم: <code>{cat_id}</code>\n"
+                f"👨‍🏫 المدرب: {d['coach_name']}",
+                reply_markup=get_admin_panel(),
+                parse_mode="HTML"
+            )
+            context.user_data.pop('temp_crs', None) # مسح البيانات المؤقتة
+        else:
+            await query.edit_message_text("❌ فشل الحفظ في جوجل شيت، تأكد من صلاحيات الملف.")
+
+        # استدعاء الدالة بالاسم الصحيح المذكور في sheets.py
+        success = add_new_course(
+            bot_token, c_id, d['name'], d['hours'], d['start_date'], 
+            "", "أونلاين", d['price'], "100", "لا يوجد", "إدارة", "001", "عام",
+            d['coach_user'], d['coach_id'], d['coach_name']
+        )
+
+        
+        if success:
+            await query.edit_message_text("✅ **تم اعتماد الدورة وحفظها في جوجل شيت بنجاح!**", 
+                                          reply_markup=get_admin_panel())
+        else:
+            await query.edit_message_text("❌ حدث خطأ أثناء الحفظ.")
+
+
+    # --- 5. إدارة الأقسام (عرض القائمة) ---
+    elif data == "manage_cats":
+        from sheets import get_all_categories 
+        categories = get_all_categories(bot_token)
+        
+        keyboard = []
+        if categories:
+            for cat in categories:
+                keyboard.append([InlineKeyboardButton(f"📂 {cat['name']}", callback_data=f"edit_cat_{cat['id']}")])
+        
+        keyboard.append([InlineKeyboardButton("➕ إضافة قسم جديد", callback_data="add_cat_start")])
+        keyboard.append([InlineKeyboardButton("🔙 عودة", callback_data="back_to_admin")])
+        
+        await query.edit_message_text(
+            "🗂 <b>قائمة الأقسام الحالية:</b>\nاختر قسماً للتعديل أو اضغط إضافة:",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
+        )
+        
+    elif data == "start_add_course":
+        from sheets import get_all_categories
+        categories = get_all_categories(bot_token)
+        if not categories:
+            await query.edit_message_text("⚠️ أضف قسماً أولاً!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 عودة", callback_data="manage_cats")]]), parse_mode="HTML")
+            return
+        # الخطوة 1: اختيار القسم
+        keyboard = [[InlineKeyboardButton(f"📁 {cat['name']}", callback_data=f"set_crs_cat_{cat['id']}")] for cat in categories]
+        keyboard.append([InlineKeyboardButton("❌ إلغاء", callback_data="manage_courses")])
+        await query.edit_message_text("🎯 **الخطوة 1:** اختر القسم المخصص للدورة:", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+    # --- 6. عرض خيارات القسم المختار (تعديل/حذف/عرض دورات) ---
+    elif data.startswith("edit_cat_"):
+        cat_id = data.replace("edit_cat_", "")
+        context.user_data['selected_cat_id'] = cat_id
+        
+        keyboard = [
+            [InlineKeyboardButton("📝 تعديل اسم القسم", callback_data="rename_cat")],
+            [InlineKeyboardButton("📚 عرض دورات القسم", callback_data=f"view_crs_in_{cat_id}")],
+            [InlineKeyboardButton("🗑️ حذف القسم", callback_data="confirm_delete_cat")],
+            [InlineKeyboardButton("🔙 عودة للقائمة", callback_data="manage_cats")]
+        ]
+        await query.edit_message_text(
+            f"🛠 <b>إدارة القسم:</b>\n🆔 المعرف: <code>{cat_id}</code>\n\nاختر الإجراء المطلوب:",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
+        )
+
+    # --- 7. عرض الدورات التابعة لقسم محدد ---
+    elif data.startswith("view_crs_in_"):
+        cat_id = data.replace("view_crs_in_", "")
+        from sheets import get_courses_by_category
+        courses = get_courses_by_category(bot_token, cat_id)
+        
+        keyboard = []
+        if courses:
+            for crs in courses:
+                keyboard.append([InlineKeyboardButton(f"📖 {crs['name']}", callback_data=f"manage_crs_{crs['id']}")])
+        
+        keyboard.append([InlineKeyboardButton("🔙 عودة للقسم", callback_data=f"edit_cat_{cat_id}")])
+        
+        await query.edit_message_text(
+            f"📚 <b>الدورات التابعة للقسم {cat_id}:</b>",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
+        )
+
+    # --- 8. بدء عملية إضافة قسم جديد ---
+    elif data == "add_cat_start":
+        context.user_data['action'] = 'awaiting_cat_name'
+        await query.edit_message_text(
+            "✍️ <b>إضافة قسم جديد:</b>\n\nيرجى إرسال اسم القسم الذي تريد إنشاءه الآن:",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ إلغاء العملية", callback_data="manage_cats")]]),
+            parse_mode="HTML"
+        )
+
+    # --- 9. تأكيد حذف القسم ---
+    elif data == "confirm_delete_cat":
+        keyboard = [
+            [InlineKeyboardButton("✅ نعم، احذف", callback_data="exec_delete_cat")],
+            [InlineKeyboardButton("❌ تراجع", callback_data="manage_cats")]
+        ]
+        await query.edit_message_text(
+            "⚠️ <b>تنبيه هام!</b>\nهل أنت متأكد من حذف هذا القسم؟",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
+        )
+
+    # --- 10. تنفيذ الحذف النهائي للقسم ---
+    elif data == "exec_delete_cat":
+        cat_id = context.user_data.get('selected_cat_id')
+        if delete_category_by_id(bot_token, cat_id):
+            await query.edit_message_text("✅ <b>تم حذف القسم بنجاح!</b>", 
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 العودة للأقسام", callback_data="manage_cats")]]), parse_mode="HTML")
+        else:
+            await query.edit_message_text("❌ حدث خطأ أثناء محاولة الحذف.")
+
+    # --- 11. بدء عملية تعديل اسم القسم ---
+    elif data == "rename_cat":
+        context.user_data['action'] = 'awaiting_new_cat_name'
+        await query.edit_message_text(
+            "📝 <b>تعديل اسم القسم:</b>\nيرجى إرسال الاسم الجديد الآن:",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ إلغاء", callback_data="manage_cats")]]),
+            parse_mode="HTML"
+        )
+
+    # --- 12. واجهة إدارة دورة محددة ---
+    elif data.startswith("manage_crs_"):
+        course_id = data.replace("manage_crs_", "")
+        context.user_data['selected_course_id'] = course_id
+        
+        keyboard = [
+            [InlineKeyboardButton("🗑️ حذف هذه الدورة", callback_data="confirm_delete_crs")],
+            [InlineKeyboardButton("🔙 عودة لقائمة الدورات", callback_data="manage_courses")]
+        ]
+        await query.edit_message_text(f"📖 <b>إدارة الدورة:</b>\n🆔 المعرف: <code>{course_id}</code>", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+    # --- 13. تأكيد وحذف الدورة ---
+    elif data == "confirm_delete_crs":
+        keyboard = [
+            [InlineKeyboardButton("✅ نعم، احذف الدورة", callback_data="exec_delete_crs")],
+            [InlineKeyboardButton("❌ تراجع", callback_data="manage_courses")]
+        ]
+        await query.edit_message_text("⚠️ <b>تأكيد الحذف:</b>\nهل أنت متأكد من حذف هذه الدورة؟", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+    elif data == "exec_delete_crs":
+        course_id = context.user_data.get('selected_course_id')
+        if delete_course_by_id(bot_token, course_id):
+            await query.edit_message_text("✅ <b>تم حذف الدورة بنجاح!</b>", 
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 العودة", callback_data="manage_courses")]]), parse_mode="HTML")
+
+    # --- 14. الإذاعة والتنقل العام ---
+    elif data == "smart_broadcast":
+        await query.edit_message_text("📡 <b>الإذاعة الذكية:</b>", 
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📢 للكل", callback_data="bc_all"), InlineKeyboardButton("🎓 لمشتركي دورة", callback_data="bc_course")]]), parse_mode="HTML")
+
+    elif data == "close_panel":
+        await query.edit_message_text("🔒 تم إغلاق لوحة التحكم.")
+
+    elif data == "back_to_admin":
+        await query.edit_message_text(f"<b>مرحباً بك مجدداً يا دكتور {query.from_user.first_name}</b>", reply_markup=get_admin_panel(), parse_mode="HTML")
+
+# --------------------------------------------------------------------------
+# --- [ معالج الرسائل النصية (Message Handler) ] ---
+# --------------------------------------------------------------------------
+async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """معالجة كافة الرسائل النصية الواردة للبوت وتوجيهها حسب الحالة دون حذف أي وظيفة"""
+    text = update.message.text
+    user = update.effective_user
+    bot_token = context.bot.token
+    config = get_bot_config(bot_token)
+    bot_owner_id = int(config.get("admin_ids", 0))
+    action = context.user_data.get('action')
+
+    # --- [ الجزء الخاص بالمسؤول - إدارة المحتوى والدورات ] ---
+    if user.id == bot_owner_id:
+        # 1. حالة إضافة قسم جديد
+        if action == 'awaiting_cat_name':
+            cat_id = f"C{str(uuid.uuid4().int)[:4]}"
+            if add_new_category(bot_token, cat_id, text.strip()):
+                context.user_data['action'] = None
+                await update.message.reply_text(f"✅ تم إنشاء القسم بنجاح: <b>{text}</b>", reply_markup=get_admin_panel(), parse_mode="HTML")
+            return
             
-        all_rows = departments_sheet.get_all_values()
-        categories = []
-        for row in all_rows[1:]: # تخطي العنوان
-            if row[0] == bot_token:
-                categories.append({
-                    "id": row[1],
-                    "name": row[2]
+        # 2. حالة تعديل اسم قسم
+        elif action == 'awaiting_new_cat_name':
+            cat_id = context.user_data.get('selected_cat_id')
+            if update_category_name(bot_token, cat_id, text.strip()):
+                context.user_data['action'] = None
+                await update.message.reply_text(f"✅ تم تحديث اسم القسم إلى: <b>{text}</b>", reply_markup=get_admin_panel(), parse_mode="HTML")
+            return
+
+        # 3. حالة إضافة دورة جديدة (النظام البسيط القديم - اسم فقط)
+        elif action == 'awaiting_course_name':
+            course_cat = context.user_data.get('temp_course_cat')
+            course_id = f"CRS{str(uuid.uuid4().int)[:4]}"
+            if add_new_course(bot_token, course_id, text.strip(), course_cat):
+                context.user_data['action'] = None
+                await update.message.reply_text(f"✅ تم إضافة الدورة بنجاح: <b>{text}</b>", reply_markup=get_admin_panel(), parse_mode="HTML")
+            return
+
+        # 4. تسلسل إضافة دورة احترافي (الخطوة 2: استلام الاسم وطلب الساعات)
+        elif action == 'awaiting_crs_name':
+            context.user_data['temp_crs'] = {'name': text.strip()}
+            context.user_data['action'] = 'awaiting_crs_hours'
+            await update.message.reply_text("⏳ <b>الخطوة 3:</b> أرسل عدد ساعات الدورة (أو وصفاً قصيراً):", parse_mode="HTML")
+            return
+
+        # 5. الخطوة 3: استلام الساعات والطلب السعر
+        elif action == 'awaiting_crs_hours':
+            context.user_data['temp_crs']['hours'] = text.strip()
+            context.user_data['action'] = 'awaiting_crs_price'
+            await update.message.reply_text("💰 <b>الخطوة 4:</b> أرسل سعر الدورة (أرقام فقط):", parse_mode="HTML")
+            return
+
+        # 6. الخطوة 4: استلام السعر وعرض خيارات المدربين (من الشيت أو يدوياً)
+        elif action == 'awaiting_crs_price':
+            context.user_data['temp_crs']['price'] = text.strip()
+            from sheets import get_all_coaches
+            coaches = get_all_coaches(bot_token) # جلب المدربين من الورقة الجديدة
+            
+            msg = "👨‍🏫 <b>الخطوة 5:</b> اختر المدرب من القائمة أدناه، أو أرسل (يوزرنايم/ID) يدوي:"
+            keyboard = []
+            
+            if coaches:
+                for c in coaches:
+                    keyboard.append([InlineKeyboardButton(f"👤 {c['name']}", callback_data=f"sel_coach_for_crs_{c['id']}")])
+            
+            keyboard.append([InlineKeyboardButton("❌ إلغاء العملية", callback_data="manage_courses")])
+            
+            context.user_data['action'] = 'awaiting_crs_coach' # البوت جاهز لاستقبال نص أو ضغطة زر
+            await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+            return
+
+        # 7. الخطوة 5: استلام بيانات المدرب (يدوياً إذا لم يستخدم الأزرار)
+        elif action == 'awaiting_crs_coach':
+            input_val = text.strip()
+            from sheets import find_user_by_username
+            
+            # فحص: هل المسؤول أرسل ID رقمي؟
+            if input_val.isdigit():
+                context.user_data['temp_crs'].update({
+                    'coach_user': "إدخال يدوي رقمي",
+                    'coach_id': input_val,
+                    'coach_name': f"مدرب (ID: {input_val})"
                 })
-        return categories
-    except Exception as e:
-        print(f"❌ Error in get_all_categories: {e}")
-        return []
-#دالة حذف القسم والبحث 
-def delete_category_by_id(bot_token, cat_id):
-    """حذف صف القسم من جوجل شيت بناءً على ID القسم والتوكن"""
-    try:
-        if departments_sheet is None: return False
-        
-        all_rows = departments_sheet.get_all_values()
-        for i, row in enumerate(all_rows):
-            # التأكد من مطابقة التوكن (العمود 1) والـ ID (العمود 2)
-            if row[0] == bot_token and row[1] == cat_id:
-                # i+1 لأن جوجل شيت يبدأ العد من 1 وليس 0
-                departments_sheet.delete_rows(i + 1)
-                return True
-        return False
-    except Exception as e:
-        print(f"❌ Error in delete_category: {e}")
-        return False
- # دالة تبحث عن الـ ID وتقوم بتغيير الاسم في ذلك الصف
-def update_category_name(bot_token, cat_id, new_name):
-    """تحديث اسم قسم موجود في جوجل شيت"""
-    try:
-        if departments_sheet is None: return False
-        
-        all_rows = departments_sheet.get_all_values()
-        for i, row in enumerate(all_rows):
-            # العمود 1 توكن، العمود 2 ID
-            if row[0] == bot_token and row[1] == cat_id:
-                # تحديث العمود الثالث (Index 3 في الشيت يبدأ من 1)
-                departments_sheet.update_cell(i + 1, 3, new_name)
-                return True
-        return False
-    except Exception as e:
-        print(f"❌ Error in update_category_name: {e}")
-        return False
+                context.user_data['action'] = 'awaiting_crs_date'
+                await update.message.reply_text(f"✅ تم قبول المعرف الرقمي: <code>{input_val}</code>\n\n🗓 <b>الخطوة 6:</b> أرسل تاريخ بداية الدورة:", parse_mode="HTML")
+            
+            # فحص: هل المسؤول أرسل يوزرنايم؟
+            else:
+                coach_username = input_val.replace("@", "")
+                user_data = find_user_by_username(bot_token, coach_username) # البحث في شيت المستخدمين
+                
+                if user_data:
+                    context.user_data['temp_crs'].update({
+                        'coach_user': f"@{coach_username}",
+                        'coach_id': user_data['id'],
+                        'coach_name': user_data['name']
+                    })
+                    context.user_data['action'] = 'awaiting_crs_date'
+                    await update.message.reply_text(f"✅ تم العثور على المدرب في القاعدة: {user_data['name']}\n\n🗓 <b>الخطوة 6:</b> أرسل تاريخ بداية الدورة:", parse_mode="HTML")
+                else:
+                    try:
+                        # محاولة أخيرة عبر سيرفرات تليجرام
+                        coach_chat = await context.bot.get_chat(f"@{coach_username}")
+                        context.user_data['temp_crs'].update({
+                            'coach_user': f"@{coach_username}",
+                            'coach_id': coach_chat.id,
+                            'coach_name': coach_chat.full_name
+                        })
+                        context.user_data['action'] = 'awaiting_crs_date'
+                        await update.message.reply_text(f"✅ تم العثور عبر تليجرام: {coach_chat.full_name}\n\n🗓 <b>الخطوة 6:</b> أرسل تاريخ البداية:", parse_mode="HTML")
+                    except Exception:
+                        await update.message.reply_text(
+                            "❌ <b>فشل العثور على المدرب!</b>\n\n"
+                            "💡 يرجى إرسال <b>المعرف الرقمي (ID)</b> للمدرب الآن (مثل: 873158772)، أو تأكد من مراسلته للبوت.",
+                            parse_mode="HTML"
+                        )
+            return
 
-# --------------------------------------------------------------------------
+        # 8. الخطوة 6: مراجعة البيانات وعرض التأكيد النهائي للحفظ في "الدورات_التدريبية"
+        elif action == 'awaiting_crs_date':
+            context.user_data['temp_crs']['start_date'] = text.strip()
+            d = context.user_data['temp_crs']
+            
+            summary = (
+                f"📝 <b>مراجعة بيانات الدورة قبل الاعتماد:</b>\n"
+                f"━━━━━━━━━━━━━━\n"
+                f"📂 القسم: <code>{context.user_data.get('temp_crs_cat')}</code>\n"
+                f"📚 الاسم: <b>{d['name']}</b>\n"
+                f"⏳ الساعات: {d['hours']}\n"
+                f"💰 السعر: {d['price']}$\n"
+                f"👨‍🏫 المدرب: {d['coach_name']}\n"
+                f"🆔 معرف المدرب: <code>{d['coach_id']}</code>\n"
+                f"🗓 البداية: {d['start_date']}\n"
+                f"━━━━━━━━━━━━━━\n"
+                f"<b>هل تريد تسجيل هذه الدورة رسمياً؟</b>"
+            )
+            keyboard = [
+                [InlineKeyboardButton("✅ نعم، اعتمد واحفظ", callback_data="confirm_save_full_crs")],
+                [InlineKeyboardButton("❌ إلغاء", callback_data="manage_courses")]
+            ]
+            await update.message.reply_text(summary, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+            context.user_data['action'] = None
+            return
 
-#دالة اضافة الدورات_التدريبية
+        # --- [ تسلسل إضافة مدرب ] ---
+        # 1. استلام الاسم والطلب التخصص
+        elif action == 'await_coach_name':
+            context.user_data['temp_coach'] = {'name': text.strip()}
+            context.user_data['action'] = 'await_coach_spec'
+            await update.message.reply_text("🎓 <b>الخطوة 2:</b> أرسل تخصص المدرب (مثلاً: لغة عربية، برمجة...):", parse_mode="HTML")
+            return
 
-def add_new_course(bot_token, course_id, name, hours, start_date, end_date, c_type, price, limit, reqs, rep_name, rep_code, campaign, coach_user, coach_id, coach_name):
-    """إضافة دورة كاملة مع الالتزام بالترتيب الدقيق للأعمدة الـ 16 في جوجل شيت"""
-    try:
-        if courses_sheet is None: return False
-        
-        # الترتيب حسب الأعمدة التي حددتها أنت بالضبط:
-        # ["bot_id", "معرف_الدورة", "اسم_الدورة", "عدد_الساعات", "تاريخ_البداية", "تاريخ_النهاية", "نوع_الدورة", "سعر_الدورة", "الحد_الأقصى", "المتطلبات", "اسم_المندوب", "كود_المندوب", "الحملة_التسويقية", "معرف_المدرب", "ID_المدرب", "اسم_المدرب"]
-        row = [
-            bot_token,    # 1. bot_id
-            course_id,    # 2. معرف_الدورة
-            name,         # 3. اسم_الدورة
-            hours,        # 4. عدد_الساعات (أو الوصف)
-            start_date,   # 5. تاريخ_البداية
-            end_date,     # 6. تاريخ_النهاية
-            c_type,       # 7. نوع_الدورة
-            price,        # 8. سعر_الدورة (العمود الثامن)
-            limit,        # 9. الحد_الأقصى
-            reqs,         # 10. المتطلبات
-            rep_name,     # 11. اسم_المندوب
-            rep_code,     # 12. كود_المندوب
-            campaign,     # 13. الحملة_التسويقية
-            coach_user,   # 14. معرف_المدرب (اليوزر @)
-            coach_id,     # 15. ID_المدرب (الرقمي)
-            coach_name    # 16. اسم_المدرب
-        ]
-        
-        courses_sheet.append_row(row)
-        return True
-    except Exception as e:
-        print(f"❌ Error in add_new_course: {e}")
-        return False
+        # 2. استلام التخصص والطلب الهاتف
+        elif action == 'await_coach_spec':
+            context.user_data['temp_coach']['spec'] = text.strip()
+            context.user_data['action'] = 'await_coach_phone'
+            await update.message.reply_text("📞 <b>الخطوة 3:</b> أرسل رقم هاتف المدرب:")
+            return
 
-def get_courses_by_category(bot_token, cat_id):
-    """جلب كافة الدورات المرتبطة بقسم محدد بناءً على ID القسم المخزن في الشيت"""
-    try:
-        if courses_sheet is None: return []
-        all_rows = courses_sheet.get_all_values()
-        courses = []
-        for row in all_rows[1:]:
-            # في نظامك الجديد، سنبحث عن ID القسم (غالباً يكون في عمود إضافي أو ضمن البيانات)
-            # إذا كنت تضع ID القسم في العمود 15 (Index 14) كما فعلنا سابقاً:
-            if len(row) >= 15 and row[0] == bot_token and row[14] == cat_id:
-                courses.append({
-                    "id": row[1],    # معرف الدورة
-                    "name": row[2]   # اسم الدورة
-                })
-        return courses
-    except Exception as e:
-        print(f"❌ Error fetching courses: {e}")
-        return []
+        # 3. استلام الهاتف والطلب الـ ID
+        elif action == 'await_coach_phone':
+            context.user_data['temp_coach']['phone'] = text.strip()
+            context.user_data['action'] = 'await_coach_id'
+            await update.message.reply_text("🆔 <b>الخطوة 4:</b> أرسل المعرف الرقمي (ID) للمدرب (مثال: 873158772):", parse_mode="HTML")
+            return
 
-def delete_course_by_id(bot_token, course_id):
-    """حذف صف دورة محددة من الشيت بناءً على معرف الدورة والتوكن لضمان الدقة وعدم تداخل البيانات"""
-    try:
-        if courses_sheet is None: return False
-        all_rows = courses_sheet.get_all_values()
-        for i, row in enumerate(all_rows):
-            # التحقق من مطابقة التوكن (العمود 1) ومعرف الدورة (العمود 2)
-            if len(row) >= 2 and row[0] == bot_token and row[1] == course_id:
-                # i + 1 لأن ترقيم جوجل شيت يبدأ من 1 وليس 0
-                courses_sheet.delete_rows(i + 1)
-                return True
-        return False
-    except Exception as e:
-        print(f"❌ Error deleting course: {e}")
-        return False
+        # 4. استلام الـ ID وعرض الملخص
+        elif action == 'await_coach_id':
+            context.user_data['temp_coach']['id'] = text.strip()
+            c = context.user_data['temp_coach']
+            summary = (
+                f"📝 <b>مراجعة بيانات المدرب:</b>\n"
+                f"━━━━━━━━━━━━━━\n"
+                f"👨‍🏫 الاسم: {c['name']}\n"
+                f"🎓 التخصص: {c['spec']}\n"
+                f"📞 الهاتف: {c['phone']}\n"
+                f"🆔 المعرف: <code>{c['id']}</code>\n"
+                f"━━━━━━━━━━━━━━\n"
+                f"<b>هل تريد حفظ المدرب في القاعدة؟</b>"
+            )
+            keyboard = [[InlineKeyboardButton("✅ نعم، احفظ", callback_data="confirm_save_coach")], [InlineKeyboardButton("❌ إلغاء", callback_data="manage_coaches")]]
+            await update.message.reply_text(summary, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+            context.user_data['action'] = None
+            return
 
 
-# --------------------------------------------------------------------------
-def find_user_by_username(bot_token, username):
-    """البحث عن بيانات المدرب في شيت المستخدمين باستخدام اليوزرنايم"""
-    try:
-        # ورقة المستخدمين (تأكد من تسميتها حسب ملفك، سأفترض أنها users_sheet)
-        if users_sheet is None: return None
-        all_rows = users_sheet.get_all_values()
-        search_name = username.replace("@", "").lower()
-        
-        for row in all_rows[1:]:
-            # فحص التوكن واليوزرنايم (العمود 1 والعمود 3 عادةً)
-            if row[0] == bot_token and row[2].lower() == search_name:
-                return {
-                    "id": row[1],   # معرف المستخدم الرقمي
-                    "name": row[3] if len(row) > 3 else "مدرب" # الاسم (العمود الرابع)
-                }
-        return None
-    except Exception as e:
-        print(f"❌ Error finding user in sheets: {e}")
-        return None
+    # --- [ الجزء الخاص بالطلاب والردود الآلية والأسئلة الشائعة ] ---
+    faq_keywords = {
+        "طريقة الدفع": "💳 يمكنك الدفع عبر (زين كاش، بايبال، أو كروت التعبئة).",
+        "تفعيل": "🎟 لتفعيل الدورة، يرجى إرسال الكود الذي حصلت عليه.",
+        "قائمة": "📚 يمكنك استعراض كافة الدورات المتاحة."
+    }
 
-# --------------------------------------------------------------------------
-#دالة إضافة المدربين
-  # تأكد من وجود هذا الاستيراد في بداية الملف
+    if user.id != bot_owner_id:
+        for key, response in faq_keywords.items():
+            if key in text:
+                await update.message.reply_text(response)
+                return
 
-def add_new_coach_advanced(bot_token, coach_id, name, specialty, phone, **kwargs):
-    """
-    إضافة مدرب جديد لورقة المدربين بنظام متطور.
-    kwargs: تتيح لك إرسال قيم اختيارية مثل (email, bio, photo, status, branch_name, notes)
-    """
-    try:
-        if coaches_sheet is None:
-            print("⚠️ خطأ: ورقة المدربين غير متصلة.")
-            return False
-
-        # 1. التوليد التلقائي لتاريخ اليوم
-        today_date = datetime.now().strftime('%Y-%m-%d')
-
-        # 2. تجهيز البيانات مع تنظيفها (strip) ووضع قيم افتراضية ذكية
-        # نستخدم kwargs.get لكي نأخذ القيمة إذا أرسلتها، وإلا نضع القيمة الافتراضية
-        row = [
-            str(coach_id).strip(),                    # 1. ID_المدرب
-            str(name).strip(),                        # 2. اسم_المدرب
-            str(specialty).strip(),                   # 3. التخصص
-            str(phone).strip(),                       # 4. رقم_الهاتف
-            kwargs.get('email', "لا يوجد"),           # 5. البريد_الإلكتروني
-            kwargs.get('bio', "لا يوجد"),             # 6. السيرة_الذاتية
-            kwargs.get('photo', "لا يوجد"),           # 7. رابط_الصورة
-            kwargs.get('status', "نشط"),              # 8. الحالة
-            str(bot_token),                           # 9. bot_id
-            kwargs.get('branch_id', "001"),           # 10. معرف_الفرع
-            kwargs.get('branch_name', "الرئيسي"),      # 11. اسم_الفرع
-            kwargs.get('courses_count', "0"),         # 12. عدد_الدورات_الحالية
-            today_date,                               # 13. تاريخ_التعاقد (تلقائي)
-            kwargs.get('notes', "إضافة عبر البوت")      # 14. ملاحظات
-        ]
-
-        # 3. إضافة الصف للشيت
-        coaches_sheet.append_row(row)
-        
-        # 4. تسجيل العملية في سجل العمليات (Logging) لزيادة الاحترافية
-        print(f"✅ تم تسجيل المدرب {name} بنجاح بتاريخ {today_date}")
-        return True
-
-    except Exception as e:
-        print(f"❌ خطأ برمي في إضافة المدرب: {e}")
-        return False
-
-
-#جلب بيانات المدربين
-def get_all_coaches(bot_token):
-    """جلب قائمة المدربين المخصصين لهذا البوت من ورقة المدربين"""
-    try:
-        # تأكد أن اسم الورقة في المتغير هو coaches_sheet أو جلبها بالاسم
-        # coaches_sheet = client.open_by_key(SPREADSHEET_ID).worksheet("المدربين")
-        if coaches_sheet is None: return []
-        all_rows = coaches_sheet.get_all_values()
-        coaches = []
-        for row in all_rows[1:]:
-            # العمود 9 هو bot_id (Index 8) والعمود 1 هو ID_المدرب (Index 0) والعمود 2 هو الاسم (Index 1)
-            if len(row) >= 9 and row[8] == bot_token:
-                coaches.append({
-                    "id": row[0],    # ID_المدرب
-                    "name": row[1]   # اسم_المدرب
-                })
-        return coaches
-    except Exception as e:
-        print(f"❌ Error fetching coaches: {e}")
-        return []
- 
-# --------------------------------------------------------------------------
-
-# --------------------------------------------------------------------------
-
-# --------------------------------------------------------------------------
-
-
-
+        # تحويل سؤال الطالب للمدرب/المسؤول
+        info = f"📩 <b>سؤال جديد من طالب:</b>\nالاسم: {user.full_name}\nالمعرف: <code>{user.id}</code>\n\nالرسالة: {text}"
+        try:
+            await context.bot.send_message(chat_id=bot_owner_id, text=info, parse_mode="HTML")
+            await update.message.reply_text("✅ تم إرسال استفسارك بنجاح، سيتم الرد عليك قريباً.")
+        except:
+            await update.message.reply_text("⚠️ المعذرة، تعذر التواصل مع الإدارة حالياً.")
