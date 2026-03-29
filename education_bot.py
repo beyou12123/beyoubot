@@ -34,8 +34,10 @@ from sheets import (
 
 
 # إعداد المفتاح الذي حصلت عليه
+
 genai.configure(api_key="AIzaSyCkpHbxvjZNqN_PT8O1yXUAIG-dMAGZj2Y")
-model = genai.GenerativeModel('gemini-1.5-flash')
+model = genai.GenerativeModel("gemini-pro")
+
 # إعداد السجلات (Logging) لمراقبة أداء البوت وتتبع الأخطاء
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
@@ -714,31 +716,28 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
 
         await update.message.reply_chat_action("typing")
 
-        try:
-            # طلب الرد من g4f مع تحديد مزود مستقر
-            response = await g4f.ChatCompletion.create_async(
-                model=g4f.models.default,
-                provider=g4f.Provider.DuckDuckGo, 
-                messages=messages_to_send,
-            )
+try:
+    prompt = "\n".join([msg["content"] for msg in messages_to_send])
 
-            if response:
-                user_messages[user.id].append({"role": "assistant", "content": response})
-                await update.message.reply_text(response)
-                return
-            else:
-                raise Exception("Empty Response")
-            
-        except Exception as e:
-            print(f"❌ g4f Error: {e}")
-            # الخطة البديلة عند فشل المحرك
-            info = f"📩 <b>استفسار جديد (فشل الـ AI):</b>\nالاسم: {user.full_name}\nالرسالة: {text}"
-            try:
-                await context.bot.send_message(chat_id=bot_owner_id, text=info, parse_mode="HTML")
-                await update.message.reply_text("💡 شكراً لسؤالك! لقد استلمت استفسارك وسيقوم الدكتور بالرد عليك فوراً.")
-            except:
-                await update.message.reply_text("⚠️ المعذرة، هناك ضغط حالياً. يرجى المحاولة لاحقاً.")
+    response = model.generate_content(prompt)
 
+    if response.text:
+        reply = response.text.strip()
+        user_messages[user.id].append({"role": "assistant", "content": reply})
+        await update.message.reply_text(reply)
+        return
+    else:
+        raise Exception("Empty Response")
+
+except Exception as e:
+    print(f"❌ Gemini Error: {e}")
+
+    info = f"📩 <b>استفسار جديد (فشل الـ AI):</b>\nالاسم: {user.full_name}\nالرسالة: {text}"
+    try:
+        await context.bot.send_message(chat_id=bot_owner_id, text=info, parse_mode="HTML")
+        await update.message.reply_text("💡 تم استلام سؤالك وسيتم الرد عليك قريباً.")
+    except:
+        await update.message.reply_text("⚠️ ضغط حالياً، حاول لاحقاً.")
 
 # --------------------------------------------------------------------------
 
