@@ -673,88 +673,72 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
             else:
                 await update.message.reply_text("❌ فشل التحديث. تأكد من إضافة الأعمدة المطلوبة.")
             return
-
+# --------------------------------------------------------------------------
     # --- [ الجزء الخاص بالطلاب والردود التفاعلية باستخدام g4f والذاكرة ] ---
+    # --- [ الجزء الخاص بالطلاب والردود التفاعلية ] ---
     if user.id != bot_owner_id:
-        # 1. فحص الكلمات المفتاحية أولاً (FAQ) لسرعة الرد
+        # 1. فحص الكلمات المفتاحية (FAQ)
         faq_keywords = {
             "طريقة الدفع": "💳 يمكنك الدفع عبر (زين كاش، بايبال، أو كروت التعبئة).",
             "تفعيل": "🎟 لتفعيل الدورة، يرجى إرسال الكود الذي حصلت عليه.",
-            "قائمة": "📚 يمكنك استعراض كافة الدورات المتاحة."
+            "قائمة": "📚 يمكنك استعراض كافة الدورات المتاحة عبر الزر المخصص."
         }
         for key, response in faq_keywords.items():
             if key in text:
                 await update.message.reply_text(response)
                 return
 
-        # 2. إدارة ذاكرة المحادثة
-        # نستخدم القاموس العالمي المعرف خارج الدالة
-                # 2. إدارة ذاكرة المحادثة
+        # 2. إدارة ذاكرة المحادثة وجلب البيانات
         global user_messages
         if user.id not in user_messages:
             user_messages[user.id] = []
 
-        # جلب البيانات من الشيت (تأكد من المحاذاة هنا)
-        from sheets import get_courses_knowledge_base
-        courses_knowledge = get_courses_knowledge_base(bot_token) # أضف مسافات هنا ليكون تحت الـ from
-
-        
-        # إضافة رسالة الطالب للذاكرة
-        user_messages[user.id].append({"role": "user", "content": text})
-
-
-        # جلب البيانات من الشيت لتغذية المحرك
+        # استيراد وجلب قاعدة المعرفة من الشيت
         from sheets import get_courses_knowledge_base
         courses_knowledge = get_courses_knowledge_base(bot_token)
-
-
         
-        # إضافة رسالة الطالب للذاكرة
+        # إضافة رسالة الطالب للذاكرة (مرة واحدة فقط)
         user_messages[user.id].append({"role": "user", "content": text})
 
-        # بناء سياق المحادثة الكامل مع التعليمات
+        # بناء سياق المحادثة (آخر 6 رسائل للحفاظ على الأداء)
         messages_to_send = [
             {
                 "role": "system", 
                 "content": (
                     f"أنت المساعد الذكي الرسمي لمنصة الدكتور التعليمية. "
-                    f"إليك معلومات الدورات المتاحة حالياً:\n{courses_knowledge}\n\n"
-                    f"أجب بذكاء ولباقة واستخدم الرموز التعبيرية 🎓. "
-                    f"اعتمد على البيانات المقدمة فقط في الرد على الدورات."
+                    f"إليك معلومات الدورات المتاحة:\n{courses_knowledge}\n\n"
+                    f"أجب بذكاء ولباقة واستخدم الرموز التعبيرية 🎓."
                 )
             }
-        ] + user_messages[user.id][-6:] # إرسال آخر 6 رسائل للحفاظ على السياق والأداء
+        ] + user_messages[user.id][-6:]
 
         await update.message.reply_chat_action("typing")
 
         try:
-            # 1. تحديد مزود (Provider) مستقر لضمان عدم التعليق
-            # جرب DuckDuckGo أو Bing لأنهما الأكثر استقراراً حالياً
+            # طلب الرد من g4f مع تحديد مزود مستقر
             response = await g4f.ChatCompletion.create_async(
                 model=g4f.models.default,
                 provider=g4f.Provider.DuckDuckGo, 
                 messages=messages_to_send,
             )
 
-            if response and len(response) > 0:
-                # إضافة رد البوت للذاكرة
+            if response:
                 user_messages[user.id].append({"role": "assistant", "content": response})
-                # استخدام MarkdownV2 أو نص عادي لتجنب أخطاء التنسيق التي قد تمنع الإرسال
                 await update.message.reply_text(response)
                 return
             else:
-                raise Exception("Empty g4f Response")
+                raise Exception("Empty Response")
             
         except Exception as e:
-            # في حال فشل المحرك تماماً، يرسل للأدمن فوراً (الخطة البديلة)
             print(f"❌ g4f Error: {e}")
-            info = f"📩 <b>استفسار جديد من طالب:</b>\nالاسم: {user.full_name}\nالرسالة: {text}"
+            # الخطة البديلة عند فشل المحرك
+            info = f"📩 <b>استفسار جديد (فشل الـ AI):</b>\nالاسم: {user.full_name}\nالرسالة: {text}"
             try:
                 await context.bot.send_message(chat_id=bot_owner_id, text=info, parse_mode="HTML")
                 await update.message.reply_text("💡 شكراً لسؤالك! لقد استلمت استفسارك وسيقوم الدكتور بالرد عليك فوراً.")
-            except Exception as send_err:
-                print(f"❌ Failed to notify admin: {send_err}")
+            except:
                 await update.message.reply_text("⚠️ المعذرة، هناك ضغط حالياً. يرجى المحاولة لاحقاً.")
+
 
 # --------------------------------------------------------------------------
 
