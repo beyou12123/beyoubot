@@ -1,5 +1,5 @@
 python-telegram-bot
 gspread
 oauth2client
+google-generativeai
 g4f>=0.3.2.9
-
