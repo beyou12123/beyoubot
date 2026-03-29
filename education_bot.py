@@ -1,5 +1,6 @@
 import logging
 import re
+import io
 import uuid
 import g4f  # لضمان عمل المحرك المجاني الذي اعتمدناه
 import google.generativeai as genai
@@ -257,8 +258,56 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         await query.edit_message_text(instruction, parse_mode="HTML")
 
     elif data == "excel_import_start":
+        import pandas as pd
+        import io
+        
+        # 1. تجهيز بيانات ورقة الدورات (Reference)
+        courses_sample = {
+            'الاسم': ['دورة الذكاء الاصطناعي الشاملة'],
+            'الوصف': ['شرح مفصل للأدوات - 20 ساعة تدريبية'],
+            'السعر': [100],
+            'ID_المدرب': ['873158997'],
+            'ID_القسم': ['C101']
+        }
+        
+        # 2. تجهيز بيانات ورقة الأقسام (كمرجع للمالك ليعرف الأكواد)
+        from sheets import get_all_categories
+        categories = get_all_categories(bot_token)
+        if categories:
+            cats_sample = {
+                'معرف_القسم': [c['id'] for c in categories],
+                'اسم_القسم': [c['name'] for c in categories]
+            }
+        else:
+            cats_sample = {'معرف_القسم': ['C101'], 'اسم_القسم': ['قسم تجريبي']}
+
+        # إنشاء ملف Excel في الذاكرة دون الحاجة لحفظه على السيرفر
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            pd.DataFrame(courses_sample).to_excel(writer, index=False, sheet_name='الدورات_التدريبية')
+            pd.DataFrame(cats_sample).to_excel(writer, index=False, sheet_name='أكواد_الأقسام_المتاحة')
+        
+        output.seek(0)
+
+        # تحديث حالة البوت لانتظار الملف
         context.user_data['action'] = 'awaiting_excel_file'
-        await query.edit_message_text("📊 أرسل ملف Excel (.xlsx) الآن:")
+        
+        caption = (
+            "📊 <b>نظام الاستيراد الذكي من Excel:</b>\n\n"
+            "1️⃣ قمت بإرفاق <b>نموذج إرشادى</b> لك يحتوي على ورقتين.\n"
+            "2️⃣ ورقة <b>(الدورات)</b>: هي التي يجب تعبئتها بالبيانات الجديدة.\n"
+            "3️⃣ ورقة <b>(الأقسام)</b>: مرجع لك لتعرف الأكواد المضافة حالياً في نظامك.\n\n"
+            "⚠️ يرجى تعبئة الملف وإرساله لي هنا بصيغة <b>.xlsx</b>"
+        )
+
+        await context.bot.send_document(
+            chat_id=query.message.chat_id,
+            document=output,
+            filename="نموذج_استيراد_الدورات.xlsx",
+            caption=caption,
+            parse_mode="HTML"
+        )
+
 
     elif data == "csv_import_start":
         context.user_data['action'] = 'awaiting_csv_file'
@@ -574,43 +623,67 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
     action = context.user_data.get('action')
 
 # --------------------------------------------------------------------------
+#معالجة المستندات 
     if update.message.document:
         action = context.user_data.get('action')
         doc = update.message.document
         
-        if action in ['awaiting_excel_file', 'awaiting_csv_file']:
+        if action == 'awaiting_excel_file':
             import pandas as pd
             import os, uuid
-            from sheets import add_new_course
+            from sheets import add_new_course, add_new_category
             
+            # تحميل الملف مؤقتاً
             file = await context.bot.get_file(doc.file_id)
             file_path = f"temp_{uuid.uuid4().hex}_{doc.file_name}"
             await file.download_to_drive(file_path)
             
             try:
-                # قراءة الملف بدقة حسب النوع
-                df = pd.read_excel(file_path) if action == 'awaiting_excel_file' else pd.read_csv(file_path)
-                df = df.fillna("") # معالجة القيم الفارغة لضمان عدم حدوث خطأ
+                # فتح ملف الإكسل للوصول لكافة الصفحات
+                xls = pd.ExcelFile(file_path)
                 
-                success_count = 0
-                for _, r in df.iterrows():
-                    c_id = f"CRS{str(uuid.uuid4().int)[:4]}"
-                    # إرسال كافة الـ 17 متغيراً بدقة للشيت
-                    success = add_new_course(
-                        bot_token, c_id, str(r.get('الاسم', '')), str(r.get('الوصف', '')),
-                        "2026-01-01", "", "أونلاين", str(r.get('السعر', '0')), 
-                        "100", "لا يوجد", "إدارة المنصة", "ADMIN01", "عام", 
-                        "ملف", str(r.get('ID_المدرب', '')), "مدرب", str(r.get('ID_القسم', ''))
-                    )
-                    if success: success_count += 1
+                # --- 1. معالجة ورقة الأقسام أولاً (لضمان وجود الأكواد) ---
+                cat_count = 0
+                if 'الأقسام' in xls.sheet_names:
+                    df_cats = pd.read_excel(xls, 'الأقسام').fillna("")
+                    for _, r in df_cats.iterrows():
+                        c_id = str(r.get('معرف_القسم', '')).strip()
+                        c_name = str(r.get('اسم_القسم', '')).strip()
+                        if c_id and c_name:
+                            # إضافة القسم لجدول "الأقسام" في جوجل شيت
+                            if add_new_category(bot_token, c_id, c_name):
+                                cat_count += 1
+
+                # --- 2. معالجة ورقة الدورات ثانياً ---
+                course_count = 0
+                if 'الدورات' in xls.sheet_names:
+                    df_courses = pd.read_excel(xls, 'الدورات').fillna("")
+                    for _, r in df_courses.iterrows():
+                        course_id = f"CRS{str(uuid.uuid4().int)[:4]}"
+                        # إرسال الـ 17 متغيراً بالترتيب الصحيح لورقة "الدورات_التدريبية"
+                        success = add_new_course(
+                            bot_token, course_id, str(r.get('الاسم', '')), str(r.get('الوصف', '')),
+                            "2026-01-01", "", "أونلاين", str(r.get('السعر', '0')), 
+                            "100", "لا يوجد", "إدارة المنصة", "ADMIN01", "رفع شامل", 
+                            "ملف", str(r.get('ID_المدرب', '')), "مدرب", str(r.get('ID_القسم', ''))
+                        )
+                        if success: course_count += 1
                 
-                await update.message.reply_text(f"✅ تم استيراد {success_count} دورة بنجاح.")
+                await update.message.reply_text(
+                    f"✅ <b>تم التحديث بنجاح!</b>\n\n"
+                    f"📁 الأقسام الجديدة المضافة: {cat_count}\n"
+                    f"📚 الدورات الجديدة المضافة: {course_count}",
+                    parse_mode="HTML"
+                )
             except Exception as e:
-                await update.message.reply_text(f"❌ خطأ في معالجة الملف: {str(e)}")
+                await update.message.reply_text(f"❌ خطأ في معالجة الملف الشامل: {str(e)}")
             finally:
-                if os.path.exists(file_path): os.remove(file_path)
+                if os.path.exists(file_path): os.remove(file_path) # حذف الملف المؤقت
+            
             context.user_data['action'] = None
             return
+
+
 
 # --------------------------------------------------------------------------
     # --- [ الجزء الخاص بالمسؤول - إدارة المحتوى والدورات ] ---
