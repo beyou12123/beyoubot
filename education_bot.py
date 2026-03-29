@@ -33,15 +33,27 @@ def get_student_menu():
     return InlineKeyboardMarkup(keyboard)
 
 def get_admin_panel():
-    """قائمة الأزرار الرئيسية للوحة تحكم الإدارة"""
+    """قائمة الأزرار الرئيسية للوحة تحكم الإدارة - النسخة الشاملة"""
     keyboard = [
+        # الصف الأول: الإحصائيات
         [InlineKeyboardButton("📊 الإحصائيات الذكية", callback_data="admin_stats")],
-        [InlineKeyboardButton("📁 إدارة الأقسام", callback_data="manage_cats"), InlineKeyboardButton("📚 إدارة الدورات", callback_data="manage_courses")],
-        [InlineKeyboardButton("🎟 الكوبونات", callback_data="manage_coupons"), InlineKeyboardButton("📢 الإعلانات", callback_data="manage_ads")],
+        [
+            InlineKeyboardButton("📁 إدارة الأقسام", callback_data="manage_cats"),
+            InlineKeyboardButton("📚 إدارة الدورات", callback_data="manage_courses")
+        ],
+        [InlineKeyboardButton("👨‍🏫 إدارة شؤون المدربين", callback_data="manage_coaches")],
+        [
+            InlineKeyboardButton("🎟 الكوبونات", callback_data="manage_coupons"),
+            InlineKeyboardButton("📢 الإعلانات", callback_data="manage_ads")
+        ],
         [InlineKeyboardButton("📡 الإذاعة المستهدفة", callback_data="smart_broadcast")],
-        [InlineKeyboardButton("🛠 الإعدادات التقنية", callback_data="tech_settings"), InlineKeyboardButton("❌ إغلاق", callback_data="close_panel")]
+        [
+            InlineKeyboardButton("🛠 الإعدادات التقنية", callback_data="tech_settings"),
+            InlineKeyboardButton("❌ إغلاق", callback_data="close_panel")
+        ]
     ]
     return InlineKeyboardMarkup(keyboard)
+
 
 # --- [ المعالجات الأساسية - أمر البداية ] ---
 
@@ -111,7 +123,27 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             parse_mode="HTML"
         )
 
-    # --- 3. بدء عملية إضافة دورة جديدة (اختيار القسم أولاً) ---
+    # --- 3. بدء عملية إضافة مدرب  جديد  ---
+    elif data == "manage_coaches":
+        await query.edit_message_text(
+            "👨‍🏫 <b>إدارة المدربين:</b>\nيمكنك إضافة مدربين جدد ليظهروا لاحقاً عند إضافة الدورات.",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("➕ إضافة مدرب جديد", callback_data="start_add_coach")],
+                [InlineKeyboardButton("🔙 عودة", callback_data="back_to_admin")]
+            ]), parse_mode="HTML"
+        )
+
+    elif data == "start_add_coach":
+        context.user_data['action'] = 'await_coach_name'
+        await query.edit_message_text("✍️ <b>الخطوة 1:</b> أرسل اسم المدرب الثلاثي:")
+
+    elif data == "confirm_save_coach":
+        from sheets import add_new_coach_to_sheet
+        c = context.user_data.get('temp_coach')
+        if add_new_coach_to_sheet(bot_token, c['id'], c['name'], c['spec'], c['phone']):
+            await query.edit_message_text("✅ <b>تم تسجيل المدرب في النظام بنجاح!</b>", reply_markup=get_admin_panel())
+        else:
+            await query.edit_message_text("❌ حدث خطأ أثناء الحفظ.")
 
     # --- 4. معالجة القسم المختار للدورة وبدء طلب الاسم ---
     elif data.startswith("set_crs_cat_"):
@@ -121,11 +153,53 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         await query.edit_message_text("✍️ **الخطوة 2:** أرسل اسم الدورة الآن:")
 
     elif data == "confirm_save_full_crs":
-        from sheets import add_new_course # التصحيح هنا
+        from sheets import add_new_course 
+        import uuid
+        
+        # 1. جلب البيانات المؤقتة
         d = context.user_data.get('temp_crs')
         cat_id = context.user_data.get('temp_crs_cat')
+        
+        if not d:
+            await query.edit_message_text("⚠️ خطأ: تعذر العثور على البيانات المؤقتة، يرجى المحاولة مجدداً.")
+            return
+
+        # 2. توليد معرف فريد للدورة
         c_id = f"CRS{str(uuid.uuid4().int)[:4]}"
         
+        # 3. تنفيذ الحفظ الفعلي (إرسال الـ 16 متغير بالترتيب للأعمدة)
+        success = add_new_course(
+            bot_token,          # 1. bot_id
+            c_id,               # 2. معرف_الدورة
+            d['name'],          # 3. اسم_الدورة
+            d['hours'],         # 4. عدد_الساعات
+            d['start_date'],    # 5. تاريخ_البداية
+            "",                 # 6. تاريخ_النهاية
+            "أونلاين",          # 7. نوع_الدورة
+            d['price'],         # 8. سعر_الدورة
+            "100",              # 9. الحد_الأقصى
+            "لا يوجد",          # 10. المتطلبات
+            "إدارة المنصة",      # 11. اسم_المندوب
+            "ADMIN01",          # 12. كود_المندوب
+            "عام",              # 13. الحملة_التسويقية
+            d['coach_user'],    # 14. معرف_المدرب (اليوزر)
+            d['coach_id'],      # 15. ID_المدرب (الرقمي)
+            d['coach_name']     # 16. اسم_المدرب
+        )
+        
+        if success:
+            await query.edit_message_text(
+                f"✅ <b>تم اعتماد الدورة وحفظها بنجاح!</b>\n\n"
+                f"🆔 المعرف: <code>{c_id}</code>\n"
+                f"📂 القسم: <code>{cat_id}</code>\n"
+                f"👨‍🏫 المدرب: {d['coach_name']}",
+                reply_markup=get_admin_panel(),
+                parse_mode="HTML"
+            )
+            context.user_data.pop('temp_crs', None) # مسح البيانات المؤقتة
+        else:
+            await query.edit_message_text("❌ فشل الحفظ في جوجل شيت، تأكد من صلاحيات الملف.")
+
         # استدعاء الدالة بالاسم الصحيح المذكور في sheets.py
         success = add_new_course(
             bot_token, c_id, d['name'], d['hours'], d['start_date'], 
@@ -285,9 +359,8 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 # --------------------------------------------------------------------------
 # --- [ معالج الرسائل النصية (Message Handler) ] ---
 # --------------------------------------------------------------------------
-
 async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """معالجة كافة الرسائل النصية الواردة للبوت وتوجيهها حسب الحالة"""
+    """معالجة كافة الرسائل النصية الواردة للبوت وتوجيهها حسب الحالة دون حذف أي وظيفة"""
     text = update.message.text
     user = update.effective_user
     bot_token = context.bot.token
@@ -295,7 +368,6 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
     bot_owner_id = int(config.get("admin_ids", 0))
     action = context.user_data.get('action')
 
-    # --- [ الجزء الخاص بالمسؤول (إدارة المحتوى) ] ---
     # --- [ الجزء الخاص بالمسؤول - إدارة المحتوى والدورات ] ---
     if user.id == bot_owner_id:
         # 1. حالة إضافة قسم جديد
@@ -303,7 +375,7 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
             cat_id = f"C{str(uuid.uuid4().int)[:4]}"
             if add_new_category(bot_token, cat_id, text.strip()):
                 context.user_data['action'] = None
-                await update.message.reply_text(f"✅ تم إنشاء القسم: <b>{text}</b>", reply_markup=get_admin_panel(), parse_mode="HTML")
+                await update.message.reply_text(f"✅ تم إنشاء القسم بنجاح: <b>{text}</b>", reply_markup=get_admin_panel(), parse_mode="HTML")
             return
             
         # 2. حالة تعديل اسم قسم
@@ -311,102 +383,167 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
             cat_id = context.user_data.get('selected_cat_id')
             if update_category_name(bot_token, cat_id, text.strip()):
                 context.user_data['action'] = None
-                await update.message.reply_text(f"✅ تم تحديث الاسم إلى: <b>{text}</b>", reply_markup=get_admin_panel(), parse_mode="HTML")
+                await update.message.reply_text(f"✅ تم تحديث اسم القسم إلى: <b>{text}</b>", reply_markup=get_admin_panel(), parse_mode="HTML")
             return
 
-        # 3. حالة إضافة دورة جديدة (النظام البسيط - اسم فقط)
+        # 3. حالة إضافة دورة جديدة (النظام البسيط القديم - اسم فقط)
         elif action == 'awaiting_course_name':
             course_cat = context.user_data.get('temp_course_cat')
             course_id = f"CRS{str(uuid.uuid4().int)[:4]}"
             if add_new_course(bot_token, course_id, text.strip(), course_cat):
                 context.user_data['action'] = None
-                await update.message.reply_text(f"✅ تم إضافة الدورة بنجاح: <b>{text}</b>", reply_markup=get_admin_panel(), parse_mode="HTML" )
+                await update.message.reply_text(f"✅ تم إضافة الدورة بنجاح: <b>{text}</b>", reply_markup=get_admin_panel(), parse_mode="HTML")
             return
 
-        # 4. تسلسل إضافة دورة احترافي (الخطوة 2: استلام الاسم والطلب الساعات)
+        # 4. تسلسل إضافة دورة احترافي (الخطوة 2: استلام الاسم وطلب الساعات)
         elif action == 'awaiting_crs_name':
             context.user_data['temp_crs'] = {'name': text.strip()}
             context.user_data['action'] = 'awaiting_crs_hours'
-            await update.message.reply_text("⏳ **الخطوة 3:** أرسل عدد ساعات الدورة (أو وصفاً قصيراً):")
+            await update.message.reply_text("⏳ <b>الخطوة 3:</b> أرسل عدد ساعات الدورة (أو وصفاً قصيراً):", parse_mode="HTML")
             return
 
         # 5. الخطوة 3: استلام الساعات والطلب السعر
         elif action == 'awaiting_crs_hours':
             context.user_data['temp_crs']['hours'] = text.strip()
             context.user_data['action'] = 'awaiting_crs_price'
-            await update.message.reply_text("💰 **الخطوة 4:** أرسل سعر الدورة (أرقام فقط):")
+            await update.message.reply_text("💰 <b>الخطوة 4:</b> أرسل سعر الدورة (أرقام فقط):", parse_mode="HTML")
             return
 
-        # 6. الخطوة 4: استلام السعر والطلب يوزر المدرب
+        # 6. الخطوة 4: استلام السعر وعرض خيارات المدربين (من الشيت أو يدوياً)
         elif action == 'awaiting_crs_price':
             context.user_data['temp_crs']['price'] = text.strip()
-            context.user_data['action'] = 'awaiting_crs_coach'
-            await update.message.reply_text("👨‍🏫 **الخطوة 5:** أرسل (يوزرنايم) المدرب مع الـ @\nمثال: @CoachName")
+            from sheets import get_all_coaches
+            coaches = get_all_coaches(bot_token) # جلب المدربين من الورقة الجديدة
+            
+            msg = "👨‍🏫 <b>الخطوة 5:</b> اختر المدرب من القائمة أدناه، أو أرسل (يوزرنايم/ID) يدوي:"
+            keyboard = []
+            
+            if coaches:
+                for c in coaches:
+                    keyboard.append([InlineKeyboardButton(f"👤 {c['name']}", callback_data=f"sel_coach_for_crs_{c['id']}")])
+            
+            keyboard.append([InlineKeyboardButton("❌ إلغاء العملية", callback_data="manage_courses")])
+            
+            context.user_data['action'] = 'awaiting_crs_coach' # البوت جاهز لاستقبال نص أو ضغطة زر
+            await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
             return
 
-        # 7. الخطوة 5: استلام يوزر المدرب والبحث التلقائي
+        # 7. الخطوة 5: استلام بيانات المدرب (يدوياً إذا لم يستخدم الأزرار)
         elif action == 'awaiting_crs_coach':
-            coach_username = text.strip().replace("@", "")
+            input_val = text.strip()
             from sheets import find_user_by_username
             
-            # أولاً: البحث في قاعدة بياناتنا (الشيت) - هذا هو الأضمن
-            user_data = find_user_by_username(bot_token, coach_username)
-            
-            if user_data:
+            # فحص: هل المسؤول أرسل ID رقمي؟
+            if input_val.isdigit():
                 context.user_data['temp_crs'].update({
-                    'coach_user': f"@{coach_username}",
-                    'coach_id': user_data['id'],
-                    'coach_name': user_data['name']
+                    'coach_user': "إدخال يدوي رقمي",
+                    'coach_id': input_val,
+                    'coach_name': f"مدرب (ID: {input_val})"
                 })
                 context.user_data['action'] = 'awaiting_crs_date'
-                await update.message.reply_text(f"✅ تم العثور على المدرب في القاعدة: {user_data['name']}\n\n🗓 **الخطوة 6:** أرسل تاريخ بداية الدورة:")
+                await update.message.reply_text(f"✅ تم قبول المعرف الرقمي: <code>{input_val}</code>\n\n🗓 <b>الخطوة 6:</b> أرسل تاريخ بداية الدورة:", parse_mode="HTML")
+            
+            # فحص: هل المسؤول أرسل يوزرنايم؟
             else:
-                # ثانياً: محاولة أخيرة عبر تليجرام إذا لم يكن في الشيت
-                try:
-                    coach_chat = await context.bot.get_chat(f"@{coach_username}")
+                coach_username = input_val.replace("@", "")
+                user_data = find_user_by_username(bot_token, coach_username) # البحث في شيت المستخدمين
+                
+                if user_data:
                     context.user_data['temp_crs'].update({
                         'coach_user': f"@{coach_username}",
-                        'coach_id': coach_chat.id,
-                        'coach_name': coach_chat.full_name
+                        'coach_id': user_data['id'],
+                        'coach_name': user_data['name']
                     })
                     context.user_data['action'] = 'awaiting_crs_date'
-                    await update.message.reply_text(f"✅ تم العثور عبر تليجرام: {coach_chat.full_name}\n\n🗓 **الخطوة 6:** أرسل تاريخ البداية:")
-                except Exception:
-                    await update.message.reply_text(
-                        "❌ **فشل العثور على المدرب!**\n\n"
-                        "يرجى التأكد من أن المدرب @T0T010 قد ضغط على Start في البوت "
-                        "أو أرسل لي **ID المدرب** الرقمي مباشرة الآن بدلاً من اليوزر."
-                    )
+                    await update.message.reply_text(f"✅ تم العثور على المدرب في القاعدة: {user_data['name']}\n\n🗓 <b>الخطوة 6:</b> أرسل تاريخ بداية الدورة:", parse_mode="HTML")
+                else:
+                    try:
+                        # محاولة أخيرة عبر سيرفرات تليجرام
+                        coach_chat = await context.bot.get_chat(f"@{coach_username}")
+                        context.user_data['temp_crs'].update({
+                            'coach_user': f"@{coach_username}",
+                            'coach_id': coach_chat.id,
+                            'coach_name': coach_chat.full_name
+                        })
+                        context.user_data['action'] = 'awaiting_crs_date'
+                        await update.message.reply_text(f"✅ تم العثور عبر تليجرام: {coach_chat.full_name}\n\n🗓 <b>الخطوة 6:</b> أرسل تاريخ البداية:", parse_mode="HTML")
+                    except Exception:
+                        await update.message.reply_text(
+                            "❌ <b>فشل العثور على المدرب!</b>\n\n"
+                            "💡 يرجى إرسال <b>المعرف الرقمي (ID)</b> للمدرب الآن (مثل: 873158772)، أو تأكد من مراسلته للبوت.",
+                            parse_mode="HTML"
+                        )
             return
 
-
-        # 8. الخطوة 6: مراجعة البيانات وعرض التأكيد النهائي
+        # 8. الخطوة 6: مراجعة البيانات وعرض التأكيد النهائي للحفظ في "الدورات_التدريبية"
         elif action == 'awaiting_crs_date':
             context.user_data['temp_crs']['start_date'] = text.strip()
             d = context.user_data['temp_crs']
             
             summary = (
-                f"📝 <b>مراجعة بيانات الدورة:</b>\n"
+                f"📝 <b>مراجعة بيانات الدورة قبل الاعتماد:</b>\n"
                 f"━━━━━━━━━━━━━━\n"
-                f"📂 القسم: {context.user_data.get('temp_crs_cat')}\n"
-                f"📚 الاسم: {d['name']}\n"
+                f"📂 القسم: <code>{context.user_data.get('temp_crs_cat')}</code>\n"
+                f"📚 الاسم: <b>{d['name']}</b>\n"
                 f"⏳ الساعات: {d['hours']}\n"
                 f"💰 السعر: {d['price']}$\n"
                 f"👨‍🏫 المدرب: {d['coach_name']}\n"
+                f"🆔 معرف المدرب: <code>{d['coach_id']}</code>\n"
                 f"🗓 البداية: {d['start_date']}\n"
                 f"━━━━━━━━━━━━━━\n"
-                f"<b>هل تريد اعتماد وتسجيل الدورة؟</b>"
+                f"<b>هل تريد تسجيل هذه الدورة رسمياً؟</b>"
             )
             keyboard = [
-                [InlineKeyboardButton("✅ نعم، اعتمد الدورة", callback_data="confirm_save_full_crs")],
+                [InlineKeyboardButton("✅ نعم، اعتمد واحفظ", callback_data="confirm_save_full_crs")],
                 [InlineKeyboardButton("❌ إلغاء", callback_data="manage_courses")]
             ]
             await update.message.reply_text(summary, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
             context.user_data['action'] = None
             return
 
-    # --- [ الجزء الخاص بالطلاب والردود الآلية ] ---
-    # هذا الجزء يعمل فقط إذا لم يكن المستخدم هو المسؤول أو لم يكن هناك "حالة" نشطة للمسؤول
+        # --- [ تسلسل إضافة مدرب ] ---
+        # 1. استلام الاسم والطلب التخصص
+        elif action == 'await_coach_name':
+            context.user_data['temp_coach'] = {'name': text.strip()}
+            context.user_data['action'] = 'await_coach_spec'
+            await update.message.reply_text("🎓 <b>الخطوة 2:</b> أرسل تخصص المدرب (مثلاً: لغة عربية، برمجة...):", parse_mode="HTML")
+            return
+
+        # 2. استلام التخصص والطلب الهاتف
+        elif action == 'await_coach_spec':
+            context.user_data['temp_coach']['spec'] = text.strip()
+            context.user_data['action'] = 'await_coach_phone'
+            await update.message.reply_text("📞 <b>الخطوة 3:</b> أرسل رقم هاتف المدرب:")
+            return
+
+        # 3. استلام الهاتف والطلب الـ ID
+        elif action == 'await_coach_phone':
+            context.user_data['temp_coach']['phone'] = text.strip()
+            context.user_data['action'] = 'await_coach_id'
+            await update.message.reply_text("🆔 <b>الخطوة 4:</b> أرسل المعرف الرقمي (ID) للمدرب (مثال: 873158772):", parse_mode="HTML")
+            return
+
+        # 4. استلام الـ ID وعرض الملخص
+        elif action == 'await_coach_id':
+            context.user_data['temp_coach']['id'] = text.strip()
+            c = context.user_data['temp_coach']
+            summary = (
+                f"📝 <b>مراجعة بيانات المدرب:</b>\n"
+                f"━━━━━━━━━━━━━━\n"
+                f"👨‍🏫 الاسم: {c['name']}\n"
+                f"🎓 التخصص: {c['spec']}\n"
+                f"📞 الهاتف: {c['phone']}\n"
+                f"🆔 المعرف: <code>{c['id']}</code>\n"
+                f"━━━━━━━━━━━━━━\n"
+                f"<b>هل تريد حفظ المدرب في القاعدة؟</b>"
+            )
+            keyboard = [[InlineKeyboardButton("✅ نعم، احفظ", callback_data="confirm_save_coach")], [InlineKeyboardButton("❌ إلغاء", callback_data="manage_coaches")]]
+            await update.message.reply_text(summary, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+            context.user_data['action'] = None
+            return
+
+
+    # --- [ الجزء الخاص بالطلاب والردود الآلية والأسئلة الشائعة ] ---
     faq_keywords = {
         "طريقة الدفع": "💳 يمكنك الدفع عبر (زين كاش، بايبال، أو كروت التعبئة).",
         "تفعيل": "🎟 لتفعيل الدورة، يرجى إرسال الكود الذي حصلت عليه.",
@@ -419,19 +556,10 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
                 await update.message.reply_text(response)
                 return
 
-        info = f"📩 <b>سؤال جديد من طالب:</b>\n{user.full_name}\n\n{text}"
+        # تحويل سؤال الطالب للمدرب/المسؤول
+        info = f"📩 <b>سؤال جديد من طالب:</b>\nالاسم: {user.full_name}\nالمعرف: <code>{user.id}</code>\n\nالرسالة: {text}"
         try:
             await context.bot.send_message(chat_id=bot_owner_id, text=info, parse_mode="HTML")
-            await update.message.reply_text("✅ تم إرسال استفسارك للمدرب.")
+            await update.message.reply_text("✅ تم إرسال استفسارك بنجاح، سيتم الرد عليك قريباً.")
         except:
-            await update.message.reply_text("⚠️ فشل التواصل مع الإدارة حالياً.")
-
-
-async def track_chats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """تتبع الطلاب (حظر/إلغاء حظر البوت)"""
-    result = update.my_chat_member
-    bot_owner_id = int(get_bot_config(context.bot.token).get("admin_ids", 0))
-    status = "حظر البوت 🚫" if result.new_chat_member.status == ChatMember.BANNED else "عاد للبوت ✅"
-    msg = f"👤 الطالب {result.from_user.full_name} قام بـ {status}"
-    try: await context.bot.send_message(chat_id=bot_owner_id, text=msg, parse_mode="HTML")
-    except: pass
+            await update.message.reply_text("⚠️ المعذرة، تعذر التواصل مع الإدارة حالياً.")
