@@ -495,19 +495,26 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 # --- [ معالج الرسائل النصية (Message Handler) ] ---
 # --------------------------------------------------------------------------
 # ملاحظة هامة: يجب أن يكون السطر التالي في أعلى الملف تماماً خارج كل الدوال:
-# user_messages = {} 
 async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message or not update.message.text: return
-    text = update.message.text.strip(); user = update.effective_user; bot_token = context.bot.token
+    """معالجة كافة الرسائل النصية والربط مع محرك g4f لخدمة الطلاب مع بقاء مهام المسؤول كاملة"""
     
-    # جلب معرف المسؤول
+    if not update.message or not update.message.text: return
+    
+    # تنظيف النص من المسافات فور وصوله
+    text = update.message.text.strip()
+    user = update.effective_user
+    bot_token = context.bot.token
+    
+    # محاولة جلب الإعدادات ومعرف المسؤول
     try:
         from sheets import get_bot_config
         config = get_bot_config(bot_token)
         bot_owner_id = int(config.get("admin_ids", 0))
-    except: bot_owner_id = 0
-
-
+    except Exception as e:
+        print(f"⚠️ Error getting config: {e}")
+        bot_owner_id = 0 # قيمة افتراضية في حال فشل الجلب
+        
+    action = context.user_data.get('action')
 
     # --- [ الجزء الخاص بالمسؤول - إدارة المحتوى والدورات ] ---
     if user.id == bot_owner_id:
@@ -666,27 +673,70 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
                 await update.message.reply_text("❌ فشل التحديث. تأكد من إضافة الأعمدة المطلوبة.")
             return
 
-
-
-    # --- [ جزء الطلاب ] ---
+    # --- [ جزء الطلاب والردود التفاعلية - g4f فقط ] ---
     if user.id != bot_owner_id:
+        # 1. فحص الكلمات المفتاحية (FAQ) لسرعة الرد
+        faq_keywords = {
+            "طريقة الدفع": "💳 يمكنك الدفع عبر (زين كاش، بايبال، أو كروت التعبئة).",
+            "تفعيل": "🎟 لتفعيل الدورة، يرجى إرسال الكود الذي حصلت عليه.",
+            "قائمة": "📚 يمكنك استعراض كافة الدورات المتاحة عبر الزر المخصص."
+        }
+        for key, response in faq_keywords.items():
+            if key in text:
+                await update.message.reply_text(response)
+                return
+
+        # 2. إدارة ذاكرة المحادثة وجلب البيانات من الشيت
         global user_messages
-        if user.id not in user_messages: user_messages[user.id] = []
+        if user.id not in user_messages:
+            user_messages[user.id] = []
+
+        # جلب قاعدة المعرفة (تأكد من وجود الدالة في sheets.py)
+        from sheets import get_courses_knowledge_base
+        courses_knowledge = get_courses_knowledge_base(bot_token)
         
+        # إضافة رسالة الطالب للذاكرة
+        user_messages[user.id].append({"role": "user", "content": text})
+
+        # بناء سياق المحادثة الكامل (آخر 6 رسائل للحفاظ على الأداء)
+        messages_to_send = [
+            {
+                "role": "system", 
+                "content": (
+                    f"أنت المساعد الذكي الرسمي لمنصة الدكتور التعليمية. "
+                    f"إليك معلومات الدورات المتاحة حالياً:\n{courses_knowledge}\n\n"
+                    f"أجب بذكاء ولباقة واستخدم الرموز التعبيرية 🎓."
+                )
+            }
+        ] + user_messages[user.id][-6:] 
+
+        await update.message.reply_chat_action("typing")
+
         try:
-            # الخيار الأفضل: ترك المكتبة تختار المزود المتاح تلقائياً
+            # استخدام g4f بشكل مباشر مع المزود التلقائي (لحل مشكلة DuckDuckGo)
+            import g4f
             response = await g4f.ChatCompletion.create_async(
                 model=g4f.models.default,
                 messages=messages_to_send,
-                # حذفنا سطر provider=g4f.Provider.DuckDuckGo لأنه سبب الخطأ
             )
 
             if response and len(response) > 0:
+                # إضافة رد البوت للذاكرة وإرساله
                 user_messages[user.id].append({"role": "assistant", "content": response})
                 await update.message.reply_text(response)
                 return
             else:
-                raise Exception("Empty AI Response")
+                raise Exception("Empty g4f Response")
+            
+        except Exception as e:
+            # الخطة البديلة: إرسال تنبيه للدكتور في حال فشل المحرك
+            print(f"❌ AI Error: {e}")
+            info = f"📩 <b>استفسار طالب (فشل الـ AI):</b>\nالاسم: {user.full_name}\nالرسالة: {text}\nالخطأ: {str(e)}"
+            try:
+                await context.bot.send_message(chat_id=bot_owner_id, text=info, parse_mode="HTML")
+                await update.message.reply_text("💡 شكراً لسؤالك! لقد استلمت استفسارك وسيقوم الدكتور بالرد عليك فوراً.")
+            except:
+                await update.message.reply_text("⚠️ المعذرة، هناك ضغط حالياً. يرجى المحاولة لاحقاً.")
 
 # --------------------------------------------------------------------------
 
