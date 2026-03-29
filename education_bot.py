@@ -317,6 +317,36 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         keyboard.append([InlineKeyboardButton("❌ إلغاء", callback_data="manage_courses")])
         await query.edit_message_text("🎯 **الخطوة 1:** اختر القسم المخصص للدورة:", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
+    # --- [ معالجة اختيار المدرب من القائمة ] ---
+    elif data.startswith("sel_coach_for_crs_"):
+        coach_id = data.replace("sel_coach_for_crs_", "")
+        from sheets import get_all_coaches
+        
+        # جلب قائمة المدربين للتأكد من الاسم والبيانات
+        coaches = get_all_coaches(bot_token)
+        coach = next((c for c in coaches if str(c['id']) == str(coach_id)), None)
+        
+        if coach:
+            # تخزين بيانات المدرب في ذاكرة الدورة المؤقتة
+            if 'temp_crs' not in context.user_data:
+                context.user_data['temp_crs'] = {}
+                
+            context.user_data['temp_crs'].update({
+                'coach_user': "اختيار من القائمة",
+                'coach_id': coach['id'],
+                'coach_name': coach['name']
+            })
+            
+            # الانتقال للخطوة التالية (تاريخ البداية)
+            context.user_data['action'] = 'awaiting_crs_date'
+            await query.edit_message_text(
+                f"✅ تم اختيار المدرب: <b>{coach['name']}</b>\n\n"
+                f"🗓 <b>الخطوة 6:</b> أرسل الآن تاريخ بداية الدورة (مثلاً: 2026/05/01):",
+                parse_mode="HTML"
+            )
+        else:
+            await query.answer("⚠️ عذراً، تعذر العثور على بيانات هذا المدرب.", show_alert=True)
+
     elif data.startswith("edit_cat_"):
         cat_id = data.replace("edit_cat_", "")
         context.user_data['selected_cat_id'] = cat_id
