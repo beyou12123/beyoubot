@@ -1,6 +1,7 @@
 import logging
 import re
 import uuid
+import google.generativeai as genai
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Bot, ChatMember
 from telegram.ext import ContextTypes, ChatMemberHandler
 from sheets import (
@@ -18,6 +19,10 @@ from sheets import (
     delete_course_by_id
 )
 
+
+# إعداد المفتاح الذي حصلت عليه
+genai.configure(api_key="AIzaSyCkpHbxvjZNqN_PT8O1yXUAIG-dMAGZj2Y")
+model = genai.GenerativeModel('gemini-1.5-flash')
 # إعداد السجلات (Logging) لمراقبة أداء البوت وتتبع الأخطاء
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
@@ -649,16 +654,51 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
         "قائمة": "📚 يمكنك استعراض كافة الدورات المتاحة."
     }
 
+# --------------------------------------------------------------------------
+    # --- [ محرك الذكاء الاصطناعي التفاعلي للطلاب ] ---
     if user.id != bot_owner_id:
-        for key, response in faq_keywords.items():
-            if key in text:
-                await update.message.reply_text(response)
-                return
+        from sheets import get_all_courses_for_ai
+        import google.generativeai as genai
 
-        # تحويل سؤال الطالب للمدرب
-        info = f"📩 <b>سؤال جديد من طالب:</b>\nالاسم: {user.full_name}\nالمعرف: <code>{user.id}</code>\n\nالرسالة: {text}"
+        # 1. إعداد المحرك (تأكد من وضع المفتاح هنا)
+        genai.configure(api_key="AIzaSyCkpHbxvjZNqN_PT8O1yXUAIG-dMAGZj2Y")
+        model = genai.GenerativeModel('gemini-1.5-flash')
+
+        # 2. جلب "بنك المعلومات" من جوجل شيت
+        courses_knowledge = get_all_courses_for_ai(bot_token)
+        
+        # 3. صياغة التعليمات لـ Gemini
+        full_prompt = (
+            f"أنت المساعد الذكي الرسمي لمنصة الدكتور التعليمية. "
+            f"إليك معلومات الدورات المتاحة حالياً في الشيت:\n{courses_knowledge}\n\n"
+            f"سؤال الطالب هو: '{text}'\n\n"
+            f"ملاحظات هامة للرد:\n"
+            f"- أجب بالعامية اللبقة أو الفصحى البسيطة.\n"
+            f"- إذا سأل عن دورة موجودة، اشرح له مميزاتها وسعرها كما ورد في البيانات.\n"
+            f"- إذا سأل عن شيء غير موجود، اقترح عليه التواصل مع الإدارة أو اختر أقرب دورة تناسبه.\n"
+            f"- كن ودوداً واستخدم الرموز التعبيرية 🎓✨."
+        )
+
+        await update.message.reply_chat_action("typing")
+
         try:
+            # 4. طلب الرد من Gemini
+            response = model.generate_content(full_prompt)
+            ai_reply = response.text
+
+            if ai_reply:
+                await update.message.reply_text(ai_reply, parse_mode="Markdown")
+                return # تم الرد بنجاح، لا داعي لتكملة الكود أدناه
+            
+        except Exception as e:
+            print(f"Gemini Error: {e}")
+            # في حال فشل الـ AI لأي سبب، نعود للخطة البديلة (إرسال للأدمن)
+            info = f"📩 <b>استفسار (فشل AI):</b>\nالطالب: {user.full_name}\nالرسالة: {text}"
             await context.bot.send_message(chat_id=bot_owner_id, text=info, parse_mode="HTML")
-            await update.message.reply_text("✅ تم إرسال استفسارك بنجاح، سيتم الرد عليك قريباً.")
-        except:
-            await update.message.reply_text("⚠️ المعذرة، تعذر التواصل مع الإدارة حالياً.")
+            await update.message.reply_text("💡 شكراً لسؤالك! جاري مراجعة التفاصيل من قبل الإدارة للرد عليك بدقة.")
+
+# --------------------------------------------------------------------------
+
+
+
+
