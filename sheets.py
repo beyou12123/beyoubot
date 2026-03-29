@@ -553,6 +553,32 @@ def delete_coach_from_sheet(bot_token, coach_id):
 
 # --------------------------------------------------------------------------
 #دالة  الذكاء الاصطناعي 
+def get_courses_knowledge_base(bot_token):
+    """تحويل كافة الدورات المتاحة إلى قاعدة معرفية نصية للذكاء الاصطناعي"""
+    try:
+        if courses_sheet is None: return "المعلومات غير متوفرة حالياً."
+        all_courses = courses_sheet.get_all_records()
+        
+        # فلترة الدورات التابعة لهذا البوت فقط
+        bot_courses = [c for c in all_courses if str(c.get('bot_id')) == str(bot_token)]
+        
+        if not bot_courses:
+            return "لا توجد دورات متاحة حالياً."
+
+        kb_text = "قائمة الدورات المتاحة:\n"
+        for c in bot_courses:
+            # استخدام .get للحماية من أخطاء أسماء الأعمدة
+            name = c.get('اسم_الدورة', c.get('course_name', 'دورة غير مسمى'))
+            price = c.get('سعر_الدورة', c.get('price', 'غير محدد'))
+            coach = c.get('اسم_المدرب', c.get('coach_name', 'غير محدد'))
+            
+            kb_text += f"- دورة: {name}، السعر: {price}، المدرب: {coach}.\n"
+        return kb_text
+    except Exception as e:
+        print(f"❌ Error in KB: {e}")
+        return "المعلومات قيد التحديث."
+
+
 
 # --------------------------------------------------------------------------
 
