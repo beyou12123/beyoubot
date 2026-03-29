@@ -99,7 +99,8 @@ def connect_to_google():
         courses_sheet = safe_get_sheet("الدورات_التدريبية")
         faq_sheet = safe_get_sheet("الأسئلة_الشائعة")
         meta_sheet = safe_get_sheet("_meta")
-        coaches_sheet = spreadsheet.worksheet("المدربين") 
+        coaches_sheet = ss.worksheet("المدربين") 
+
         
         print("✅ تم الاتصال بنجاح وربط كافة المتغيرات بالأوراق المتاحة.")
         return True
