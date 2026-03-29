@@ -51,9 +51,8 @@ def get_student_menu():
     return InlineKeyboardMarkup(keyboard)
 
 def get_admin_panel():
-    """قائمة الأزرار الرئيسية للوحة تحكم الإدارة - النسخة الشاملة"""
+    """قائمة الأزرار الرئيسية للوحة تحكم الإدارة - النسخة المطورة بضبط الـ AI"""
     keyboard = [
-        # الصف الأول: الإحصائيات
         [InlineKeyboardButton("📊 الإحصائيات الذكية", callback_data="admin_stats")],
         [
             InlineKeyboardButton("📁 إدارة الأقسام", callback_data="manage_cats"),
@@ -67,8 +66,9 @@ def get_admin_panel():
         [InlineKeyboardButton("📡 الإذاعة المستهدفة", callback_data="smart_broadcast")],
         [
             InlineKeyboardButton("🛠 الإعدادات التقنية", callback_data="tech_settings"),
-            InlineKeyboardButton("❌ إغلاق", callback_data="close_panel")
-        ]
+            InlineKeyboardButton("🤖 ضبط الـ AI", callback_data="setup_ai_start") # الزر الجديد هنا
+        ],
+        [InlineKeyboardButton("❌ إغلاق", callback_data="close_panel")]
     ]
     return InlineKeyboardMarkup(keyboard)
 
@@ -84,6 +84,18 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # جلب كافة الإعدادات من جوجل شيت
     config = get_bot_config(bot_token)
     bot_owner_id = int(config.get("admin_ids", 0))
+
+    # ... (بعد جلب bot_owner_id)
+    from sheets import get_ai_setup
+    ai_config = get_ai_setup(bot_token)
+    
+
+    if user.id == bot_owner_id:
+        if not ai_config or not ai_config.get('اسم_المؤسسة'):
+            context.user_data['action'] = 'awaiting_institution_name'
+            await update.message.reply_text("👋 <b>أهلاً بك يا دكتور!</b>\nقبل البدء، يرجى إرسال <b>اسم المنصة التعليمية</b> الخاصة بك:")
+            return
+
 
     # تسجيل المستخدم في القاعدة
     save_user(user.id, user.username)
@@ -171,7 +183,12 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
                 [InlineKeyboardButton("🔙 عودة للوحة التحكم", callback_data="back_to_admin")]
             ]), parse_mode="HTML"
         )
+# --------------------------------------------------------------------------
+    elif data == "setup_ai_start":
+        context.user_data['action'] = 'awaiting_institution_name'
+        await query.edit_message_text("🤖 <b>إعداد الهوية الذكية:</b>\nيرجى إرسال اسم المنصة التعليمية الآن:")
 
+# --------------------------------------------------------------------------
     # عرض قائمة المدربين كأزرار
     elif data == "list_coaches":
         from sheets import get_all_coaches
@@ -673,6 +690,22 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
                 await update.message.reply_text("❌ فشل التحديث. تأكد من إضافة الأعمدة المطلوبة.")
             return
 
+        # 1. استقبال اسم المؤسسة (تم دمجه في تسلسل الإدارة)
+        elif action == 'awaiting_institution_name':
+            from sheets import save_ai_setup
+            if save_ai_setup(bot_token, user.id, user.username, institution_name=text):
+                context.user_data['action'] = 'awaiting_ai_instructions'
+                await update.message.reply_text(f"✅ تم حفظ الاسم: <b>{text}</b>\nالآن أرسل <b>تعليمات الذكاء الاصطناعي</b> (مثلاً: أنت مساعد خبير تجيب بلباقة):")
+            return
+
+        # 2. استقبال تعليمات AI
+        elif action == 'awaiting_ai_instructions':
+            from sheets import save_ai_setup
+            if save_ai_setup(bot_token, user.id, user.username, ai_instructions=text):
+                context.user_data['action'] = None
+                await update.message.reply_text("🎊 <b>اكتملت التهيئة!</b> تم ضبط هوية البوت بنجاح.", reply_markup=get_admin_panel())
+            return
+
     # --- [ جزء الطلاب والردود التفاعلية - g4f فقط ] ---
     if user.id != bot_owner_id:
         # 1. فحص الكلمات المفتاحية (FAQ) لسرعة الرد
@@ -691,29 +724,31 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
         if user.id not in user_messages:
             user_messages[user.id] = []
 
-        # جلب قاعدة المعرفة (تأكد من وجود الدالة في sheets.py)
+        # جلب قاعدة المعرفة من الشيت
         from sheets import get_courses_knowledge_base
         courses_knowledge = get_courses_knowledge_base(bot_token)
         
         # إضافة رسالة الطالب للذاكرة
         user_messages[user.id].append({"role": "user", "content": text})
+        
+        # --- [ الجزء الديناميكي الجديد: جلب الهوية من الشيت ] ---
+        from sheets import get_ai_setup
+        ai_info = get_ai_setup(bot_token)
+        platform = ai_info.get('اسم_المؤسسة', 'منصة الدكتور التعليمية') if ai_info else "منصة الدكتور التعليمية"
+        rules = ai_info.get('تعليمات_AI', 'أجب بذكاء ولباقة واستخدم الرموز التعبيرية 🎓') if ai_info else "أجب بذكاء ولباقة"
 
-        # بناء سياق المحادثة الكامل (آخر 6 رسائل للحفاظ على الأداء)
+        # بناء سياق المحادثة الكامل بالهوية الجديدة + الذاكرة
         messages_to_send = [
             {
                 "role": "system", 
-                "content": (
-                    f"أنت المساعد الذكي الرسمي لمنصة الدكتور التعليمية. "
-                    f"إليك معلومات الدورات المتاحة حالياً:\n{courses_knowledge}\n\n"
-                    f"أجب بذكاء ولباقة واستخدم الرموز التعبيرية 🎓."
-                )
+                "content": f"أنت المساعد الذكي الرسمي لـ {platform}. {rules}. إليك معلومات الدورات المتاحة حالياً:\n{courses_knowledge}"
             }
-        ] + user_messages[user.id][-6:] 
+        ] + user_messages[user.id][-6:] # دمج الذاكرة لضمان استمرارية الحوار
 
         await update.message.reply_chat_action("typing")
 
         try:
-            # استخدام g4f بشكل مباشر مع المزود التلقائي (لحل مشكلة DuckDuckGo)
+            # استخدام g4f بشكل مباشر مع المزود التلقائي لضمان الاستقرار
             import g4f
             response = await g4f.ChatCompletion.create_async(
                 model=g4f.models.default,
@@ -738,10 +773,21 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
             except:
                 await update.message.reply_text("⚠️ المعذرة، هناك ضغط حالياً. يرجى المحاولة لاحقاً.")
 
+
 # --------------------------------------------------------------------------
 
 
 # --------------------------------------------------------------------------
+def main():
+    TOKEN = "TOKEN_HERE" 
+    application = ApplicationBuilder().token(TOKEN).build()
+    application.add_handler(CommandHandler("start", start_handler))
+    application.add_handler(CallbackQueryHandler(contact_callback_handler))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_contact_message))
+    application.run_polling()
+
+if __name__ == '__main__':
+    main()
 
 
 # --------------------------------------------------------------------------
