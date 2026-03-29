@@ -482,8 +482,9 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 # --- [ معالج الرسائل النصية (Message Handler) ] ---
 # --------------------------------------------------------------------------
 async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """معالجة كافة الرسائل النصية الواردة للبوت وتوجيهها حسب الحالة دون حذف أي وظيفة"""
+    """معالجة كافة الرسائل النصية والربط مع محرك g4f لخدمة الطلاب مع بقاء مهام المسؤول كاملة"""
     import uuid  # لضمان عمل توليد المعرفات للأقسام والدورات
+    import g4f   # استخدام المحرك المجاني المعتمد
     if not update.message or not update.message.text: return
     
     # تنظيف النص من المسافات فور وصوله
@@ -649,9 +650,9 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
                 await update.message.reply_text("❌ فشل التحديث. تأكد من إضافة الأعمدة المطلوبة.")
             return
 
-    # --- [ الجزء الخاص بالطلاب والردود التفاعلية ] ---
+    # --- [ الجزء الخاص بالطلاب والردود التفاعلية باستخدام g4f والذاكرة ] ---
     if user.id != bot_owner_id:
-        # 1. فحص الكلمات المفتاحية أولاً (FAQ)
+        # 1. فحص الكلمات المفتاحية أولاً (FAQ) لسرعة الرد
         faq_keywords = {
             "طريقة الدفع": "💳 يمكنك الدفع عبر (زين كاش، بايبال، أو كروت التعبئة).",
             "تفعيل": "🎟 لتفعيل الدورة، يرجى إرسال الكود الذي حصلت عليه.",
@@ -662,39 +663,56 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
                 await update.message.reply_text(response)
                 return
 
-        # 2. محرك الذكاء الاصطناعي (Gemini)
+        # 2. إدارة ذاكرة المحادثة (القاموس العالمي user_messages يجب أن يُعرف خارج الدالة)
+        global user_messages
+        if user.id not in user_messages:
+            user_messages[user.id] = []
+
+        # جلب البيانات من الشيت لتغذية المحرك
         from sheets import get_all_courses_for_ai
-        import google.generativeai as genai
-
-        # إعداد المحرك بالمفتاح الخاص بك
-        genai.configure(api_key="AIzaSyCkpHbxvjZNqN_PT8O1yXUAIG-dMAGZj2Y")
-        model = genai.GenerativeModel('gemini-1.5-flash')
-
-        # جلب البيانات من الشيت
         courses_knowledge = get_all_courses_for_ai(bot_token)
         
-        full_prompt = (
-            f"أنت المساعد الذكي الرسمي لمنصة الدكتور التعليمية. "
-            f"إليك معلومات الدورات المتاحة:\n{courses_knowledge}\n\n"
-            f"سؤال الطالب: '{text}'\n\n"
-            f"أجب بذكاء ولباقة واستخدم الرموز التعبيرية."
-        )
+        # إضافة رسالة الطالب للذاكرة
+        user_messages[user.id].append({"role": "user", "content": text})
+
+        # بناء سياق المحادثة الكامل مع التعليمات
+        messages_to_send = [
+            {
+                "role": "system", 
+                "content": (
+                    f"أنت المساعد الذكي الرسمي لمنصة الدكتور التعليمية. "
+                    f"إليك معلومات الدورات المتاحة حالياً:\n{courses_knowledge}\n\n"
+                    f"أجب بذكاء ولباقة واستخدم الرموز التعبيرية 🎓. "
+                    f"اعتمد على البيانات المقدمة فقط في الرد على الدورات."
+                )
+            }
+        ] + user_messages[user.id][-6:] # إرسال آخر 6 رسائل للحفاظ على السياق والأداء
 
         await update.message.reply_chat_action("typing")
 
         try:
-            response = model.generate_content(full_prompt)
-            # التأكد من وجود نص في الاستجابة قبل الإرسال
-            if response and response.text:
-                await update.message.reply_text(response.text, parse_mode="Markdown")
+            # طلب الرد من g4f بشكل غير متزامن
+            response = await g4f.ChatCompletion.create_async(
+                model=g4f.models.default,
+                messages=messages_to_send,
+            )
+
+            if response:
+                # إضافة رد البوت للذاكرة
+                user_messages[user.id].append({"role": "assistant", "content": response})
+                await update.message.reply_text(response, parse_mode="Markdown")
+                return
             else:
-                raise Exception("Empty AI Response")
+                raise Exception("Empty g4f Response")
             
         except Exception as e:
-            # خطة بديلة: تحويل السؤال للأدمن في حال فشل الـ AI
+            # في حال فشل المحرك المجاني، نعتمد نظام التوجيه للأدمن كخطة بديلة
             info = f"📩 <b>استفسار جديد من طالب:</b>\nالاسم: {user.full_name}\nالرسالة: {text}"
-            await context.bot.send_message(chat_id=bot_owner_id, text=info, parse_mode="HTML")
-            await update.message.reply_text("💡 شكراً لسؤالك! لقد استلمت استفسارك وسيقوم الدكتور بالرد عليك فوراً.")
+            try:
+                await context.bot.send_message(chat_id=bot_owner_id, text=info, parse_mode="HTML")
+                await update.message.reply_text("💡 شكراً لسؤالك! لقد استلمت استفسارك وسيقوم الدكتور بالرد عليك فوراً.")
+            except:
+                await update.message.reply_text("⚠️ المعذرة، هناك ضغط حالياً. يرجى المحاولة لاحقاً.")
 
 # --------------------------------------------------------------------------
 
