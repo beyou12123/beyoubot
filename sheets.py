@@ -535,7 +535,7 @@ def get_all_coaches(bot_token):
         print(f"❌ Error fetching coaches: {e}")
         return []
  
- def delete_coach_from_sheet(bot_token, coach_id):
+def delete_coach_from_sheet(bot_token, coach_id):
     """حذف مدرب من الشيت بناءً على الـ ID وتوكن البوت"""
     try:
         if coaches_sheet is None: return False
