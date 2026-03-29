@@ -600,8 +600,19 @@ def save_ai_setup(bot_token, user_id, username, institution_name=None, ai_instru
         return False
 
 # --------------------------------------------------------------------------
+def get_courses_knowledge_base(bot_token):
+    """جلب بيانات الدورات وتحويلها لنص يفهمه الذكاء الاصطناعي"""
+    try:
+        if courses_sheet is None: return "لا توجد بيانات حالياً."
+        all_courses = courses_sheet.get_all_records()
+        bot_courses = [c for c in all_courses if str(c.get('bot_id')) == str(bot_token)]
+        if not bot_courses: return "لا توجد دورات متاحة حالياً."
+        kb = "قائمة الدورات:\n"
+        for c in bot_courses:
+            kb += f"- {c.get('اسم_الدورة')}، السعر: {c.get('سعر_الدورة')}، المدرب: {c.get('اسم_المدرب')}.\n"
+        return kb
+    except: return "المعلومات قيد التحديث."
 
 # --------------------------------------------------------------------------
 
-
-
+# --------------------------------------------------------------------------
