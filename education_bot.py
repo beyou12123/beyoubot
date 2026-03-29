@@ -126,13 +126,31 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         await query.edit_message_text("🎯 <b>اختر القسم الذي تريد إضافة الدورة إليه:</b>", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
     # --- 4. معالجة القسم المختار للدورة وبدء طلب الاسم ---
-    elif data.startswith("sel_cat_for_crs_"):
-        cat_id = data.replace("sel_cat_for_crs_", "")
-        context.user_data['temp_course_cat'] = cat_id # حفظ القسم مؤقتاً في الذاكرة
-        context.user_data['action'] = 'awaiting_course_name' # تغيير حالة البوت لانتظار اسم الدورة
+    elif data.startswith("set_crs_cat_"):
+        cat_id = data.replace("set_crs_cat_", "")
+        context.user_data['temp_crs_cat'] = cat_id
+        context.user_data['action'] = 'awaiting_crs_name'
+        await query.edit_message_text("✍️ **الخطوة 2:** أرسل اسم الدورة الآن:")
+
+    elif data == "confirm_save_full_crs":
+        from sheets import add_new_course_full
+        d = context.user_data.get('temp_crs')
+        cat_id = context.user_data.get('temp_crs_cat')
+        c_id = f"CRS{str(uuid.uuid4().int)[:4]}"
         
-        await query.edit_message_text("✍️ <b>ممتاز! الآن أرسل اسم الدورة الجديدة كرسالة نصية:</b>", 
-                                      reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ إلغاء", callback_data="manage_courses")]]), parse_mode="HTML")
+        # استدعاء دالة الحفظ مع كافة المعايير
+        success = add_new_course_full(
+            bot_token, c_id, d['name'], d['hours'], d['start_date'], 
+            "", "أونلاين", d['price'], "100", "لا يوجد", "إدارة", "001", "عام",
+            d['coach_user'], d['coach_id'], d['coach_name']
+        )
+        
+        if success:
+            await query.edit_message_text("✅ **تم اعتماد الدورة وحفظها في جوجل شيت بنجاح!**", 
+                                          reply_markup=get_admin_panel())
+        else:
+            await query.edit_message_text("❌ حدث خطأ أثناء الحفظ.")
+
 
     # --- 5. إدارة الأقسام (عرض القائمة) ---
     elif data == "manage_cats":
@@ -152,6 +170,16 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode="HTML"
         )
+    elif data == "start_add_course":
+        from sheets import get_all_categories
+        categories = get_all_categories(bot_token)
+        if not categories:
+            await query.edit_message_text("⚠️ أضف قسماً أولاً!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 عودة", callback_data="manage_cats")]]), parse_mode="HTML")
+            return
+        # الخطوة 1: اختيار القسم
+        keyboard = [[InlineKeyboardButton(f"📁 {cat['name']}", callback_data=f"set_crs_cat_{cat['id']}")] for cat in categories]
+        keyboard.append([InlineKeyboardButton("❌ إلغاء", callback_data="manage_courses")])
+        await query.edit_message_text("🎯 **الخطوة 1:** اختر القسم المخصص للدورة:", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
     # --- 6. عرض خيارات القسم المختار (تعديل/حذف/عرض دورات) ---
     elif data.startswith("edit_cat_"):
@@ -302,6 +330,70 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
             if add_new_course(bot_token, course_id, text.strip(), course_cat):
                 context.user_data['action'] = None
                 await update.message.reply_text(f"✅ تم إضافة الدورة: <b>{text}</b>", reply_markup=get_admin_panel(), parse_mode="HTML" )
+            return
+            
+    # --- [ تسلسل إضافة دورة احترافي ] ---
+    if user.id == bot_owner_id:
+        # الخطوة 2: استلام الاسم والطلب الساعات (أو الوصف)
+        if action == 'awaiting_crs_name':
+            context.user_data['temp_crs'] = {'name': text.strip()}
+            context.user_data['action'] = 'awaiting_crs_hours'
+            await update.message.reply_text("⏳ **الخطوة 3:** أرسل عدد ساعات الدورة (أو وصفاً قصيراً):")
+            return
+
+        # الخطوة 3: استلام الساعات والطلب السعر
+        elif action == 'awaiting_crs_hours':
+            context.user_data['temp_crs']['hours'] = text.strip()
+            context.user_data['action'] = 'awaiting_crs_price'
+            await update.message.reply_text("💰 **الخطوة 4:** أرسل سعر الدورة (أرقام فقط):")
+            return
+
+        # الخطوة 4: استلام السعر والطلب يوزر المدرب
+        elif action == 'awaiting_crs_price':
+            context.user_data['temp_crs']['price'] = text.strip()
+            context.user_data['action'] = 'awaiting_crs_coach'
+            await update.message.reply_text("👨‍🏫 **الخطوة 5:** أرسل (يوزرنايم) المدرب مع الـ @\nمثال: @CoachName")
+            return
+
+        # الخطوة 5: استلام يوزر المدرب والبحث عن الـ ID اتماتيكياً
+        elif action == 'awaiting_crs_coach':
+            coach_username = text.strip().replace("@", "")
+            try:
+                # محاولة الحصول على معلومات المدرب من التليجرام اتماتيكياً
+                coach_chat = await context.bot.get_chat(f"@{coach_username}")
+                context.user_data['temp_crs']['coach_user'] = f"@{coach_username}"
+                context.user_data['temp_crs']['coach_id'] = coach_chat.id
+                context.user_data['temp_crs']['coach_name'] = coach_chat.full_name
+                
+                context.user_data['action'] = 'awaiting_crs_date'
+                await update.message.reply_text(f"✅ تم العثور على المدرب: {coach_chat.full_name}\n🆔 معرفه: {coach_chat.id}\n\n🗓 **الخطوة 6:** أرسل تاريخ بداية الدورة (مثال: 2026-04-01):")
+            except Exception:
+                await update.message.reply_text("❌ لم أستطع العثور على هذا اليوزر. تأكد من صحته أو اطلب من المدرب مراسلة البوت أولاً.")
+            return
+
+        # الخطوة 6: تجميع المعلومات وعرض "تأكيد الاعتماد"
+        elif action == 'awaiting_crs_date':
+            context.user_data['temp_crs']['start_date'] = text.strip()
+            d = context.user_data['temp_crs']
+            
+            summary = (
+                f"📝 **مراجعة بيانات الدورة:**\n"
+                f"━━━━━━━━━━━━━━\n"
+                f"📂 القسم: {context.user_data.get('temp_crs_cat')}\n"
+                f"📚 الاسم: {d['name']}\n"
+                f"⏳ الساعات: {d['hours']}\n"
+                f"💰 السعر: {d['price']}$\n"
+                f"👨‍🏫 المدرب: {d['coach_name']}\n"
+                f"🗓 البداية: {d['start_date']}\n"
+                f"━━━━━━━━━━━━━━\n"
+                f"**هل تريد اعتماد وتسجيل الدورة؟**"
+            )
+            keyboard = [
+                [InlineKeyboardButton("✅ نعم، اعتمد الدورة", callback_data="confirm_save_full_crs")],
+                [InlineKeyboardButton("❌ إلغاء", callback_data="manage_courses")]
+            ]
+            await update.message.reply_text(summary, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+            context.user_data['action'] = None
             return
 
     # --- [ الجزء الخاص بالطلاب والردود الآلية ] ---
