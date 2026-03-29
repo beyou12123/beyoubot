@@ -696,7 +696,8 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
 
         # جلب البيانات من الشيت (تأكد من المحاذاة هنا)
         from sheets import get_courses_knowledge_base
-        courses_knowledge = get_courses_knowledge_base(bot_token)
+        courses_knowledge = get_courses_knowledge_base(bot_token) # أضف مسافات هنا ليكون تحت الـ from
+
         
         # إضافة رسالة الطالب للذاكرة
         user_messages[user.id].append({"role": "user", "content": text})
