@@ -90,8 +90,10 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ai_config = get_ai_setup(bot_token)
     
     # تصحيح الـ HTML والإزاحة لضمان استجابة البوت
+
     if user.id == bot_owner_id:
         if not ai_config or not ai_config.get('اسم_المؤسسة'):
+
             context.user_data['action'] = 'awaiting_institution_name'
             await update.message.reply_text(
                 "👋 <b>أهلاً بك يا دكتور!</b>\n\n"
@@ -168,15 +170,25 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         await query.edit_message_text(stats_text, reply_markup=get_admin_panel(), parse_mode="HTML")
 
     # --- 2. إدارة الدورات التدريبية (الواجهة الرئيسية) ---
+# تحديث قسم إدارة الدورات ليشمل كافة طرق الاستيراد المتاحة
     elif data == "manage_courses":
         await query.edit_message_text(
-            "📚 <b>إدارة الدورات التدريبية:</b>\n\nيمكنك إضافة دورات جديدة وربطها بالأقسام المتاحة.", 
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("➕ إضافة دورة جديدة", callback_data="start_add_course")],
-                [InlineKeyboardButton("🔙 عودة", callback_data="back_to_admin")]
-            ]), 
-            parse_mode="HTML"
-        )
+        "📚 <b>إدارة واستيراد الدورات:</b>\n\nاختر الطريقة التي تفضلها لإضافة البيانات:", 
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("➕ إضافة دورة فردية", callback_data="start_add_course")],
+            [
+                InlineKeyboardButton("📥 نصية (|)", callback_data="bulk_add_start"),
+                InlineKeyboardButton("📊 ملف Excel", callback_data="excel_import_start")
+            ],
+            [
+                InlineKeyboardButton("📄 ملف CSV", callback_data="csv_import_start"),
+                InlineKeyboardButton("🔗 رابط Google Sheet", callback_data="sheet_link_import")
+            ],
+            [InlineKeyboardButton("🔙 عودة", callback_data="back_to_admin")]
+        ]), 
+        parse_mode="HTML"
+    )
+
 # --------------------------------------------------------------------------
     # --- 3. إدارة شؤون المدربين ---
     elif data == "manage_coaches":
@@ -206,7 +218,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         keyboard = [[InlineKeyboardButton(f"👤 {c['name']}", callback_data=f"view_coach_{c['id']}")] for c in coaches]
         keyboard.append([InlineKeyboardButton("🔙 عودة", callback_data="manage_coaches")])
         await query.edit_message_text("🎯 **اختر مدرباً لعرض تفاصيله أو حذفه:**", reply_markup=InlineKeyboardMarkup(keyboard))
-
+# --------------------------------------------------------------------------
     # عرض تفاصيل مدرب محدد مع زر الحذف
     elif data.startswith("view_coach_"):
         coach_id = data.replace("view_coach_", "")
@@ -221,7 +233,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
                 [InlineKeyboardButton("🔙 عودة للقائمة", callback_data="list_coaches")]
             ]
             await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
-
+# --------------------------------------------------------------------------
     # تنفيذ الحذف الفعلي للمدرب
     elif data.startswith("del_coach_"):
         coach_id = data.replace("del_coach_", "")
@@ -232,8 +244,31 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📋 عرض القائمة", callback_data="list_coaches")]]))
         else:
             await query.answer("❌ فشل الحذف", show_alert=True)
+# --------------------------------------------------------------------------
+    elif data == "bulk_add_start":
+        context.user_data['action'] = 'awaiting_bulk_courses'
+        instruction = (
+            "📥 <b>إضافة دورات دفعة واحدة:</b>\n\n"
+            "يرجى إرسال الدورات بحيث يكون كل سطر دورة مستقلة بهذا التنسيق:\n"
+            "<code>اسم الدورة |  الوصف وعدد الساعات | السعر | معرف المدرب | معرف القسم</code>\n\n"
+            "💡 مثال:\n"
+            "<code>دورة البرمجة | 40 | 150 | 873158997 | C1234</code>"
+        )
+        await query.edit_message_text(instruction, parse_mode="HTML")
 
+    elif data == "excel_import_start":
+        context.user_data['action'] = 'awaiting_excel_file'
+        await query.edit_message_text("📊 أرسل ملف Excel (.xlsx) الآن:")
 
+    elif data == "csv_import_start":
+        context.user_data['action'] = 'awaiting_csv_file'
+        await query.edit_message_text("📄 أرسل ملف CSV الآن:")
+
+    elif data == "sheet_link_import":
+        context.user_data['action'] = 'awaiting_sheet_link'
+        await query.edit_message_text("🔗 أرسل رابط Google Sheet المفتوح للمشاركة:")
+
+# --------------------------------------------------------------------------
     elif data == "start_add_coach":
         context.user_data['action'] = 'await_coach_name'
         await query.edit_message_text("✍️ <b>الخطوة 1:</b> أرسل اسم المدرب الثلاثي:", parse_mode="HTML")
@@ -520,10 +555,10 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """معالجة كافة الرسائل النصية والربط مع محرك g4f لخدمة الطلاب مع بقاء مهام المسؤول كاملة"""
     
-    if not update.message or not update.message.text: return
+    if not update.message: return
     
     # تنظيف النص من المسافات فور وصوله
-    text = update.message.text.strip()
+    text = update.message.text.strip() if update.message.text else ""
     user = update.effective_user
     bot_token = context.bot.token
     
@@ -538,6 +573,46 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
         
     action = context.user_data.get('action')
 
+# --------------------------------------------------------------------------
+    if update.message.document:
+        action = context.user_data.get('action')
+        doc = update.message.document
+        
+        if action in ['awaiting_excel_file', 'awaiting_csv_file']:
+            import pandas as pd
+            import os, uuid
+            from sheets import add_new_course
+            
+            file = await context.bot.get_file(doc.file_id)
+            file_path = f"temp_{uuid.uuid4().hex}_{doc.file_name}"
+            await file.download_to_drive(file_path)
+            
+            try:
+                # قراءة الملف بدقة حسب النوع
+                df = pd.read_excel(file_path) if action == 'awaiting_excel_file' else pd.read_csv(file_path)
+                df = df.fillna("") # معالجة القيم الفارغة لضمان عدم حدوث خطأ
+                
+                success_count = 0
+                for _, r in df.iterrows():
+                    c_id = f"CRS{str(uuid.uuid4().int)[:4]}"
+                    # إرسال كافة الـ 17 متغيراً بدقة للشيت
+                    success = add_new_course(
+                        bot_token, c_id, str(r.get('الاسم', '')), str(r.get('الوصف', '')),
+                        "2026-01-01", "", "أونلاين", str(r.get('السعر', '0')), 
+                        "100", "لا يوجد", "إدارة المنصة", "ADMIN01", "عام", 
+                        "ملف", str(r.get('ID_المدرب', '')), "مدرب", str(r.get('ID_القسم', ''))
+                    )
+                    if success: success_count += 1
+                
+                await update.message.reply_text(f"✅ تم استيراد {success_count} دورة بنجاح.")
+            except Exception as e:
+                await update.message.reply_text(f"❌ خطأ في معالجة الملف: {str(e)}")
+            finally:
+                if os.path.exists(file_path): os.remove(file_path)
+            context.user_data['action'] = None
+            return
+
+# --------------------------------------------------------------------------
     # --- [ الجزء الخاص بالمسؤول - إدارة المحتوى والدورات ] ---
     if user.id == bot_owner_id:
         # إضافة قسم جديد
@@ -682,7 +757,98 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
             await update.message.reply_text(summary, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
             context.user_data['action'] = None
             return
+# دالة الإضافة الجماعية
+# --------------------------------------------------------------------------
+        # --- [ محرك معالجة الإضافة الجماعية للدورات ] ---
+        elif action == 'awaiting_bulk_courses':
+            lines = text.split('\n')
+            success_count = 0
+            failed_lines = []
+            from sheets import add_new_course
+            import uuid
 
+            for line in lines:
+                if not line.strip(): continue # تخطي الأسطر الفارغة
+                
+                # تقسيم السطر بناءً على الفاصل الرأسي |
+                parts = [p.strip() for p in line.split('|')]
+                
+                # التأكد من وجود الخمسة أجزاء المطلوبة حسب تعليماتك الجديدة
+                if len(parts) >= 5:
+                    c_id = f"CRS{str(uuid.uuid4().int)[:4]}"
+                    
+                    # إرسال البيانات للدالة (الترتيب مطابق للـ 17 عمود في sheets.py)
+                    success = add_new_course(
+                        bot_token,          # 1. bot_id
+                        c_id,               # 2. معرف_الدورة
+                        parts[0],           # 3. اسم_الدورة
+                        parts[1],           # 4. عدد_الساعات (الوصف والساعات)
+                        "2026-01-01",       # 5. تاريخ_البداية (افتراضي)
+                        "",                 # 6. تاريخ_النهاية
+                        "أونلاين",          # 7. نوع_الدورة
+                        parts[2],           # 8. سعر_الدورة
+                        "100",              # 9. الحد_الأقصى
+                        "لا يوجد",          # 10. المتطلبات
+                        "إدارة المنصة",      # 11. اسم_المندوب
+                        "ADMIN01",          # 12. كود_المندوب
+                        "عام",              # 13. الحملة_التسويقية
+                        "إدخال جماعي",      # 14. معرف_المدرب (يوزر)
+                        parts[3],           # 15. ID_المدرب (المعرف الرقمي)
+                        "مدرب معتمد",       # 16. اسم_المدرب (افتراضي)
+                        parts[4]            # 17. معرف_القسم
+                    )
+                    
+                    if success:
+                        success_count += 1
+                    else:
+                        failed_lines.append(line)
+                else:
+                    failed_lines.append(line)
+
+            context.user_data['action'] = None
+            
+            # رسالة النتيجة النهائية
+            result_msg = f"✅ <b>تمت العملية بنجاح!</b>\n\n📥 عدد الدورات المضافة: {success_count}"
+            if failed_lines:
+                result_msg += f"\n⚠️ أسطر فشلت (تأكد من التنسيق):\n" + "\n".join(failed_lines)
+            
+            await update.message.reply_text(result_msg, reply_markup=get_admin_panel(), parse_mode="HTML")
+            return
+
+#-----
+        elif action == 'awaiting_sheet_link':
+            import re, uuid
+            from sheets import client, add_new_course
+            
+            # استخراج ID الشيت من الرابط بدقة
+            match = re.search(r"/d/([a-zA-Z0-9-_]+)", text)
+            if not match:
+                await update.message.reply_text("❌ رابط غير صحيح. أرسل رابط شيت صالح.")
+                return
+
+            try:
+                external_ss = client.open_by_key(match.group(1))
+                data = external_ss.get_worksheet(0).get_all_records()
+                
+                success_count = 0
+                for r in data:
+                    c_id = f"CRS{str(uuid.uuid4().int)[:4]}"
+                    success = add_new_course(
+                        bot_token, c_id, str(r.get('اسم_الدورة', '')), str(r.get('الوصف', '')),
+                        "2026-01-01", "", "أونلاين", str(r.get('السعر', '0')), 
+                        "100", "لا يوجد", "إدارة المنصة", "ADMIN01", "رابط", 
+                        "Sheet", str(r.get('ID_المدرب', '')), "مدرب", str(r.get('ID_القسم', ''))
+                    )
+                    if success: success_count += 1
+                
+                await update.message.reply_text(f"✅ تم سحب {success_count} دورة من الرابط.")
+            except Exception as e:
+                await update.message.reply_text(f"❌ فشل الوصول للرابط: {str(e)}")
+            context.user_data['action'] = None
+            return
+
+
+# --------------------------------------------------------------------------
         # --- [ حفظ كليشة الترحيب الجديدة ] ---
         elif action == 'awaiting_new_welcome_text':
             period = context.user_data.get('edit_period')
