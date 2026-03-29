@@ -3,4 +3,5 @@ gspread
 oauth2client
 google-generativeai
 g4f>=0.3.5.7
-
+pandas
+openpyxl
