@@ -89,12 +89,17 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     from sheets import get_ai_setup
     ai_config = get_ai_setup(bot_token)
     
-
+# تصحيح الـ HTML لكي لا تظهر الأكواد كنص
     if user.id == bot_owner_id:
-        if not ai_config or not ai_config.get('اسم_المؤسسة'):
-            context.user_data['action'] = 'awaiting_institution_name'
-            await update.message.reply_text("👋 <b>أهلاً بك يا دكتور!</b>\nقبل البدء، يرجى إرسال <b>اسم المنصة التعليمية</b> الخاصة بك:")
-            return
+    if not ai_config or not ai_config.get('اسم_المؤسسة'):
+        context.user_data['action'] = 'awaiting_institution_name'
+        await update.message.reply_text(
+            "👋 <b>أهلاً بك يا دكتور!</b>\n\n"
+            "قبل البدء، يرجى إرسال <b>اسم المنصة التعليمية</b> الخاصة بك:",
+            parse_mode="HTML"
+        )
+        return
+
 
 
     # تسجيل المستخدم في القاعدة
@@ -691,12 +696,17 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
             return
 
         # 1. استقبال اسم المؤسسة (تم دمجه في تسلسل الإدارة)
+        # 1. استقبال اسم المؤسسة
         elif action == 'awaiting_institution_name':
             from sheets import save_ai_setup
             if save_ai_setup(bot_token, user.id, user.username, institution_name=text):
                 context.user_data['action'] = 'awaiting_ai_instructions'
-                await update.message.reply_text(f"✅ تم حفظ الاسم: <b>{text}</b>\nالآن أرسل <b>تعليمات الذكاء الاصطناعي</b> (مثلاً: أنت مساعد خبير تجيب بلباقة):")
+                await update.message.reply_text(f"✅ تم حفظ الاسم: <b>{text}</b>\n\nالآن أرسل <b>تعليمات الذكاء الاصطناعي</b> للمنصة:")
+            else:
+                # إذا فشل الحفظ، البوت سيخبرك بدلاً من التهنيج
+                await update.message.reply_text("❌ عذراً دكتور، فشل الحفظ في الشيت. تأكد من وجود ورقة 'الذكاء_الإصطناعي'.")
             return
+
 
         # 2. استقبال تعليمات AI
         elif action == 'awaiting_ai_instructions':
