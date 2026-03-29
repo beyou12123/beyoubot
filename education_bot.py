@@ -34,10 +34,8 @@ from sheets import (
 
 
 # إعداد المفتاح الذي حصلت عليه
-
 genai.configure(api_key="AIzaSyCkpHbxvjZNqN_PT8O1yXUAIG-dMAGZj2Y")
-model = genai.GenerativeModel("gemini-pro")
-
+model = genai.GenerativeModel('gemini-1.5-flash')
 # إعداد السجلات (Logging) لمراقبة أداء البوت وتتبع الأخطاء
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
@@ -678,8 +676,9 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
 # --------------------------------------------------------------------------
     # --- [ الجزء الخاص بالطلاب والردود التفاعلية باستخدام g4f والذاكرة ] ---
     # --- [ الجزء الخاص بالطلاب والردود التفاعلية ] ---
+    # --- [ الجزء الخاص بالطلاب والردود التفاعلية باستخدام g4f فقط ] ---
     if user.id != bot_owner_id:
-        # 1. فحص الكلمات المفتاحية (FAQ)
+        # 1. فحص الكلمات المفتاحية (FAQ) لسرعة الرد
         faq_keywords = {
             "طريقة الدفع": "💳 يمكنك الدفع عبر (زين كاش، بايبال، أو كروت التعبئة).",
             "تفعيل": "🎟 لتفعيل الدورة، يرجى إرسال الكود الذي حصلت عليه.",
@@ -695,14 +694,14 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
         if user.id not in user_messages:
             user_messages[user.id] = []
 
-        # استيراد وجلب قاعدة المعرفة من الشيت
+        # استيراد وجلب قاعدة المعرفة من الشيت (التأكد من المحاذاة)
         from sheets import get_courses_knowledge_base
         courses_knowledge = get_courses_knowledge_base(bot_token)
         
-        # إضافة رسالة الطالب للذاكرة (مرة واحدة فقط)
+        # إضافة رسالة الطالب للذاكرة
         user_messages[user.id].append({"role": "user", "content": text})
 
-        # بناء سياق المحادثة (آخر 6 رسائل للحفاظ على الأداء)
+        # بناء السياق للرد من g4f
         messages_to_send = [
             {
                 "role": "system", 
@@ -712,32 +711,35 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
                     f"أجب بذكاء ولباقة واستخدم الرموز التعبيرية 🎓."
                 )
             }
-        ] + user_messages[user.id][-6:]
+        ] + user_messages[user.id][-6:] # آخر 6 رسائل فقط
 
         await update.message.reply_chat_action("typing")
 
-try:
-    prompt = "\n".join([msg["content"] for msg in messages_to_send])
+        try:
+            # استخدام g4f بشكل مباشر مع مزود سريع
+            response = await g4f.ChatCompletion.create_async(
+                model=g4f.models.default,
+                provider=g4f.Provider.DuckDuckGo, 
+                messages=messages_to_send,
+            )
 
-    response = model.generate_content(prompt)
-
-    if response.text:
-        reply = response.text.strip()
-        user_messages[user.id].append({"role": "assistant", "content": reply})
-        await update.message.reply_text(reply)
-        return
-    else:
-        raise Exception("Empty Response")
-
-except Exception as e:
-    print(f"❌ Gemini Error: {e}")
-
-    info = f"📩 <b>استفسار جديد (فشل الـ AI):</b>\nالاسم: {user.full_name}\nالرسالة: {text}"
-    try:
-        await context.bot.send_message(chat_id=bot_owner_id, text=info, parse_mode="HTML")
-        await update.message.reply_text("💡 تم استلام سؤالك وسيتم الرد عليك قريباً.")
-    except:
-        await update.message.reply_text("⚠️ ضغط حالياً، حاول لاحقاً.")
+            if response and len(response) > 0:
+                # إضافة رد البوت للذاكرة وإرساله
+                user_messages[user.id].append({"role": "assistant", "content": response})
+                await update.message.reply_text(response)
+                return
+            else:
+                raise Exception("Empty g4f Response")
+            
+        except Exception as e:
+            print(f"❌ g4f Error: {e}")
+            # الخطة البديلة: إرسال تنبيه للدكتور (الأدمن)
+            info = f"📩 <b>استفسار جديد (فشل g4f):</b>\nالاسم: {user.full_name}\nالرسالة: {text}"
+            try:
+                await context.bot.send_message(chat_id=bot_owner_id, text=info, parse_mode="HTML")
+                await update.message.reply_text("💡 شكراً لسؤالك! لقد استلمت استفسارك وسيقوم الدكتور بالرد عليك فوراً.")
+            except Exception as send_err:
+                await update.message.reply_text("⚠️ المعذرة، هناك ضغط حالياً. يرجى المحاولة لاحقاً.")
 
 # --------------------------------------------------------------------------
 
@@ -748,29 +750,5 @@ except Exception as e:
 # 1. تأكد من وجود هذا السطر في أعلى الملف (خارج كل الدوال) كما طلبت
 
 
-def main():
-    """تشغيل البوت وربط كافة المعالجات"""
-    # ضع التوكن الخاص ببوتك هنا
-    TOKEN = "YOUR_BOT_TOKEN_HERE" 
-    
-    # بناء التطبيق
-    application = ApplicationBuilder().token(TOKEN).build()
-
-    # --- [ ربط الأوامر ] ---
-    application.add_handler(CommandHandler("start", start_handler))
-
-    # --- [ ربط ضغطات الأزرار ] ---
-    application.add_handler(CallbackQueryHandler(contact_callback_handler))
-
-    # --- [ ربط الرسائل النصية (الذكاء الاصطناعي + إدارة المسؤول) ] ---
-    # ملاحظة: هذا المعالج يجب أن يكون الأخير لضمان عدم تداخله مع الأوامر
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_contact_message))
-
-    # تشغيل البوت بنظام التحديث المستمر
-    print("🚀 البوت يعمل الآن.. في انتظار رسائل الطلاب...")
-    application.run_polling()
-
-if __name__ == '__main__':
-    main()
 
 # --------------------------------------------------------------------------
