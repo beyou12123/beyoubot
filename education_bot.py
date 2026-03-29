@@ -483,6 +483,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 # --------------------------------------------------------------------------
 async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """معالجة كافة الرسائل النصية الواردة للبوت وتوجيهها حسب الحالة دون حذف أي وظيفة"""
+    import uuid  # لضمان عمل توليد المعرفات للأقسام والدورات
     if not update.message or not update.message.text: return
     
     # تنظيف النص من المسافات فور وصوله
@@ -498,6 +499,7 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
         # إضافة قسم جديد
         if action == 'awaiting_cat_name':
             cat_id = f"C{str(uuid.uuid4().int)[:4]}"
+            from sheets import add_new_category
             if add_new_category(bot_token, cat_id, text):
                 context.user_data['action'] = None
                 await update.message.reply_text(f"✅ تم إنشاء القسم بنجاح: <b>{text}</b>", reply_markup=get_admin_panel(), parse_mode="HTML")
@@ -506,6 +508,7 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
         # تعديل اسم قسم
         elif action == 'awaiting_new_cat_name':
             cat_id = context.user_data.get('selected_cat_id')
+            from sheets import update_category_name
             if update_category_name(bot_token, cat_id, text):
                 context.user_data['action'] = None
                 await update.message.reply_text(f"✅ تم تحديث اسم القسم إلى: <b>{text}</b>", reply_markup=get_admin_panel(), parse_mode="HTML")
@@ -515,6 +518,7 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
         elif action == 'awaiting_course_name':
             course_cat = context.user_data.get('temp_course_cat')
             course_id = f"CRS{str(uuid.uuid4().int)[:4]}"
+            from sheets import add_new_course
             if add_new_course(bot_token, course_id, text, course_cat):
                 context.user_data['action'] = None
                 await update.message.reply_text(f"✅ تم إضافة الدورة بنجاح: <b>{text}</b>", reply_markup=get_admin_panel(), parse_mode="HTML")
@@ -633,69 +637,64 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
             context.user_data['action'] = None
             return
 
-
         # --- [ حفظ كليشة الترحيب الجديدة ] ---
         elif action == 'awaiting_new_welcome_text':
             period = context.user_data.get('edit_period')
-            column_name = f"welcome_{period}" # سيتم الحفظ في أعمدة مخصصة في الشيت
+            column_name = f"welcome_{period}"
             from sheets import update_content_setting
-            
             if update_content_setting(bot_token, column_name, text):
                 await update.message.reply_text(f"✅ تم تحديث كليشة الترحيب <b>({period})</b> بنجاح!", reply_markup=get_admin_panel(), parse_mode="HTML")
                 context.user_data['action'] = None
             else:
-                await update.message.reply_text("❌ فشل التحديث. تأكد من إضافة الأعمدة (welcome_morning, welcome_noon, etc) في شيت إعدادات المحتوى.")
+                await update.message.reply_text("❌ فشل التحديث. تأكد من إضافة الأعمدة المطلوبة.")
             return
 
-    # الجزء الخاص بالطلاب والردود التلقائية
-    faq_keywords = {
-        "طريقة الدفع": "💳 يمكنك الدفع عبر (زين كاش، بايبال، أو كروت التعبئة).",
-        "تفعيل": "🎟 لتفعيل الدورة، يرجى إرسال الكود الذي حصلت عليه.",
-        "قائمة": "📚 يمكنك استعراض كافة الدورات المتاحة."
-    }
-
-# --------------------------------------------------------------------------
-    # --- [ محرك الذكاء الاصطناعي التفاعلي للطلاب ] ---
+    # --- [ الجزء الخاص بالطلاب والردود التفاعلية ] ---
     if user.id != bot_owner_id:
+        # 1. فحص الكلمات المفتاحية أولاً (FAQ)
+        faq_keywords = {
+            "طريقة الدفع": "💳 يمكنك الدفع عبر (زين كاش، بايبال، أو كروت التعبئة).",
+            "تفعيل": "🎟 لتفعيل الدورة، يرجى إرسال الكود الذي حصلت عليه.",
+            "قائمة": "📚 يمكنك استعراض كافة الدورات المتاحة."
+        }
+        for key, response in faq_keywords.items():
+            if key in text:
+                await update.message.reply_text(response)
+                return
+
+        # 2. محرك الذكاء الاصطناعي (Gemini)
         from sheets import get_all_courses_for_ai
         import google.generativeai as genai
 
-        # 1. إعداد المحرك (تأكد من وضع المفتاح هنا)
+        # إعداد المحرك بالمفتاح الخاص بك
         genai.configure(api_key="AIzaSyCkpHbxvjZNqN_PT8O1yXUAIG-dMAGZj2Y")
         model = genai.GenerativeModel('gemini-1.5-flash')
 
-        # 2. جلب "بنك المعلومات" من جوجل شيت
+        # جلب البيانات من الشيت
         courses_knowledge = get_all_courses_for_ai(bot_token)
         
-        # 3. صياغة التعليمات لـ Gemini
         full_prompt = (
             f"أنت المساعد الذكي الرسمي لمنصة الدكتور التعليمية. "
-            f"إليك معلومات الدورات المتاحة حالياً في الشيت:\n{courses_knowledge}\n\n"
-            f"سؤال الطالب هو: '{text}'\n\n"
-            f"ملاحظات هامة للرد:\n"
-            f"- أجب بالعامية اللبقة أو الفصحى البسيطة.\n"
-            f"- إذا سأل عن دورة موجودة، اشرح له مميزاتها وسعرها كما ورد في البيانات.\n"
-            f"- إذا سأل عن شيء غير موجود، اقترح عليه التواصل مع الإدارة أو اختر أقرب دورة تناسبه.\n"
-            f"- كن ودوداً واستخدم الرموز التعبيرية 🎓✨."
+            f"إليك معلومات الدورات المتاحة:\n{courses_knowledge}\n\n"
+            f"سؤال الطالب: '{text}'\n\n"
+            f"أجب بذكاء ولباقة واستخدم الرموز التعبيرية."
         )
 
         await update.message.reply_chat_action("typing")
 
         try:
-            # 4. طلب الرد من Gemini
             response = model.generate_content(full_prompt)
-            ai_reply = response.text
-
-            if ai_reply:
-                await update.message.reply_text(ai_reply, parse_mode="Markdown")
-                return # تم الرد بنجاح، لا داعي لتكملة الكود أدناه
+            # التأكد من وجود نص في الاستجابة قبل الإرسال
+            if response and response.text:
+                await update.message.reply_text(response.text, parse_mode="Markdown")
+            else:
+                raise Exception("Empty AI Response")
             
         except Exception as e:
-            print(f"Gemini Error: {e}")
-            # في حال فشل الـ AI لأي سبب، نعود للخطة البديلة (إرسال للأدمن)
-            info = f"📩 <b>استفسار (فشل AI):</b>\nالطالب: {user.full_name}\nالرسالة: {text}"
+            # خطة بديلة: تحويل السؤال للأدمن في حال فشل الـ AI
+            info = f"📩 <b>استفسار جديد من طالب:</b>\nالاسم: {user.full_name}\nالرسالة: {text}"
             await context.bot.send_message(chat_id=bot_owner_id, text=info, parse_mode="HTML")
-            await update.message.reply_text("💡 شكراً لسؤالك! جاري مراجعة التفاصيل من قبل الإدارة للرد عليك بدقة.")
+            await update.message.reply_text("💡 شكراً لسؤالك! لقد استلمت استفسارك وسيقوم الدكتور بالرد عليك فوراً.")
 
 # --------------------------------------------------------------------------
 
