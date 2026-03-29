@@ -89,16 +89,16 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     from sheets import get_ai_setup
     ai_config = get_ai_setup(bot_token)
     
-# تصحيح الـ HTML لكي لا تظهر الأكواد كنص
+    # تصحيح الـ HTML والإزاحة لضمان استجابة البوت
     if user.id == bot_owner_id:
-    if not ai_config or not ai_config.get('اسم_المؤسسة'):
-        context.user_data['action'] = 'awaiting_institution_name'
-        await update.message.reply_text(
-            "👋 <b>أهلاً بك يا دكتور!</b>\n\n"
-            "قبل البدء، يرجى إرسال <b>اسم المنصة التعليمية</b> الخاصة بك:",
-            parse_mode="HTML"
-        )
-        return
+        if not ai_config or not ai_config.get('اسم_المؤسسة'):
+            context.user_data['action'] = 'awaiting_institution_name'
+            await update.message.reply_text(
+                "👋 <b>أهلاً بك يا دكتور!</b>\n\n"
+                "قبل البدء، يرجى إرسال <b>اسم المنصة التعليمية</b> الخاصة بك:",
+                parse_mode="HTML"
+            )
+            return
 
 
 
