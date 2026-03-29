@@ -516,7 +516,6 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 # --------------------------------------------------------------------------
 # --- [ معالج الرسائل النصية (Message Handler) ] ---
 # --------------------------------------------------------------------------
-# ملاحظة هامة: يجب أن يكون السطر التالي في أعلى الملف تماماً خارج كل الدوال:
 async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """معالجة كافة الرسائل النصية والربط مع محرك g4f لخدمة الطلاب مع بقاء مهام المسؤول كاملة"""
     
@@ -695,27 +694,6 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
                 await update.message.reply_text("❌ فشل التحديث. تأكد من إضافة الأعمدة المطلوبة.")
             return
 
-        # 1. استقبال اسم المؤسسة (تم دمجه في تسلسل الإدارة)
-        # 1. استقبال اسم المؤسسة
-        elif action == 'awaiting_institution_name':
-            from sheets import save_ai_setup
-            if save_ai_setup(bot_token, user.id, user.username, institution_name=text):
-                context.user_data['action'] = 'awaiting_ai_instructions'
-                await update.message.reply_text(f"✅ تم حفظ الاسم: <b>{text}</b>\n\nالآن أرسل <b>تعليمات الذكاء الاصطناعي</b> للمنصة:")
-            else:
-                # إذا فشل الحفظ، البوت سيخبرك بدلاً من التهنيج
-                await update.message.reply_text("❌ عذراً دكتور، فشل الحفظ في الشيت. تأكد من وجود ورقة 'الذكاء_الإصطناعي'.")
-            return
-
-
-        # 2. استقبال تعليمات AI
-        elif action == 'awaiting_ai_instructions':
-            from sheets import save_ai_setup
-            if save_ai_setup(bot_token, user.id, user.username, ai_instructions=text):
-                context.user_data['action'] = None
-                await update.message.reply_text("🎊 <b>اكتملت التهيئة!</b> تم ضبط هوية البوت بنجاح.", reply_markup=get_admin_panel())
-            return
-
     # --- [ جزء الطلاب والردود التفاعلية - g4f فقط ] ---
     if user.id != bot_owner_id:
         # 1. فحص الكلمات المفتاحية (FAQ) لسرعة الرد
@@ -734,31 +712,29 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
         if user.id not in user_messages:
             user_messages[user.id] = []
 
-        # جلب قاعدة المعرفة من الشيت
+        # جلب قاعدة المعرفة (تأكد من وجود الدالة في sheets.py)
         from sheets import get_courses_knowledge_base
         courses_knowledge = get_courses_knowledge_base(bot_token)
         
         # إضافة رسالة الطالب للذاكرة
         user_messages[user.id].append({"role": "user", "content": text})
-        
-        # --- [ الجزء الديناميكي الجديد: جلب الهوية من الشيت ] ---
-        from sheets import get_ai_setup
-        ai_info = get_ai_setup(bot_token)
-        platform = ai_info.get('اسم_المؤسسة', 'منصة الدكتور التعليمية') if ai_info else "منصة الدكتور التعليمية"
-        rules = ai_info.get('تعليمات_AI', 'أجب بذكاء ولباقة واستخدم الرموز التعبيرية 🎓') if ai_info else "أجب بذكاء ولباقة"
 
-        # بناء سياق المحادثة الكامل بالهوية الجديدة + الذاكرة
+        # بناء سياق المحادثة الكامل (آخر 6 رسائل للحفاظ على الأداء)
         messages_to_send = [
             {
                 "role": "system", 
-                "content": f"أنت المساعد الذكي الرسمي لـ {platform}. {rules}. إليك معلومات الدورات المتاحة حالياً:\n{courses_knowledge}"
+                "content": (
+                    f"أنت المساعد الذكي الرسمي لمنصة الدكتور التعليمية. "
+                    f"إليك معلومات الدورات المتاحة حالياً:\n{courses_knowledge}\n\n"
+                    f"أجب بذكاء ولباقة واستخدم الرموز التعبيرية 🎓."
+                )
             }
-        ] + user_messages[user.id][-6:] # دمج الذاكرة لضمان استمرارية الحوار
+        ] + user_messages[user.id][-6:] 
 
         await update.message.reply_chat_action("typing")
 
         try:
-            # استخدام g4f بشكل مباشر مع المزود التلقائي لضمان الاستقرار
+            # استخدام g4f بشكل مباشر مع المزود التلقائي (لحل مشكلة DuckDuckGo)
             import g4f
             response = await g4f.ChatCompletion.create_async(
                 model=g4f.models.default,
@@ -782,7 +758,6 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
                 await update.message.reply_text("💡 شكراً لسؤالك! لقد استلمت استفسارك وسيقوم الدكتور بالرد عليك فوراً.")
             except:
                 await update.message.reply_text("⚠️ المعذرة، هناك ضغط حالياً. يرجى المحاولة لاحقاً.")
-
 
 # --------------------------------------------------------------------------
 
