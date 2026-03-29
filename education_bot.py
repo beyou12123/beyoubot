@@ -347,17 +347,38 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
         # 7. الخطوة 5: استلام يوزر المدرب والبحث التلقائي
         elif action == 'awaiting_crs_coach':
             coach_username = text.strip().replace("@", "")
-            try:
-                coach_chat = await context.bot.get_chat(f"@{coach_username}")
-                context.user_data['temp_crs']['coach_user'] = f"@{coach_username}"
-                context.user_data['temp_crs']['coach_id'] = coach_chat.id
-                context.user_data['temp_crs']['coach_name'] = coach_chat.full_name
-                
+            from sheets import find_user_by_username
+            
+            # أولاً: البحث في قاعدة بياناتنا (الشيت) - هذا هو الأضمن
+            user_data = find_user_by_username(bot_token, coach_username)
+            
+            if user_data:
+                context.user_data['temp_crs'].update({
+                    'coach_user': f"@{coach_username}",
+                    'coach_id': user_data['id'],
+                    'coach_name': user_data['name']
+                })
                 context.user_data['action'] = 'awaiting_crs_date'
-                await update.message.reply_text(f"✅ تم العثور على المدرب: {coach_chat.full_name}\n🆔 معرفه: {coach_chat.id}\n\n🗓 **الخطوة 6:** أرسل تاريخ بداية الدورة (مثال: 2026-04-01):")
-            except Exception:
-                await update.message.reply_text("❌ لم أستطع العثور على هذا اليوزر. تأكد من صحته أو اطلب من المدرب مراسلة البوت أولاً.")
+                await update.message.reply_text(f"✅ تم العثور على المدرب في القاعدة: {user_data['name']}\n\n🗓 **الخطوة 6:** أرسل تاريخ بداية الدورة:")
+            else:
+                # ثانياً: محاولة أخيرة عبر تليجرام إذا لم يكن في الشيت
+                try:
+                    coach_chat = await context.bot.get_chat(f"@{coach_username}")
+                    context.user_data['temp_crs'].update({
+                        'coach_user': f"@{coach_username}",
+                        'coach_id': coach_chat.id,
+                        'coach_name': coach_chat.full_name
+                    })
+                    context.user_data['action'] = 'awaiting_crs_date'
+                    await update.message.reply_text(f"✅ تم العثور عبر تليجرام: {coach_chat.full_name}\n\n🗓 **الخطوة 6:** أرسل تاريخ البداية:")
+                except Exception:
+                    await update.message.reply_text(
+                        "❌ **فشل العثور على المدرب!**\n\n"
+                        "يرجى التأكد من أن المدرب @T0T010 قد ضغط على Start في البوت "
+                        "أو أرسل لي **ID المدرب** الرقمي مباشرة الآن بدلاً من اليوزر."
+                    )
             return
+
 
         # 8. الخطوة 6: مراجعة البيانات وعرض التأكيد النهائي
         elif action == 'awaiting_crs_date':
