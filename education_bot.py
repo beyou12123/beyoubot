@@ -1,9 +1,22 @@
 import logging
 import re
 import uuid
+import g4f  # لضمان عمل المحرك المجاني الذي اعتمدناه
 import google.generativeai as genai
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Bot, ChatMember
-from telegram.ext import ContextTypes, ChatMemberHandler
+from telegram.ext import (
+    ApplicationBuilder, 
+    ContextTypes, 
+    ChatMemberHandler, 
+    CommandHandler,      # ضروري لأمر /start
+    CallbackQueryHandler, # ضروري لعمل الأزرار
+    MessageHandler, 
+    filters
+)
+
+# --- [ ذاكرة المحادثات المؤقتة للطلاب ] ---
+user_messages = {} 
+
 from sheets import (
     get_bot_config, 
     add_log_entry, 
@@ -481,18 +494,29 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 # --------------------------------------------------------------------------
 # --- [ معالج الرسائل النصية (Message Handler) ] ---
 # --------------------------------------------------------------------------
+# ملاحظة هامة: يجب أن يكون السطر التالي في أعلى الملف تماماً خارج كل الدوال:
+# user_messages = {} 
+
 async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """معالجة كافة الرسائل النصية والربط مع محرك g4f لخدمة الطلاب مع بقاء مهام المسؤول كاملة"""
-    import uuid  # لضمان عمل توليد المعرفات للأقسام والدورات
-    import g4f   # استخدام المحرك المجاني المعتمد
+   
+    
     if not update.message or not update.message.text: return
     
     # تنظيف النص من المسافات فور وصوله
     text = update.message.text.strip()
     user = update.effective_user
     bot_token = context.bot.token
-    config = get_bot_config(bot_token)
-    bot_owner_id = int(config.get("admin_ids", 0))
+    
+    # محاولة جلب الإعدادات ومعرف المسؤول
+    try:
+        from sheets import get_bot_config
+        config = get_bot_config(bot_token)
+        bot_owner_id = int(config.get("admin_ids", 0))
+    except Exception as e:
+        print(f"⚠️ Error getting config: {e}")
+        bot_owner_id = 0 # قيمة افتراضية في حال فشل الجلب
+        
     action = context.user_data.get('action')
 
     # --- [ الجزء الخاص بالمسؤول - إدارة المحتوى والدورات ] ---
@@ -663,10 +687,15 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
                 await update.message.reply_text(response)
                 return
 
-        # 2. إدارة ذاكرة المحادثة (القاموس العالمي user_messages يجب أن يُعرف خارج الدالة)
+        # 2. إدارة ذاكرة المحادثة
+        # نستخدم القاموس العالمي المعرف خارج الدالة
         global user_messages
-        if user.id not in user_messages:
-            user_messages[user.id] = []
+        # محاولة الوصول للقاموس، إذا لم يكن موجوداً ننشئه لتفادي تعليق البوت
+        try:
+            if user.id not in user_messages:
+                user_messages[user.id] = []
+        except NameError:
+            user_messages = {user.id: []}
 
         # جلب البيانات من الشيت لتغذية المحرك
         from sheets import get_all_courses_for_ai
@@ -691,31 +720,66 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
         await update.message.reply_chat_action("typing")
 
         try:
-            # طلب الرد من g4f بشكل غير متزامن
+            # 1. تحديد مزود (Provider) مستقر لضمان عدم التعليق
+            # جرب DuckDuckGo أو Bing لأنهما الأكثر استقراراً حالياً
             response = await g4f.ChatCompletion.create_async(
                 model=g4f.models.default,
+                provider=g4f.Provider.DuckDuckGo, 
                 messages=messages_to_send,
             )
 
-            if response:
+            if response and len(response) > 0:
                 # إضافة رد البوت للذاكرة
                 user_messages[user.id].append({"role": "assistant", "content": response})
-                await update.message.reply_text(response, parse_mode="Markdown")
+                # استخدام MarkdownV2 أو نص عادي لتجنب أخطاء التنسيق التي قد تمنع الإرسال
+                await update.message.reply_text(response)
                 return
             else:
                 raise Exception("Empty g4f Response")
             
         except Exception as e:
-            # في حال فشل المحرك المجاني، نعتمد نظام التوجيه للأدمن كخطة بديلة
+            # في حال فشل المحرك تماماً، يرسل للأدمن فوراً (الخطة البديلة)
+            print(f"❌ g4f Error: {e}")
             info = f"📩 <b>استفسار جديد من طالب:</b>\nالاسم: {user.full_name}\nالرسالة: {text}"
             try:
                 await context.bot.send_message(chat_id=bot_owner_id, text=info, parse_mode="HTML")
                 await update.message.reply_text("💡 شكراً لسؤالك! لقد استلمت استفسارك وسيقوم الدكتور بالرد عليك فوراً.")
-            except:
+            except Exception as send_err:
+                print(f"❌ Failed to notify admin: {send_err}")
                 await update.message.reply_text("⚠️ المعذرة، هناك ضغط حالياً. يرجى المحاولة لاحقاً.")
 
 # --------------------------------------------------------------------------
 
 
+# --------------------------------------------------------------------------
 
 
+# 1. تأكد من وجود هذا السطر في أعلى الملف (خارج كل الدوال) كما طلبت
+
+
+def main():
+    """تشغيل البوت وربط كافة المعالجات"""
+    # ضع التوكن الخاص ببوتك هنا
+    TOKEN = "YOUR_BOT_TOKEN_HERE" 
+    
+    # بناء التطبيق
+    application = ApplicationBuilder().token(TOKEN).build()
+
+    # --- [ ربط الأوامر ] ---
+    application.add_handler(CommandHandler("start", start_handler))
+
+    # --- [ ربط ضغطات الأزرار ] ---
+    application.add_handler(CallbackQueryHandler(contact_callback_handler))
+
+    # --- [ ربط الرسائل النصية (الذكاء الاصطناعي + إدارة المسؤول) ] ---
+    # ملاحظة: هذا المعالج يجب أن يكون الأخير لضمان عدم تداخله مع الأوامر
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_contact_message))
+
+    # تشغيل البوت بنظام التحديث المستمر
+    print("🚀 البوت يعمل الآن.. في انتظار رسائل الطلاب...")
+    application.run_polling()
+
+if __name__ == '__main__':
+    main()
+
+# --------------------------------------------------------------------------
