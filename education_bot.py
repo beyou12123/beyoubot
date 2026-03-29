@@ -58,30 +58,50 @@ def get_admin_panel():
 # --- [ المعالجات الأساسية - أمر البداية ] ---
 
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """معالجة أمر /start وتسجيل المستخدم وعرض القائمة المناسبة"""
+    """معالجة أمر /start برسائل ترحيبية ذكية يحددها المسؤول حسب الوقت"""
+    from datetime import datetime
     user = update.effective_user
     bot_token = context.bot.token
+    
+    # جلب كافة الإعدادات من جوجل شيت
     config = get_bot_config(bot_token)
     bot_owner_id = int(config.get("admin_ids", 0))
 
-    # تسجيل الطالب في قاعدة البيانات (Google Sheets)
+    # تسجيل المستخدم في القاعدة
     save_user(user.id, user.username)
 
+    # --- [ محرك اختيار الكليشة الذكي ] ---
+    hour = datetime.now().hour
+    
+    # تحديد الفترة وجلب النص المخصص من الشيت (مع نص افتراضي في حال كان العمود فارغاً)
+    if 5 <= hour < 12:
+        msg = config.get("welcome_morning", "صباح العلم والهمة.. أي مهارة سنبني اليوم؟")
+    elif 12 <= hour < 17:
+        msg = config.get("welcome_noon", "طاب يومك.. الاستمرارية هي سر النجاح، لنكمل التعلم.")
+    elif 17 <= hour < 22:
+        msg = config.get("welcome_evening", "مساء الفكر المستنير.. حان وقت الحصاد المعرفي.")
+    else:
+        msg = config.get("welcome_night", "أهلاً بالمثابر.. العظماء يصنعون مستقبلهم في هدوء الليل.")
+
+    # --- [ إرسال الواجهة المناسبة ] ---
     if user.id == bot_owner_id:
-        # واجهة المسؤول
+        # واجهة الدكتور (المسؤول)
         await update.message.reply_text(
-            f"<b>مرحباً بك يا دكتور {user.first_name} في لوحة تحكم منصتك</b> 🎓\n\nيمكنك إدارة الطلاب، الدورات، والمبيعات من هنا:",
+            f"<b>مرحباً بك يا دكتور {user.first_name} في مركز قيادة منصتك</b> 🎓\n\n"
+            f"{msg}\n\n"
+            f"يمكنك إدارة كافة مفاصل المنصة من الأزرار أدناه:",
             reply_markup=get_admin_panel(),
             parse_mode="HTML"
         )
     else:
         # واجهة الطالب
-        welcome_msg = config.get("الرسالة الترحيبية", "مرحباً بك في المنصة التعليمية! ابدأ رحلة تعلمك الآن.")
         await update.message.reply_text(
-            f"<b>{welcome_msg}</b>",
+            f"<b>{msg}</b>",
             reply_markup=get_student_menu(),
             parse_mode="HTML"
         )
+
+
 
 # --------------------------------------------------------------------------
 # --- [ معالج ضغطات الأزرار (Callback Query Handler) ] ---
@@ -389,6 +409,30 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         await query.edit_message_text("📡 <b>الإذاعة الذكية:</b>", 
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📢 للكل", callback_data="bc_all"), InlineKeyboardButton("🎓 لمشتركي دورة", callback_data="bc_course")]]), parse_mode="HTML")
 
+    # --- [ إعدادات الكليشات الذكية ] ---
+    elif data == "tech_settings":
+        keyboard = [
+            [InlineKeyboardButton("📝 كليشة الترحيب الذكية", callback_data="manage_welcome_texts")],
+            [InlineKeyboardButton("🔙 عودة", callback_data="back_to_admin")]
+        ]
+        await query.edit_message_text("🛠 <b>الإعدادات التقنية:</b>\nتحكم في نصوص النظام والترحيب الذكي من هنا.", 
+                                      reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+    elif data == "manage_welcome_texts":
+        keyboard = [
+            [InlineKeyboardButton("🌅 الصباحية", callback_data="edit_welcome_morning"), InlineKeyboardButton("☀️ الظهرية", callback_data="edit_welcome_noon")],
+            [InlineKeyboardButton("🌆 المسائية", callback_data="edit_welcome_evening"), InlineKeyboardButton("🌃 الليلية", callback_data="edit_welcome_night")],
+            [InlineKeyboardButton("🔙 عودة", callback_data="tech_settings")]
+        ]
+        await query.edit_message_text("🖼 <b>تعديل كليشات الترحيب:</b>\nاختر الفترة التي تريد تغيير رسالتها:", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+    elif data.startswith("edit_welcome_"):
+        period = data.replace("edit_welcome_", "")
+        context.user_data['edit_period'] = period
+        context.user_data['action'] = 'awaiting_new_welcome_text'
+        periods_ar = {"morning": "الصباحية", "noon": "الظهرية", "evening": "المسائية", "night": "الليلية"}
+        await query.edit_message_text(f"✍️ <b>تعديل الرسالة {periods_ar[period]}:</b>\n\nأرسل الآن النص الجديد (يمكنك استخدام HTML):")
+
     elif data == "close_panel":
         await query.edit_message_text("🔒 تم إغلاق لوحة التحكم.")
 
@@ -548,6 +592,20 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
             keyboard = [[InlineKeyboardButton("✅ نعم، احفظ", callback_data="confirm_save_coach")], [InlineKeyboardButton("❌ إلغاء", callback_data="manage_coaches")]]
             await update.message.reply_text(summary, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
             context.user_data['action'] = None
+            return
+
+
+        # --- [ حفظ كليشة الترحيب الجديدة ] ---
+        elif action == 'awaiting_new_welcome_text':
+            period = context.user_data.get('edit_period')
+            column_name = f"welcome_{period}" # سيتم الحفظ في أعمدة مخصصة في الشيت
+            from sheets import update_content_setting
+            
+            if update_content_setting(bot_token, column_name, text):
+                await update.message.reply_text(f"✅ تم تحديث كليشة الترحيب <b>({period})</b> بنجاح!", reply_markup=get_admin_panel(), parse_mode="HTML")
+                context.user_data['action'] = None
+            else:
+                await update.message.reply_text("❌ فشل التحديث. تأكد من إضافة الأعمدة (welcome_morning, welcome_noon, etc) في شيت إعدادات المحتوى.")
             return
 
     # الجزء الخاص بالطلاب والردود التلقائية
