@@ -496,10 +496,8 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 # --------------------------------------------------------------------------
 # ملاحظة هامة: يجب أن يكون السطر التالي في أعلى الملف تماماً خارج كل الدوال:
 # user_messages = {} 
-
 async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """معالجة كافة الرسائل النصية والربط مع محرك g4f لخدمة الطلاب مع بقاء مهام المسؤول كاملة"""
-   
     
     if not update.message or not update.message.text: return
     
@@ -508,7 +506,7 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
     user = update.effective_user
     bot_token = context.bot.token
     
-    # محاولة جلب الإعدادات ومعرف المسؤول
+    # محاولة جلب الإعدادات ومعرف المسؤول من الشيت
     try:
         from sheets import get_bot_config
         config = get_bot_config(bot_token)
@@ -523,6 +521,7 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
     if user.id == bot_owner_id:
         # إضافة قسم جديد
         if action == 'awaiting_cat_name':
+            import uuid
             cat_id = f"C{str(uuid.uuid4().int)[:4]}"
             from sheets import add_new_category
             if add_new_category(bot_token, cat_id, text):
@@ -541,6 +540,7 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
 
         # إضافة دورة بسيطة
         elif action == 'awaiting_course_name':
+            import uuid
             course_cat = context.user_data.get('temp_course_cat')
             course_id = f"CRS{str(uuid.uuid4().int)[:4]}"
             from sheets import add_new_course
@@ -673,10 +673,8 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
             else:
                 await update.message.reply_text("❌ فشل التحديث. تأكد من إضافة الأعمدة المطلوبة.")
             return
-# --------------------------------------------------------------------------
+
     # --- [ الجزء الخاص بالطلاب والردود التفاعلية باستخدام g4f والذاكرة ] ---
-    # --- [ الجزء الخاص بالطلاب والردود التفاعلية ] ---
-    # --- [ الجزء الخاص بالطلاب والردود التفاعلية باستخدام g4f فقط ] ---
     if user.id != bot_owner_id:
         # 1. فحص الكلمات المفتاحية (FAQ) لسرعة الرد
         faq_keywords = {
@@ -689,34 +687,35 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
                 await update.message.reply_text(response)
                 return
 
-        # 2. إدارة ذاكرة المحادثة وجلب البيانات
+        # 2. إدارة ذاكرة المحادثة وجلب البيانات من الشيت
         global user_messages
         if user.id not in user_messages:
             user_messages[user.id] = []
 
-        # استيراد وجلب قاعدة المعرفة من الشيت (التأكد من المحاذاة)
+        # جلب البيانات من الشيت لتغذية المحرك (تم تصحيح المحاذاة ومنع التكرار)
         from sheets import get_courses_knowledge_base
         courses_knowledge = get_courses_knowledge_base(bot_token)
         
-        # إضافة رسالة الطالب للذاكرة
+        # إضافة رسالة الطالب للذاكرة (مرة واحدة فقط)
         user_messages[user.id].append({"role": "user", "content": text})
 
-        # بناء السياق للرد من g4f
+        # بناء سياق المحادثة الكامل مع التعليمات (آخر 6 رسائل للحفاظ على السياق)
         messages_to_send = [
             {
                 "role": "system", 
                 "content": (
                     f"أنت المساعد الذكي الرسمي لمنصة الدكتور التعليمية. "
-                    f"إليك معلومات الدورات المتاحة:\n{courses_knowledge}\n\n"
-                    f"أجب بذكاء ولباقة واستخدم الرموز التعبيرية 🎓."
+                    f"إليك معلومات الدورات المتاحة حالياً:\n{courses_knowledge}\n\n"
+                    f"أجب بذكاء ولباقة واستخدم الرموز التعبيرية 🎓. "
+                    f"اعتمد على البيانات المقدمة فقط في الرد على الدورات."
                 )
             }
-        ] + user_messages[user.id][-6:] # آخر 6 رسائل فقط
+        ] + user_messages[user.id][-6:] 
 
         await update.message.reply_chat_action("typing")
 
         try:
-            # استخدام g4f بشكل مباشر مع مزود سريع
+            # استخدام g4f مع مزود DuckDuckGo لضمان الاستقرار
             response = await g4f.ChatCompletion.create_async(
                 model=g4f.models.default,
                 provider=g4f.Provider.DuckDuckGo, 
@@ -724,7 +723,7 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
             )
 
             if response and len(response) > 0:
-                # إضافة رد البوت للذاكرة وإرساله
+                # إضافة رد البوت للذاكرة
                 user_messages[user.id].append({"role": "assistant", "content": response})
                 await update.message.reply_text(response)
                 return
@@ -732,23 +731,21 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
                 raise Exception("Empty g4f Response")
             
         except Exception as e:
-            print(f"❌ g4f Error: {e}")
-            # الخطة البديلة: إرسال تنبيه للدكتور (الأدمن)
-            info = f"📩 <b>استفسار جديد (فشل g4f):</b>\nالاسم: {user.full_name}\nالرسالة: {text}"
+            # الخطة البديلة عند فشل المحرك تماماً
+            print(f"❌ AI Error: {e}")
+            info = f"📩 <b>استفسار طالب (فشل الـ AI):</b>\nالاسم: {user.full_name}\nالرسالة: {text}"
             try:
                 await context.bot.send_message(chat_id=bot_owner_id, text=info, parse_mode="HTML")
-                await update.message.reply_text("💡 شكراً لسؤالك! لقد استلمت استفسارك وسيقوم الدكتور بالرد عليك فوراً.")
+                await update.message.reply_text("💡 شكراً لسؤالك! لقد استلمت استفسارك وسيتم الرد عليك قريباً.")
             except Exception as send_err:
+                print(f"❌ Failed to notify admin: {send_err}")
                 await update.message.reply_text("⚠️ المعذرة، هناك ضغط حالياً. يرجى المحاولة لاحقاً.")
 
-# --------------------------------------------------------------------------
-
 
 # --------------------------------------------------------------------------
 
 
-# 1. تأكد من وجود هذا السطر في أعلى الملف (خارج كل الدوال) كما طلبت
-
+# --------------------------------------------------------------------------
 
 
 # --------------------------------------------------------------------------
