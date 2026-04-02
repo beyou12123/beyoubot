@@ -1416,16 +1416,21 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
 # --------------------------------------------------------------------------
 
 # --------------------------------------------------------------------------
-def main():
-    TOKEN = "TOKEN_HERE" 
-    application = ApplicationBuilder().token(TOKEN).build()
+
+# --- [ محرك التشغيل المتوافق مع المصنع ] ---
+
+async def run_bot(token, owner_id):
+    """هذه الدالة هي التي يستدعيها ملف main.py لتشغيل البوت ديناميكياً"""
+    application = ApplicationBuilder().token(token).build()
+    
+    # إضافة المعالجات (Handlers)
     application.add_handler(CommandHandler("start", start_handler))
     application.add_handler(CallbackQueryHandler(contact_callback_handler))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_contact_message))
-    application.run_polling()
-
-if __name__ == '__main__':
-    main()
-
+    
+    # بدء الاستماع للرسائل
+    await application.initialize()
+    await application.start()
+    await application.updater.start_polling()
 
 # --------------------------------------------------------------------------
