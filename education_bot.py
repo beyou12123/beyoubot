@@ -33,6 +33,7 @@ from sheets import (
     delete_course_by_id
 )
 
+from educational_manager import manage_groups_main
 
 # إعداد المفتاح الذي حصلت عليه
 genai.configure(api_key="AIzaSyCkpHbxvjZNqN_PT8O1yXUAIG-dMAGZj2Y")
@@ -182,6 +183,31 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         ]), 
         parse_mode="HTML"
     )
+# --------------------------------------------------------------------------
+    # إضافة هذا القسم للتعامل مع زر إدارة المجموعات
+    elif data == "manage_group":
+        # بما أن إدارة المجموعات تتطلب معرفة الدورة، سنعرض قائمة الدورات أولاً لاختيار واحدة
+        from sheets import courses_sheet
+        all_courses = courses_sheet.get_all_records()
+        bot_courses = [c for c in all_courses if str(c.get('bot_id')) == str(bot_token)]
+        
+        if not bot_courses:
+            await query.edit_message_text("⚠️ لا توجد دورات مضافة حالياً لإنشاء مجموعات لها.")
+            return
+
+        keyboard = [[InlineKeyboardButton(f"📖 {c['اسم_الدورة']}", callback_data=f"sel_course_groups_{c['معرف_الدورة']}")] for c in bot_courses]
+        keyboard.append([InlineKeyboardButton("🔙 عودة", callback_data="manage_educational")])
+        
+        await query.edit_message_text("🎯 **اختر الدورة المراد إدارة مجموعاتها:**", reply_markup=InlineKeyboardMarkup(keyboard))
+
+    # معالجة اختيار الدورة للانتقال لملف المجموعات
+    elif data.startswith("sel_course_groups_"):
+        course_id = data.replace("sel_course_groups_", "")
+        from educational_manager import manage_groups_main
+        await manage_groups_main(update, context, course_id)
+
+
+
 
 # --------------------------------------------------------------------------
     # --- 3. إدارة شؤون المدربين ---
@@ -555,6 +581,10 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
     elif data == "smart_broadcast":
         await query.edit_message_text("📡 <b>الإذاعة الذكية:</b>", 
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📢 للكل", callback_data="bc_all"), InlineKeyboardButton("🎓 لمشتركي دورة", callback_data="bc_course")]]), parse_mode="HTML")
+
+
+
+
 
     # --- [ إعدادات الكليشات الذكية ] ---
     elif data == "tech_settings":
