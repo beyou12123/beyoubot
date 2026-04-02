@@ -588,41 +588,39 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 #قسم الأزرار الاضافية الجديدة 
     elif data == "manage_educational":
         await query.edit_message_text(
-          "👨‍🏫 <b>إدارة الشؤون التعليمية :</b>\nيمكنك إضافة مدربين جدد دورات جديدة او اقسام او مجموعات أو استعراض القائمة الحالية للحذف.",
+            "👨‍🏫 <b>إدارة الشؤون التعليمية :</b>\nيمكنك إضافة مدربين جدد دورات جديدة او اقسام او مجموعات أو استعراض القائمة الحالية للحذف.",
             reply_markup=InlineKeyboardMarkup([
-               [InlineKeyboardButton("📁 إدارة الأقسام", callback_data="manage_cats"),InlineKeyboardButton("📚 إدارة الدورات", callback_data="manage_courses")],
-               [InlineKeyboardButton("المكتبة الشاملة", callback_data="manage_library"), InlineKeyboardButton("الأوسمة والإنجازات", callback_data="honors_achievements")],
-               [InlineKeyboardButton("إدارة المجموعات", callback_data="manage_group"),InlineKeyboardButton("الأسئلة الشائعة", callback_data="frequently_guestions")],
-               [InlineKeyboardButton("جداول المحاضرات", callback_data="schedules_lectures"), InlineKeyboardButton("أكواد الخصم", callback_data="frequently_guestions")],
-               [InlineKeyboardButton("الإدارة المالية", callback_data="manage_financial"), InlineKeyboardButton("إدارة الفروع", callback_data="manage_branches")],
-               [InlineKeyboardButton("🎟 الكوبونات", callback_data="manage_coupons"),InlineKeyboardButton("📢 الإعلانات", callback_data="manage_ads")],
-               [InlineKeyboardButton("الكنترول", callback_data="manage_control")], 
-                [InlineKeyboardButton("المهام الإدارية", callback_data="administrative_tasks"),InlineKeyboardButton("🔙 عودة", callback_data="manage_educational")]
-              ]), parse_mode="HTML"
-               )
-               
+                [InlineKeyboardButton("📁 إدارة الأقسام", callback_data="manage_cats"), InlineKeyboardButton("📚 إدارة الدورات", callback_data="manage_courses")],
+                [InlineKeyboardButton("المكتبة الشاملة", callback_data="manage_library"), InlineKeyboardButton("الأوسمة والإنجازات", callback_data="honors_achievements")],
+                [InlineKeyboardButton("إدارة المجموعات", callback_data="manage_group"), InlineKeyboardButton("الأسئلة الشائعة", callback_data="frequently_guestions")],
+                [InlineKeyboardButton("جداول المحاضرات", callback_data="schedules_lectures"), InlineKeyboardButton("أكواد الخصم", callback_data="frequently_guestions")],
+                [InlineKeyboardButton("الإدارة المالية", callback_data="manage_financial"), InlineKeyboardButton("إدارة الفروع", callback_data="manage_branches")],
+                [InlineKeyboardButton("🎟 الكوبونات", callback_data="manage_coupons"), InlineKeyboardButton("📢 الإعلانات", callback_data="manage_ads")],
+                [InlineKeyboardButton("الكنترول", callback_data="manage_control")],
+                [InlineKeyboardButton("المهام الإدارية", callback_data="administrative_tasks"), InlineKeyboardButton("🔙 عودة", callback_data="back_to_admin")]
+            ]), parse_mode="HTML"
+        )
+
     elif data == "manage_control":
         await query.edit_message_text(
-        "ادارة الكنترول التعليمي  </b>\n يمكنك التحكم الكامل ب <b> كل الازار اداناه", 
+            "<b>ادارة الكنترول التعليمي</b>\nيمكنك التحكم الكامل بكل الأزرار أدناه:",
             reply_markup=InlineKeyboardMarkup([
-               [InlineKeyboardButton("إدارة الاختبارات", callback_data="manage_tests"), InlineKeyboardButton("إدارة الواجبات", callback_data="manage_homework")],
-               [InlineKeyboardButton("بنك الأسئلة", callback_data="question_bank"),InlineKeyboardButton("الأرشيف", callback_data="manage_archive")], 
+                [InlineKeyboardButton("إدارة الاختبارات", callback_data="manage_tests"), InlineKeyboardButton("إدارة الواجبات", callback_data="manage_homework")],
+                [InlineKeyboardButton("بنك الأسئلة", callback_data="question_bank"), InlineKeyboardButton("الأرشيف", callback_data="manage_archive")],
                 [InlineKeyboardButton("🔙 عودة", callback_data="manage_educational")]
-              ]), parse_mode="HTML"
-               )      
-
+            ]), parse_mode="HTML"
+        )
 
     elif data == "administrative_tasks":
         await query.edit_message_text(
-        "اهلا في إدارة المهام الإدارية يمكنك إضافة المهام الفردية والجماعية الى كافاة الموظفين او المدربين بشكل جماعي او فردي او لمجموعة محددة", 
+            "أهلاً في إدارة المهام الإدارية، يمكنك إضافة المهام الفردية والجماعية إلى كافة الموظفين أو المدربين.",
             reply_markup=InlineKeyboardMarkup([
-               [[InlineKeyboardButton("➕ إضافة مهمة فردية", callback_data="single_missions"), InlineKeyboardButton("إ➕ إضافة مهمة لمجموعة ", callback_data="single_group")],
-               [InlineKeyboardButton("➕ إضافة مهمة لدورة ", callback_data="single_course"),InlineKeyboardButton("➕ إضافة مهمة جماعية", callback_data="single_all")], 
-               [InlineKeyboardButton("عرض جميع المهام", callback_data="single_show")], 
-               [InlineKeyboardButton("المهام الإدارية", callback_data="administrative_tasks"),InlineKeyboardButton("🔙 عودة", callback_data="manage_educational")]
-               ]), parse_mode="HTML"
-               )      
-
+                [InlineKeyboardButton("➕ إضافة مهمة فردية", callback_data="single_missions"), InlineKeyboardButton("➕ إضافة مهمة لمجموعة", callback_data="single_group")],
+                [InlineKeyboardButton("➕ إضافة مهمة لدورة", callback_data="single_course"), InlineKeyboardButton("➕ إضافة مهمة جماعية", callback_data="single_all")],
+                [InlineKeyboardButton("عرض جميع المهام", callback_data="single_show")],
+                [InlineKeyboardButton("🔙 عودة", callback_data="manage_educational")]
+            ]), parse_mode="HTML"
+        )
 
                
 # --------------------------------------------------------------------------
