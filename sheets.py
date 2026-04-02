@@ -704,7 +704,7 @@ def check_user_permission(bot_token, user_id, permission_col):
         return False
 
  
- def toggle_scope_id(bot_token, employee_id, scope_column, target_id):
+def toggle_scope_id(bot_token, employee_id, scope_column, target_id):
     """
     إضافة أو حذف ID (دورة أو مجموعة) من قائمة الموظف
     scope_column: "الدورات_المسموحة" أو "المجموعات_المسموحة"
@@ -733,6 +733,7 @@ def check_user_permission(bot_token, user_id, permission_col):
     except Exception as e:
         print(f"❌ خطأ في تحديث النطاق: {e}")
         return False
+
 
 def check_access(bot_token, user_id, permission_col, target_id=None, scope_type=None):
     """
