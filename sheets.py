@@ -681,7 +681,7 @@ def toggle_employee_permission(bot_token, employee_id, col_name):
         return "FALSE"
  
  
- def check_user_permission(bot_token, user_id, permission_col):
+def check_user_permission(bot_token, user_id, permission_col):
     """
     التحقق مما إذا كان المستخدم لديه صلاحية محددة.
     يعيد True إذا كان المالك أو موظفاً لديه صلاحية TRUE.
