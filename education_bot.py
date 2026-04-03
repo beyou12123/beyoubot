@@ -144,7 +144,63 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
     bot_owner_id = int(config.get("admin_ids", 0))
 
     await query.answer()
+# --------------------------------------------------------------------------
+    # 1. معالجة جداول المحاضرات
+    elif data == "schedules_lectures":
+        from educational_manager import show_lectures_logic
+        await show_lectures_logic(update, context)
+        
+    # 2. فتح لوحة إدارة أكواد الخصم الرئيسية
+    elif data == "discount_codes":
+        from educational_manager import show_discount_codes_logic
+        await show_discount_codes_logic(update, context)
 
+    # 3. زر "إضافة كود جديد" (هذا الزر كان مفقوداً في ملفك)
+    elif data == "add_discount_start":
+        from educational_manager import add_discount_start
+        await add_discount_start(update, context)
+
+    # 4. معالجة خطوات التحقق من الدورة والاستمرار
+    elif data.startswith("dsc_check_"):
+        course_id = data.replace("dsc_check_", "")
+        from educational_manager import process_dsc_check
+        await process_dsc_check(update, context, course_id)
+        
+    elif data == "dsc_continue":
+        from educational_manager import process_dsc_ask_desc
+        await process_dsc_ask_desc(update, context)
+
+    # 5. عرض وإدارة الأكواد للمالك
+    elif data == "list_all_discounts":
+        from educational_manager import list_all_discounts_ui
+        await list_all_discounts_ui(update, context)
+
+    # 6. عرض تفاصيل كود محدد
+    elif data.startswith("view_disc_"):
+        disc_id = data.replace("view_disc_", "")
+        from educational_manager import view_discount_details_ui
+        await view_discount_details_ui(update, context, disc_id)
+
+    # 7. معالج حذف الكود
+    elif data.startswith("confirm_del_disc_"):
+        disc_id = data.replace("confirm_del_disc_", "")
+        from sheets import ss
+        sheet = ss.worksheet("أكواد_الخصم")
+        try:
+            cell = sheet.find(disc_id, in_column=3)
+            if cell:
+                sheet.delete_rows(cell.row)
+                await query.answer("✅ تم حذف كود الخصم بنجاح!", show_alert=True)
+                from educational_manager import list_all_discounts_ui
+                await list_all_discounts_ui(update, context)
+        except:
+            await query.answer("❌ فشل الحذف.", show_alert=True)
+
+    # 8. زر العودة للقائمة الرئيسية (كان مفقوداً أيضاً)
+    elif data == "main_menu":
+        await start_handler(update, context)
+
+# --------------------------------------------------------------------------
     # --- 1. إدارة الإحصائيات ---
     if data == "admin_stats":
         total_students = get_bot_users_count(bot_token)
@@ -667,52 +723,6 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             ]), parse_mode="HTML"
         )
 # --------------------------------------------------------------------------
-#قسم جدول المحاضرات 
-    # داخل دالة معالجة الأزرار في education_bot.py
-    elif data.startswith("dsc_check_"):
-        course_id = data.replace("dsc_check_", "")
-        from educational_manager import process_dsc_check
-        await process_dsc_check(update, context, course_id)
-        
-    elif data == "dsc_continue":
-        from educational_manager import process_dsc_ask_desc
-        await process_dsc_ask_desc(update, context)
-
-
-# ------------------------------------------------------
-    # 1. معالجة جداول المحاضرات
-    elif data == "schedules_lectures":
-        from educational_manager import show_lectures_logic
-        await show_lectures_logic(update, context)
-        
-    # 2. معالجة فتح لوحة أكواد الخصم (مرة واحدة فقط)
-    elif data == "discount_codes":
-        from educational_manager import show_discount_codes_logic
-        await show_discount_codes_logic(update, context)
-
-    # 3. معالجات المالك المضافة مؤخراً (العرض والتفاصيل والحذف)
-    elif data == "list_all_discounts":
-        from educational_manager import list_all_discounts_ui
-        await list_all_discounts_ui(update, context)
-
-    elif data.startswith("view_disc_"):
-        disc_id = data.replace("view_disc_", "")
-        from educational_manager import view_discount_details_ui
-        await view_discount_details_ui(update, context, disc_id)
-
-    elif data.startswith("confirm_del_disc_"):
-        disc_id = data.replace("confirm_del_disc_", "")
-        from sheets import ss
-        sheet = ss.worksheet("أكواد_الخصم")
-        try:
-            cell = sheet.find(disc_id, in_column=3)
-            if cell:
-                sheet.delete_rows(cell.row)
-                await query.answer("✅ تم حذف كود الخصم بنجاح!", show_alert=True)
-                from educational_manager import list_all_discounts_ui
-                await list_all_discounts_ui(update, context)
-        except:
-            await query.answer("❌ فشل الحذف، قد يكون الكود غير موجود.", show_alert=True)
 
 # --------------------------------------------------------------------------
     # --- [ قسم إدارة الكنترول والاختبارات ] ---

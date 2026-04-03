@@ -1270,7 +1270,6 @@ def check_course_has_discount(bot_token, course_id):
         return None
     except: return None
 
-
 #حفظ كود الخصم 
 def save_discount_code_full(bot_token, data):
     """حفظ البيانات الـ 15 عموداً بدقة"""

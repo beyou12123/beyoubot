@@ -18,7 +18,6 @@ from sheets import (
     delete_group_by_id  # تم تصحيح الاسم هنا ليتطابق مع المحرك
 )
 
-
 async def manage_groups_main(update, context, course_id):
     """الواجهة الرئيسية لإدارة مجموعات دورة محددة"""
     query = update.callback_query
