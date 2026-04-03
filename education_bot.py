@@ -624,13 +624,14 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
     elif data == "tech_settings":
         keyboard = [
             [InlineKeyboardButton("📝 كليشة الترحيب الذكية", callback_data="manage_welcome_texts")],
-            [InlineKeyboardButton("👨‍🏫 إدارة المدربين", callback_data="manage_coaches"), InlineKeyboardButton("🤖 ضبط الـ AI", callback_data="setup_ai_start")],
-            [InlineKeyboardButton("👨‍🏫 إدارة الموظفين", callback_data="manage_personnel"), InlineKeyboardButton("إدارة الفروع", callback_data="manage_branches")],
+            [InlineKeyboardButton("👨‍🏫 إدارة المدربين", callback_data="manage_coaches"),InlineKeyboardButton("👨‍🏫 إدارة الموظفين", callback_data="manage_personnel")],
+            [InlineKeyboardButton("🤖 ضبط الـ AI", callback_data="setup_ai_start"),InlineKeyboardButton("إدارة الفروع", callback_data="manage_branches")],
             [InlineKeyboardButton("🎟 الكوبونات", callback_data="manage_coupons"),InlineKeyboardButton("📢 الإعلانات", callback_data="manage_ads")],
             [InlineKeyboardButton("الإدارة المالية", callback_data="manage_financial"), InlineKeyboardButton("إدارة الفروع", callback_data="manage_branches")],
             [InlineKeyboardButton("المهام الإدارية", callback_data="administrative_tasks"), InlineKeyboardButton("الكنترول", callback_data="manage_control")],
             [InlineKeyboardButton("📊  استيراد البيانات من ملف Excel", callback_data="excel_import_start")], 
-            [InlineKeyboardButton("الإدارة التعليمية", callback_data="manage_educational"),InlineKeyboardButton("🔙 عودة", callback_data="back_to_admin")]
+            [InlineKeyboardButton("الإدارة التعليمية", callback_data="manage_educational")],
+            [InlineKeyboardButton("🔙 عودة", callback_data="back_to_admin")]
             ]
         await query.edit_message_text("🛠 <b>الإعدادات التقنية:</b>\nتحكم في نصوص النظام والترحيب الذكي من هنا.", 
                                       reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
@@ -662,9 +663,21 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
                 [InlineKeyboardButton("الإدارة المالية", callback_data="manage_financial"), InlineKeyboardButton("إدارة الفروع", callback_data="manage_branches")],
                 [InlineKeyboardButton("🎟 الكوبونات", callback_data="manage_coupons"), InlineKeyboardButton("📢 الإعلانات", callback_data="manage_ads")],
                 [InlineKeyboardButton("الكنترول", callback_data="manage_control")],
-                [InlineKeyboardButton("المهام الإدارية", callback_data="administrative_tasks"), InlineKeyboardButton("🔙 عودة", callback_data="back_to_admin")]
+                [InlineKeyboardButton("المهام الإدارية", callback_data="administrative_tasks"), InlineKeyboardButton("🔙 عودة", callback_data="tech_settings")]
             ]), parse_mode="HTML"
         )
+# --------------------------------------------------------------------------
+#قسم جدول المحاضرات 
+    # داخل دالة معالجة الأزرار في education_bot.py
+    elif data == "schedules_lectures":
+        from educational_manager import show_lectures_logic
+        await show_lectures_logic(update, context)
+        
+    elif data == "frequently_guestions": # استخدام نفس الـ data التي اخترتها
+        from educational_manager import show_discount_codes_logic
+        await show_discount_codes_logic(update, context)
+
+
 # --------------------------------------------------------------------------
     # --- [ قسم إدارة الكنترول والاختبارات ] ---
     

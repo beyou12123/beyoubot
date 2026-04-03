@@ -8,8 +8,20 @@ from sheets import (
     get_groups_by_course, 
     add_new_group, 
     get_all_coaches, 
+    get_employee_allowed_courses,
+    get_employee_allowed_groups,
+    get_student_enrollment_data,
+    get_lectures_by_group,
+    get_active_discount_codes,
+    check_user_permission, # للتأكد من هوية الموظف
     delete_group_by_id  # تم تصحيح الاسم هنا ليتطابق مع المحرك
 )
+
+# أضف هذه الدوال لقائمة الاستيراد الموجودة في بداية الملف
+from sheets import (
+    
+)
+
 
 async def manage_groups_main(update, context, course_id):
     """الواجهة الرئيسية لإدارة مجموعات دورة محددة"""
@@ -415,8 +427,90 @@ async def quiz_gen_select_groups_ui(update, context, course_id):
 
 
 # --------------------------------------------------------------------------
+#جدول المحاضرات
+async def show_lectures_logic(update, context):
+    """المنطق الذكي لعرض المحاضرات بناءً على نوع المستخدم"""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    bot_token = context.bot.token
+    
+    # 1. محاولة جلب بيانات الطالب أولاً
+    student_data = get_student_enrollment_data(bot_token, user_id)
+    
+    if student_data:
+        # --- مسار الطالب: عرض الجدول المباشر ---
+        lectures = get_lectures_by_group(bot_token, student_data['group_id'])
+        
+        msg = (
+            f"<b>🗓 جدول محاضراتك يا {student_data['student_name']}</b>\n"
+            f"📚 الدورة: {student_data['course_name']}\n"
+            f"👥 المجموعة: {student_data['group_name']}\n"
+            f"---------------------------\n"
+        )
+        
+        keyboard = []
+        if lectures:
+            for lec in lectures:
+                msg += (
+                    f"🔹 <b>{lec.get('التاريخ')} ({lec.get('اليوم')})</b>\n"
+                    f"⏰ الوقت: {lec.get('وقت_البداية')} - {lec.get('وقت_النهاية')}\n"
+                    f"👨‍🏫 المدرب: {lec.get('اسم_المدرب')}\n"
+                    f"📝 ملاحظة: {lec.get('ملاحظات', '-')}\n\n"
+                )
+                # إضافة زر الانضمام إذا وجد رابط
+                if lec.get('رابط_الحصة') and str(lec.get('رابط_الحصة')).startswith('http'):
+                    keyboard.append([InlineKeyboardButton(f"🔗 انضم لمحاضرة {lec.get('التاريخ')}", url=lec.get('رابط_الحصة'))])
+        else:
+            msg += "⚠️ لا توجد محاضرات مجدولة حالياً لهذه المجموعة."
+            
+        keyboard.append([InlineKeyboardButton("🔙 العودة", callback_data="main_menu")])
+        await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+        
+    else:
+        # --- مسار الموظف: رحلة الاختيار بناءً على الصلاحيات ---
+        allowed_courses = get_employee_allowed_courses(bot_token, user_id)
+        
+        if allowed_courses:
+            keyboard = []
+            for course in allowed_courses:
+                keyboard.append([InlineKeyboardButton(f"📚 {course['name']}", callback_data=f"lec_course_{course['id']}")])
+            
+            keyboard.append([InlineKeyboardButton("🔙 العودة", callback_data="main_menu")])
+            await query.edit_message_text("⚙️ <b>لوحة الموظف:</b>\nيرجى اختيار الدورة لعرض مجموعاتها المسموحة:", 
+                                          reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+        else:
+            await query.answer("⚠️ عذراً، لا تملك صلاحيات لعرض الجداول أو لست مسجلاً كطالب.", show_alert=True)
+ 
+
+
+
 
 # --------------------------------------------------------------------------
+#دالة عرض اكود الخصم 
+async def show_discount_codes_logic(update, context):
+    """عرض كافة الأكواد النشطة للمستخدمين"""
+    query = update.callback_query
+    bot_token = context.bot.token
+    
+    codes = get_active_discount_codes(bot_token)
+    
+    msg = "<b>🎟 أكواد الخصم المتاحة حالياً:</b>\n\n"
+    if codes:
+        for c in codes:
+            msg += (
+                f"✅ الكود: <code>{c['code']}</code>\n"
+                f"💰 الخصم: <b>{c['value']}</b>\n"
+                f"📖 مخصص لـ: {c['course']}\n"
+                f"📅 ينتهي في: {c['expiry']}\n"
+                f"---------------------------\n"
+            )
+    else:
+        msg += "⚠️ لا توجد أكواد خصم نشطة حالياً."
+        
+    keyboard = [[InlineKeyboardButton("🔙 العودة للقائمة", callback_data="main_menu")]]
+    await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+ 
+
 
 # --------------------------------------------------------------------------
 
