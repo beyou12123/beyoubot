@@ -630,16 +630,246 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
                 [InlineKeyboardButton("المهام الإدارية", callback_data="administrative_tasks"), InlineKeyboardButton("🔙 عودة", callback_data="back_to_admin")]
             ]), parse_mode="HTML"
         )
-
+# --------------------------------------------------------------------------
+    # --- [ قسم إدارة الكنترول والاختبارات ] ---
+    
+    # 1. الدخول لغرفة الكنترول الرئيسية
     elif data == "manage_control":
-        await query.edit_message_text(
-            "<b>ادارة الكنترول التعليمي</b>\nيمكنك التحكم الكامل بكل الأزرار أدناه:",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("إدارة الاختبارات", callback_data="manage_tests"), InlineKeyboardButton("إدارة الواجبات", callback_data="manage_homework")],
-                [InlineKeyboardButton("بنك الأسئلة", callback_data="question_bank"), InlineKeyboardButton("الأرشيف", callback_data="manage_archive")],
-                [InlineKeyboardButton("🔙 عودة", callback_data="manage_educational")]
-            ]), parse_mode="HTML"
+        from educational_manager import manage_control_ui
+        await manage_control_ui(update, context)
+#إنشاء الاختبارات الآلية 
+    elif data == "manage_quizzes":
+        from educational_manager import quiz_create_start_ui
+        await quiz_create_start_ui(update, context)
+
+    elif data.startswith("q_gen_crs_"):
+        course_id = data.replace("q_gen_crs_", "")
+        from educational_manager import quiz_gen_select_groups_ui
+        await quiz_gen_select_groups_ui(update, context, course_id)
+
+    elif data.startswith("q_gen_grp_"):
+        parts = data.split("_")
+        g_id = parts[3]
+        course_id = parts[4]
+        
+        if g_id == "ALL":
+            context.user_data['temp_quiz']['target_groups'] = ["ALL"]
+        else:
+            if "ALL" in context.user_data['temp_quiz']['target_groups']:
+                context.user_data['temp_quiz']['target_groups'].remove("ALL")
+            
+            if g_id in context.user_data['temp_quiz']['target_groups']:
+                context.user_data['temp_quiz']['target_groups'].remove(g_id)
+            else:
+                context.user_data['temp_quiz']['target_groups'].append(g_id)
+        
+        from educational_manager import quiz_gen_select_groups_ui
+        await quiz_gen_select_groups_ui(update, context, course_id)
+
+    elif data == "q_gen_next_settings":
+        if not context.user_data.get('temp_quiz', {}).get('target_groups'):
+            await query.answer("⚠️ يرجى اختيار مجموعة واحدة على الأقل!", show_alert=True)
+            return
+        context.user_data['action'] = 'awaiting_quiz_title'
+        await query.edit_message_text("🏷 <b>الخطوة 3:</b> أرسل <b>عنواناً للاختبار</b> (مثلاً: اختبار نهاية الفصل الأول):")
+
+
+
+
+
+
+
+    # 2. الدخول لبنك الأسئلة
+    elif data == "manage_q_bank":
+        from educational_manager import q_bank_manager_ui
+        await q_bank_manager_ui(update, context)
+        #استيراد الأسئلة 
+    elif data == "import_q_excel":
+        import pandas as pd
+        import io
+        
+        # 1. تجهيز بيانات النموذج الإرشادي للأسئلة
+        q_sample = {
+            'نص السؤال': ['مثال: ما هو عاصمة اليمن؟'],
+            'A': ['صنعاء'],
+            'B': ['عدن'],
+            'C': ['تعز'],
+            'D': ['إب'],
+            'الإجابة الصحيحة': ['A'],
+            'الدرجة': [1],
+            'الصعوبة': ['متوسط'],
+            'معرف الدورة': ['أدخل هنا ID الدورة']
+        }
+        
+        # 2. إنشاء ملف Excel في الذاكرة (Buffer)
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            pd.DataFrame(q_sample).to_excel(writer, index=False, sheet_name='الأسئلة')
+        output.seek(0)
+        
+        # 3. تحديث حالة البوت لانتظار الملف
+        context.user_data['action'] = 'awaiting_q_excel'
+        
+        caption = (
+            "📥 <b>نظام استيراد الأسئلة الذكي:</b>\n\n"
+            "1️⃣ قمت بإرفاق <b>نموذج Excel</b> جاهز لك.\n"
+            "2️⃣ يرجى تعبئة أسئلتك في ورقة <b>(الأسئلة)</b> بنفس الترتيب.\n"
+            "3️⃣ تأكد من كتابة حرف الإجابة الصحيحة (A, B, C, D) فقط.\n\n"
+            "⚠️ بعد الانتهاء، أرسل الملف هنا بصيغة <b>.xlsx</b> ليتم رفعه للبنك."
         )
+
+        # إرسال الملف مع الشرح
+        await context.bot.send_document(
+            chat_id=query.message.chat_id,
+            document=output,
+            filename="نموذج_استيراد_الأسئلة.xlsx",
+            caption=caption,
+            parse_mode="HTML"
+        )
+
+    elif data == "browse_q_bank":
+        from educational_manager import browse_q_bank_ui
+        await browse_q_bank_ui(update, context)
+
+    elif data.startswith("view_q_det_"):
+        q_id = data.replace("view_q_det_", "")
+        from educational_manager import view_question_details_ui
+        await view_question_details_ui(update, context, q_id)
+
+    elif data.startswith("exec_del_q_"):
+        q_id = data.replace("exec_del_q_", "")
+        from sheets import delete_question_from_bank
+        if delete_question_from_bank(bot_token, q_id):
+            await query.answer("🗑️ تم حذف السؤال من البنك بنجاح", show_alert=True)
+            from educational_manager import browse_q_bank_ui
+            await browse_q_bank_ui(update, context)
+        else:
+            await query.answer("❌ فشل حذف السؤال.")
+
+#ربط  اضافة السؤال اليدوي
+    elif data == "add_q_manual":
+        from educational_manager import start_add_question_ui
+        await start_add_question_ui(update, context)
+
+    elif data.startswith("sel_q_crs_"):
+        course_id = data.replace("sel_q_crs_", "")
+        # تخزين معرف الدورة لبدء تسلسل الأسئلة
+        context.user_data['temp_q'] = {'course_id': course_id}
+        context.user_data['action'] = 'awaiting_q_text'
+        await query.edit_message_text("✍️ <b>الخطوة 2:</b> أرسل الآن <b>نص السؤال</b> الذي تود إضافته:")
+     # معالجة اختيار الإجابة الصحيحة
+    elif data.startswith("set_q_ans_"):
+        ans = data.replace("set_q_ans_", "")
+        context.user_data['temp_q']['correct'] = ans
+        context.user_data['action'] = 'awaiting_q_grade'
+        await query.edit_message_text(f"✅ تم تحديد الإجابة الصحيحة: <b>({ans})</b>\n\n🎯 <b>الخطوة 8:</b> أرسل <b>درجة السؤال</b> (أرقام فقط، مثلاً: 5):", parse_mode="HTML")
+
+    # معالجة اختيار مستوى الصعوبة وعرض المراجعة النهائية
+    elif data.startswith("set_q_lv_"):
+        lv = data.replace("set_q_lv_", "")
+        context.user_data['temp_q']['level'] = lv
+        q = context.user_data['temp_q']
+        summary = (
+            f"📝 <b>مراجعة السؤال قبل الحفظ النهائي:</b>\n"
+            f"━━━━━━━━━━━━━━\n"
+            f"📚 الدورة: <code>{q['course_id']}</code>\n"
+            f"❓ السؤال: {q['text']}\n"
+            f"✅ الإجابة الصحيحة: {q['correct']}\n"
+            f"🎯 الدرجة: {q['grade']} | 📊 المستوى: {lv}\n"
+            f"━━━━━━━━━━━━━━\n"
+            f"هل تريد تأكيد الحفظ في بنك الأسئلة؟"
+        )
+        keyboard = [
+            [InlineKeyboardButton("✅ نعم، احفظ الآن", callback_data="exec_save_question")],
+            [InlineKeyboardButton("❌ إلغاء", callback_data="manage_q_bank")]
+        ]
+        await query.edit_message_text(summary, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+    # التنفيذ الفعلي للحفظ في الشيت
+    elif data == "exec_save_question":
+        from sheets import add_question_to_bank
+        import uuid
+        q_data = context.user_data.get('temp_q')
+        q_data['q_id'] = f"Q{str(uuid.uuid4().int)[:5]}"
+        q_data['creator_id'] = str(user_id)
+        
+        if add_question_to_bank(bot_token, q_data):
+            await query.answer("✅ تم حفظ السؤال في بنك الأسئلة بنجاح", show_alert=True)
+            from educational_manager import q_bank_manager_ui
+            await q_bank_manager_ui(update, context)
+            context.user_data.pop('temp_q', None)
+        else:
+            await query.answer("❌ فشل الحفظ في الشيت")
+
+    elif data == "exec_create_quiz_final":
+        from sheets import create_auto_quiz
+        quiz_data = context.user_data.get('temp_quiz')
+        # تحويل القائمة لنص لحفظها في الشيت
+        quiz_data['target_groups'] = ",".join(quiz_data['target_groups'])
+        quiz_data['coach_id'] = str(user_id)
+        
+        if create_auto_quiz(bot_token, quiz_data):
+            await query.answer("🚀 تم إنشاء الاختبار بنجاح وهو الآن في حالة (مخفي).", show_alert=True)
+            from educational_manager import manage_control_ui
+            await manage_control_ui(update, context)
+            context.user_data.pop('temp_quiz', None)
+        else:
+            await query.answer("❌ فشل الحفظ في الشيت.")
+
+
+    # 3. بدء تفعيل/إنشاء الاختبارات (اختيار الدورة)
+    elif data == "manage_tests":
+        from educational_manager import quiz_activation_start
+        await quiz_activation_start(update, context)
+
+    # 4. اختيار المجموعات المستهدفة للاختبار
+    elif data.startswith("act_q_crs_"):
+        course_id = data.replace("act_q_crs_", "")
+        from educational_manager import quiz_activation_groups
+        await quiz_activation_groups(update, context, course_id)
+
+    # 5. عرض الاختبارات المتاحة للموظف (الأرشيف)
+    elif data == "manage_archiveaq":
+        from educational_manager import employee_quiz_view
+        await employee_quiz_view(update, context)
+
+    # 6. تبديل حالة ظهور الاختبار (TRUE/FALSE)
+    # معالج تبديل رؤية الاختبار (النسخة المعتمدة والمرنة)
+    elif data.startswith("q_toggle_vis_"):
+        quiz_id = data.replace("q_toggle_vis_", "")
+        from sheets import toggle_quiz_visibility
+        
+        # 1. تغيير الحالة في الشيت (TRUE <-> FALSE)
+        new_status = toggle_quiz_visibility(bot_token, quiz_id)
+        
+        # 2. إرسال تنبيه سريع للمستخدم بالحالة الجديدة
+        await query.answer(f"✅ تم تغيير الحالة إلى: {new_status}")
+        
+        # 3. تحديث واجهة الخيارات فوراً لإظهار الأيقونة المحدثة (عين أو قفل)
+        from educational_manager import quiz_options_ui
+        await quiz_options_ui(update, context, quiz_id)
+
+    # 7. إدارة صلاحيات الموظف (التأسيس الصامت + عرض اللوحة)
+    elif data.startswith("setup_p_perms_"):
+        person_id = data.replace("setup_p_perms_", "")
+        from sheets import ensure_permission_row_exists, get_employee_permissions
+        
+        # التأكد من وجود سجل في ورقة الهيكل التنظيمي
+        ensure_permission_row_exists(bot_token, person_id)
+        
+        # جلب الصلاحيات وعرض لوحة التحكم (الصح والخطأ)
+        current_perms = get_employee_permissions(bot_token, person_id)
+        await query.edit_message_text(
+            f"🔐 <b>ضبط صلاحيات المستخدم ID:</b> <code>{person_id}</code>",
+            reply_markup=get_permissions_keyboard(bot_token, person_id, current_perms),
+            parse_mode="HTML"
+        )
+
+        
+        
+        
+        
+# --------------------------------------------------------------------------
 
     elif data == "administrative_tasks":
         await query.edit_message_text(
@@ -1035,8 +1265,46 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
                 if os.path.exists(file_path): os.remove(file_path) # حذف الملف المؤقت
             
             context.user_data['action'] = None
+        elif action == 'awaiting_q_excel':
+            import pandas as pd
+            import os, uuid
+            from sheets import add_question_to_bank
+            
+            file = await context.bot.get_file(doc.file_id)
+            file_path = f"q_temp_{uuid.uuid4().hex}.xlsx"
+            await file.download_to_drive(file_path)
+            
+            try:
+                df = pd.read_excel(file_path, sheet_name='الأسئلة').fillna("")
+                q_count = 0
+                for _, r in df.iterrows():
+                    q_data = {
+                        'text': str(r.get('نص السؤال', '')),
+                        'a': str(r.get('A', '')),
+                        'b': str(r.get('B', '')),
+                        'c': str(r.get('C', '')),
+                        'd': str(r.get('D', '')),
+                        'correct': str(r.get('الإجابة الصحيحة', 'A')).upper(),
+                        'grade': str(r.get('الدرجة', '1')),
+                        'level': str(r.get('الصعوبة', 'متوسط')),
+                        'course_id': str(r.get('معرف الدورة', '')),
+                        'q_id': f"Q{str(uuid.uuid4().int)[:5]}",
+                        'creator_id': str(user.id)
+                    }
+                    if q_data['text'] and add_question_to_bank(bot_token, q_data):
+                        q_count += 1
+                
+                await update.message.reply_text(f"✅ <b>اكتمل الاستيراد!</b>\nتم إضافة {q_count} سؤال إلى بنك الأسئلة بنجاح.", parse_mode="HTML")
+            except Exception as e:
+                await update.message.reply_text(f"❌ خطأ: تأكد من اسم الورقة (الأسئلة) وتنسيق الأعمدة. {str(e)}")
+            finally:
+                if os.path.exists(file_path): os.remove(file_path)
+            context.user_data['action'] = None
             return
-
+            
+            
+           
+# --------------------------------------------------------------------------
 
 
 # --------------------------------------------------------------------------
@@ -1054,14 +1322,18 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
             
 
         # استقبال ID الموظف لفتح لوحة صلاحياته
+        # استقبال ID الموظف لفتح لوحة صلاحياته (النسخة المعتمدة والأقوى)
         elif action == 'awaiting_emp_id_for_perms':
             emp_id = text
             context.user_data['action'] = None
             from sheets import get_employee_permissions
+            
             # جلب الصلاحيات الحالية من الشيت لعرض الأزرار بشكل صحيح
             current_perms = get_employee_permissions(bot_token, emp_id)
+            
             await update.message.reply_text(
-                f"🔐 <b>لوحة تحكم الموظف:</b> <code>{emp_id}</code>\n\nقم بتبديل الصلاحيات بالضغط على الأزرار:", 
+                f"🔐 <b>تم العثور على الموظف:</b> <code>{emp_id}</code>\n\n"
+                f"قم بضبط الصلاحيات المطلوبة بالضغط على الأزرار أدناه:", 
                 reply_markup=get_permissions_keyboard(bot_token, emp_id, current_perms), 
                 parse_mode="HTML"
             )
@@ -1290,31 +1562,9 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
             context.user_data['action'] = None
             return
 
-                    # أضف هذا داخل handle_contact_message تحت قسم المسؤول
-        elif action == 'awaiting_emp_id_for_perms':
-            emp_id = text
-            context.user_data['action'] = None
-            from sheets import get_employee_permissions
-            current_perms = get_employee_permissions(bot_token, emp_id)
-            await update.message.reply_text(f"🔐 تم العثور على الموظف <code>{emp_id}</code>\nقم بضبط الصلاحيات:", 
-                reply_markup=get_permissions_keyboard(bot_token, emp_id, current_perms), parse_mode="HTML")
 
 
 
-
-        # وضع هذا الجزء داخل دالة handle_contact_message تحت قسم المسؤول
-        elif action == 'awaiting_emp_id_for_perms':
-            emp_id = text
-            context.user_data['action'] = None
-            from sheets import get_employee_permissions
-            # جلب الصلاحيات لعرض الواجهة
-            current_perms = get_employee_permissions(bot_token, emp_id)
-            await update.message.reply_text(
-                f"🔐 <b>تم العثور على الموظف:</b> <code>{emp_id}</code>\nقم بضبط الصلاحيات المطلوبة:", 
-                reply_markup=get_permissions_keyboard(bot_token, emp_id, current_perms), 
-                parse_mode="HTML"
-            )
-            return
 
 # --------------------------------------------------------------------------
 # المجموعات 
@@ -1372,8 +1622,121 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
                 context.user_data['action'] = None
                 await update.message.reply_text("🎊 <b>اكتملت التهيئة!</b> تم ضبط هوية البوت بنجاح.", reply_markup=get_admin_panel())
             return
+# --------------------------------------------------------------------------
+        # تسلسل إضافة سؤال يدوي - استقبال نص السؤال
+        elif action == 'awaiting_q_text':
+            context.user_data['temp_q']['text'] = text
+            context.user_data['action'] = 'awaiting_q_a'
+            await update.message.reply_text("🔘 <b>الخطوة 3:</b> أرسل <b>الخيار (A)</b>:")
+            return
 
+        # استقبال الخيار A
+        elif action == 'awaiting_q_a':
+            context.user_data['temp_q']['a'] = text
+            context.user_data['action'] = 'awaiting_q_b'
+            await update.message.reply_text("🔘 <b>الخطوة 4:</b> أرسل <b>الخيار (B)</b>:")
+            return
+
+        # استقبال الخيار B
+        elif action == 'awaiting_q_b':
+            context.user_data['temp_q']['b'] = text
+            context.user_data['action'] = 'awaiting_q_c'
+            await update.message.reply_text("🔘 <b>الخطوة 5:</b> أرسل <b>الخيار (C)</b>:")
+            return
+
+        # استقبال الخيار C
+        elif action == 'awaiting_q_c':
+            context.user_data['temp_q']['c'] = text
+            context.user_data['action'] = 'awaiting_q_d'
+            await update.message.reply_text("🔘 <b>الخطوة 6:</b> أرسل <b>الخيار (D)</b>:")
+            return
+
+        # استقبال الخيار D وطلب الإجابة الصحيحة
+        elif action == 'awaiting_q_d':
+            context.user_data['temp_q']['d'] = text
+            context.user_data['action'] = 'awaiting_q_correct'
+            keyboard = [
+                [InlineKeyboardButton("A", callback_data="set_q_ans_A"), InlineKeyboardButton("B", callback_data="set_q_ans_B")],
+                [InlineKeyboardButton("C", callback_data="set_q_ans_C"), InlineKeyboardButton("D", callback_data="set_q_ans_D")]
+            ]
+            await update.message.reply_text(
+                "✅ <b>الخطوة 7:</b> حدد <b>الإجابة الصحيحة</b> من الأزرار أدناه:",
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode="HTML"
+            )
+            return
+
+        # استقبال درجة السؤال
+        elif action == 'awaiting_q_grade':
+            if not text.isdigit():
+                await update.message.reply_text("⚠️ يرجى إرسال أرقام فقط لدرجة السؤال:")
+                return
+            context.user_data['temp_q']['grade'] = text
+            context.user_data['action'] = 'awaiting_q_level'
+            keyboard = [
+                [InlineKeyboardButton("سهل", callback_data="set_q_lv_سهل"), 
+                 InlineKeyboardButton("متوسط", callback_data="set_q_lv_متوسط"),
+                 InlineKeyboardButton("صعب", callback_data="set_q_lv_صعب")]
+            ]
+            await update.message.reply_text("📊 <b>الخطوة 9:</b> اختر <b>مستوى صعوبة</b> السؤال من الأزرار:", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+            return
+
+
+
+        # تسلسل إعدادات الاختبار الآلي
+        elif action == 'awaiting_quiz_title':
+            context.user_data['temp_quiz']['quiz_id'] = text
+            context.user_data['action'] = 'awaiting_quiz_q_count'
+            await update.message.reply_text("🔢 <b>الخطوة 4:</b> كم <b>عدد الأسئلة</b> التي تريد سحبها من البنك لهذا الاختبار؟")
+            return
+
+        elif action == 'awaiting_quiz_q_count':
+            if not text.isdigit():
+                await update.message.reply_text("⚠️ أرسل رقماً فقط:")
+                return
+            context.user_data['temp_quiz']['q_count'] = text
+            context.user_data['action'] = 'awaiting_quiz_pass'
+            await update.message.reply_text("🎯 <b>الخطوة 5:</b> حدد <b>درجة النجاح</b> (مثلاً: 50):")
+            return
+
+        elif action == 'awaiting_quiz_pass':
+            context.user_data['temp_quiz']['pass_score'] = text
+            context.user_data['action'] = 'awaiting_quiz_time'
+            await update.message.reply_text("⏱ <b>الخطوة 6:</b> حدد <b>مدة الاختبار الكلية</b> بالدقائق:")
+            return
+
+        elif action == 'awaiting_quiz_time':
+            context.user_data['temp_quiz']['duration'] = text
+            q = context.user_data['temp_quiz']
+            summary = (
+                f"⚙️ <b>مراجعة إعدادات الاختبار:</b>\n"
+                f"━━━━━━━━━━━━━━\n"
+                f"📝 العنوان: {q['quiz_id']}\n"
+                f"👥 المجموعات: {','.join(q['target_groups'])}\n"
+                f"🔢 عدد الأسئلة: {q['q_count']}\n"
+                f"🎯 النجاح من: {q['pass_score']}\n"
+                f"⏱ المدة: {text} دقيقة\n"
+                f"━━━━━━━━━━━━━━\n"
+                f"هل تريد إنشاء الاختبار الآن؟"
+            )
+            keyboard = [
+                [InlineKeyboardButton("✅ نعم، إنشاء", callback_data="exec_create_quiz_final")],
+                [InlineKeyboardButton("❌ إلغاء", callback_data="manage_control")]
+            ]
+            await update.message.reply_text(summary, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+            context.user_data['action'] = None
+            return
+
+
+# --------------------------------------------------------------------------
     # --- [ جزء الطلاب والردود التفاعلية - g4f فقط ] ---
+    
+    # جلب إعدادات البوت أولاً لتعريف bot_owner_id قبل استخدامه في الشرط
+    from sheets import get_bot_config
+    config = get_bot_config(bot_token)
+    bot_owner_id = int(config.get("admin_ids", 0))
+
+    # تنفيذ الشرط: إذا كان المرسل ليس هو المالك (أي أنه طالب)
     if user.id != bot_owner_id:
         # 1. فحص الكلمات المفتاحية (FAQ) لسرعة الرد
         faq_keywords = {
@@ -1430,14 +1793,22 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
             else:
                 raise Exception("Empty g4f Response")
             
-        except Exception as e:
+        except Exception as e: # تصحيح الحرف الصغير هنا
             # الخطة البديلة: إرسال تنبيه للادارة في حال فشل المحرك
             print(f"❌ AI Error: {e}")
+            
+            # تم نقل جلب الإعدادات للأعلى لضمان توافر bot_owner_id
             info = f"📩 <b>استفسار طالب (فشل الـ AI):</b>\nالاسم: {user.full_name}\nالرسالة: {text}\nالخطأ: {str(e)}"
+            
             try:
-                await context.bot.send_message(chat_id=bot_owner_id, text=info, parse_mode="HTML")
+                # محاولة إرسال التنبيه للمالك إذا كان معرّفاً
+                if bot_owner_id:
+                    await context.bot.send_message(chat_id=bot_owner_id, text=info, parse_mode="HTML")
+                
+                # الرد على الطالب دائماً لضمان عدم بقاء المحادثة معلقة
                 await update.message.reply_text("💡 شكراً لسؤالك! لقد استلمت استفسارك وسيقوم الادارة بالرد عليك فوراً.")
-            except:
+            except Exception as send_error:
+                print(f"⚠️ فشل إرسال التنبيه للمالك: {send_error}")
                 await update.message.reply_text("⚠️ المعذرة، هناك ضغط حالياً. يرجى المحاولة لاحقاً.")
 
 

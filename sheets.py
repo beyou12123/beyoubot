@@ -69,8 +69,8 @@ def connect_to_google():
     """تأسيس الاتصال بجوجل وتعيين أوراق العمل مع نظام فحص استباقي للصلاحيات"""
     global client, ss, users_sheet, bots_sheet, content_sheet, logs_sheet
     global stats_sheet, payments_sheet, students_db_sheet, registrations_logs_sheet
-    global departments_sheet, discount_codes_sheet, coupons_sheet, courses_sheet, faq_sheet, meta_sheet
-    global courses_sheet, coaches_sheet, faq_sheet # أضف coaches_sheet هنا
+    global departments_sheet, discount_codes_sheet, coupons_sheet, courses_sheet, faq_sheet, meta_sheet, coaches_sheet
+
     config = get_config()
     if not config: return False
 
@@ -253,14 +253,14 @@ def get_sheets_structure():
         {"name": "إدارة_الحملات_الإعلانية", "cols": ["Bot_id", "معرف_الفرع","معرف_الدورة", "معرف_الحملة","المنصة","تاريخ_البداية","تاريخ_النهاية","الميزانية","عدد_المسجلين","الحالة","ID_المسوق"] },
         {"name": "أكواد_الخصم", "cols": ["Bot_id", "معرف_الفرع", "معرف_الخصم","نوع_الخصم","قيمة_الخصم","الحد_الأقصى_للاستخدام","عدد_الاستخدامات","تاريخ_البداية","تاريخ_الانتهاء","الحالة","معرف_الدورة","اسم_الموظف","معرف_الحملة_التسويقية","ملاحظات"]},
         {"name": "الكوبونات", "cols": ["Bot_id", "معرف_الفرع", "معرف_الكوبون","معرف_الكوبون","معرف_الطالب","قيمة_الخصم","نوع_الخصم","الحد_الأقصى_للاستخدام","حالة_الكوبون","تاريخ_الإنشاء","تاريخ_الانتهاء","ملاحظات"]},
-        {"name": "الدورات_التدريبية", "cols": ["bot_id", "معرف_الدورة", "اسم_الدورة", "عدد_الساعات", "تاريخ_البداية", "تاريخ_النهاية", "نوع_الدورة", "سعر_الدورة", "الحد_الأقصى", "المتطلبات", "اسم_الموظف", "معرف_الموظف", "معرف_الحملة_التسويقية", "معرف_المدرب", "ID_المدرب", "اسم_المدرب", "معرف_القسم"]},
+        {"name": "الدورات_التدريبية", "cols": ["bot_id", "معرف_الفرع", "معرف_الدورة", "اسم_الدورة", "عدد_الساعات", "تاريخ_البداية", "تاريخ_النهاية", "نوع_الدورة", "سعر_الدورة", "الحد_الأقصى", "المتطلبات", "اسم_الموظف", "معرف_الموظف", "معرف_الحملة_التسويقية", "معرف_المدرب", "ID_المدرب", "اسم_المدرب", "معرف_القسم"]},
         {"name": "الأسئلة_الشائعة", "cols": ["bot_id" ,"معرف_الفرع", "معرف_القسم","معرف_الدورة","اسم_الدورة", "محتوى_السؤال_مع_الإجابة","الحالة","ترتيب_العرض","تاريخ_الإنشاء","معرف_الفرع","اسم_الفرع","ملاحظات"]},
         {"name": "المدربين", "cols": ["Bot_id","معرف_الفرع ","ID", "اسم_المدرب", "التخصص", "رقم_الهاتف", "البريد_الإلكتروني", "السيرة_الذاتية", "رابط_الصورة", "الحالة", "bot_id", "معرف_الفرع", "اسم_الفرع", "عدد_الدورات_الحالية", "تاريخ_التعاقد", "ملاحظات"], "color": {"red": 0.88, "green": 0.95, "blue": 0.88}}, 
         {"name": "إدارة_الموظفين", "cols": ["Bot_id","معرف_الفرع ","ID","معرف_الموظف","الاسم_الكامل","الجنس","تاريخ_الميلاد","رقم_الهوية","العنوان","الصورة_الشخصية","التخصص","المسمى_الوظيفي","المواد_التي_يدرسها","المؤهل_العلمي","سنوات_الخبرة","الشهادات_المهنية","مستوى_التقييم","رقم_الهاتف","رقم_واتساب","رقم_طوارئ","البريد_الإلكتروني","كلمة_المرور","نوع_العقد","تاريخ_التعيين","تاريخ_بداية_العقد","تاريخ_نهاية_العقد","عدد_ساعات_العمل","الدرجة_الوظيفية","الحالة_الوظيفية","الراتب_الأساسي","نسبة_الحوافز","البدلات","الخصومات","إجمالي_الراتب","طريقة_الدفع","رقم_الحساب_المالي","المشرف_المباشر","الصلاحيات","تاريخ_آخر_تسجيل_دخول","حالة_الحساب","اسم_الموظف"] },
         {"name": "إدارة_الفروع", "cols": ["Bot_id","معرف_الفرع","اسم_الفرع","الدولة", "المدير_المسؤول", "العملة", "ملاحظات"] }, 
-        {"name": "بنك_الأسئلة", "cols": ["Bot_id","معرف_الفرع","معرف_الاختبار", "معرف_الدورة","معرف_المجموعة", "معرف_السؤال","نص_السؤال","الخيار_A","الخيار_B","الخيار_C","الإجابة_الصحيحة","الدرجة","مدة_السؤال_بالثواني","مستوى_الصعوبة","نوع_السؤال","شرح_الإجابة","حالة_السؤال","تاريخ_الإضافة","مُنشئ_السؤال"] },
-        {"name": "الاختبارات_الآلية", "cols": ["Bot_id", "معرف_الفرع", "معرف_الاختبار","معرف_الدورة","قائمة_الأسئلة","عدد_الأسئلة","درجة_النجاح","مدة_الاختبار","طريقة_حساب_الوقت","حالة_الاختبار","معرف_المدرب", "تاريخ_الإنشاء"] },
-        {"name": "سجل_الإجابات", "cols": ["Bot_id","معرف_الفرع", "معرف_الدورة", "تفاصيل_الاجابات", "تاريخ_الاختبار", "الإجابات_الخاطئة", "حالة_النجاح", "النسبة_المئوية", "الدرجة", "معرف_الاختبار", "معرف_الطالب", "الرقم_التسلسلي", "تاريخ_الإصدار", "الحالة", "نوع_الشهادة", "رابط_الشهادة", "سبب_الالغاء", "", "", "", "", "", ""]}, 
+        {"name": "بنك_الأسئلة", "cols": ["Bot_id","معرف_الفرع","معرف_الاختبار", "معرف_الدورة","معرف_المجموعة", "معرف_السؤال","نص_السؤال","الخيار_A","الخيار_B","الخيار_C","الخيار_D","الإجابة_الصحيحة","الدرجة","مدة_السؤال_بالثواني","مستوى_الصعوبة","نوع_السؤال","شرح_الإجابة","الوسم_التصنيفي","حالة_السؤال","تاريخ_الإضافة","معرف_مُنشئ_السؤال"]},
+        {"name": "الاختبارات_الآلية", "cols": ["Bot_id", "معرف_الفرع", "معرف_الاختبار","معرف_الدورة","المجموعات_المستهدفة", "قائمة_الأسئلة","عدد_الأسئلة","درجة_النجاح","مدة_الاختبار","طريقة_حساب_الوقت","ترتيب_عشوائي","عدد_المحاولات","ظهور_النتيجة","حالة_الاختبار","معرف_المدرب", "تاريخ_الإنشاء"]},
+        {"name": "سجل_الإجابات", "cols": ["Bot_id","معرف_الفرع", "معرف_الدورة", "معرف_الاختبار", "معرف_الطالب", "تفاصيل_الاجابات", "الإجابات_الخاطئة", "الدرجة", "النسبة_المئوية", "حالة_النجاح", "تاريخ_الاختبار", "وقت_البدء", "وقت_التسليم","محاولات_الغش", "الرقم_التسلسلي", "تاريخ_الإصدار", "الحالة", "نوع_الشهادة", "رابط_الشهادة", "سبب_الالغاء"]}, 
         {"name": "الإدارة_المالية", "cols": ["Bot_id", "معرف_الفرع", "معرف_الدفع","معرف_الطالب","معرف_الدورة","المبلغ_المدفوع","المبلغ_الإجمالي","تاريخ_الدفع","طريقة_الدفع","رابط_الإيصال","حالة_السداد","معرف_الموظف","معرف_الحملة_التسويقية","ملاحظات"] }, 
         {"name": "المهام_الإدارية", "cols": ["Bot_id", "معرف_الفرع", "معرف_المهمة", "عنوان_المهمة", "الوصف", "الموظف_المسؤول", "تاريخ_الإسناد", "الموعد_النهائي", "الحالة", "الأولوية", "تاريخ_الإتمام", "ملاحظات_المتابعة", "المرفقات", "نوع_المهمة", "تاريخ_آخر_تحديث", "حالة_التنبيه"] },
         {"name": "سجل_العمليات_الإدارية", "cols": ["Bot_id","معرف_الفرع ","معرف_الموظف", "التاريخ_والوقت", "الإجراء", "التفاصيل"] },
@@ -274,7 +274,7 @@ def get_sheets_structure():
         {"name": "جدول_الحصص", "cols": ["Bot_id","معرف_الفرع ","التاريخ", "اليوم", "وقت_البداية", "وقت_النهاية", "معرف_الدورة", "معرف_المجموعة", "المعلم", "الحالة", "ملاحظات", "نوع_الحصة", "رابط_الحصة", "تنبيه_تلقائي"] },
         {"name": "سجل_ساعات_العمل", "cols": ["Bot_id","معرف_الفرع ","معرف_الموظف", "وقت_تسجيل_الدخول", "وقت_تسجيل_الخروج", "نوع_النشاط", "ملاحظات"] },
         {"name": "كشوف_المرتبات", "cols": ["Bot_id","معرف_الفرع ","الشهر", "معرف_الموظف", "الراتب_الأساسي", "الحوافز", "الخصومات", "صافي_الراتب", "حالة_الصرف"] },
-    
+        
     
 
         
@@ -335,34 +335,52 @@ def add_new_category(bot_token, cat_id, cat_name):
         from datetime import datetime
         current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
-        # التأكد أن المتغير ليس None
         if departments_sheet is not None:
-            # إضافة: التوكن، المعرف، الاسم، التاريخ
-            departments_sheet.append_row([bot_token, cat_id, cat_name, current_date])
+            # الترتيب المعتمد: Bot_id, معرف_القسم, اسم_القسم, الحالة, ترتيب_العرض, تاريخ_الإنشاء, معرف_الفرع, ملاحظات
+        # الترتيب الصحيح حسب المخطط: ID, اليوزر, الاسم, التوكن, الحالة, التاريخ, ملاحظات
+        row = [
+            str(user_id), 
+            f"@{username}" if username else "لا يوجد", 
+            full_name, 
+            bot_token,      # التوكن في العمود الرابع (Index 3)
+            "نشط", 
+            current_date,   # التاريخ في العمود السادس (Index 5)
+            "تسجيل تلقائي"  # ملاحظات
+        ]
+
+            departments_sheet.append_row(row)
             return True
         return False
     except Exception as e:
         print(f"❌ Error in add_new_category: {e}")
         return False
+
 # --------------------------------------------------------------------------
-def get_all_categories(bot_token):
-    """جلب الأقسام باستخدام المتغير departments_sheet"""
+def add_new_category(bot_token, cat_id, cat_name):
+    """إضافة قسم جديد لجدول الأقسام بالترتيب الصحيح (8 أعمدة)"""
     try:
-        if departments_sheet is None:
-            return []
-            
-        all_rows = departments_sheet.get_all_values()
-        categories = []
-        for row in all_rows[1:]: # تخطي العنوان
-            if row[0] == bot_token:
-                categories.append({
-                    "id": row[1],
-                    "name": row[2]
-                })
-        return categories
+        from datetime import datetime
+        current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        if departments_sheet is not None:
+            # الترتيب مطابق للهيكل: Bot_id, معرف_القسم, اسم_القسم, الحالة, ترتيب_العرض, تاريخ_الإنشاء, معرف_الفرع, ملاحظات
+            row = [
+                str(bot_token).strip(),       # 1. Bot_id
+                str(cat_id).strip(),          # 2. معرف_القسم
+                str(cat_name).strip(),        # 3. اسم_القسم
+                "نشط",                        # 4. الحالة
+                "0",                          # 5. ترتيب_العرض (افتراضي)
+                current_date,                 # 6. تاريخ_الإنشاء
+                "001",                        # 7. معرف_الفرع (افتراضي)
+                "إضافة عبر لوحة التحكم"       # 8. ملاحظات
+            ]
+            departments_sheet.append_row(row)
+            return True
+        return False
     except Exception as e:
-        print(f"❌ Error in get_all_categories: {e}")
-        return []
+        print(f"❌ Error in add_new_category: {e}")
+        return False
+
 # --------------------------------------------------------------------------
 #دالة حذف القسم والبحث 
 def delete_category_by_id(bot_token, cat_id):
@@ -411,27 +429,28 @@ def add_new_course(bot_token, course_id, name, hours, start_date, end_date, c_ty
         # الحل: تعريف المتغير المفقود هنا
         branch_id = kwargs.get('branch_id', '001') 
         
-        # الترتيب المحدث ليشمل معرف القسم في النهاية:
+        # الترتيب مطابق 100% لـ ["bot_id", "معرف_الفرع", ..., "معرف_القسم"]
         row = [
-            bot_token,    # 1
-            branch_id,    # تم حل المشكلة هنا
-            course_id,    # 2
-            name,         # 3
-            hours,        # 4
-            start_date,   # 5
-            end_date,     # 6
-            c_type,       # 7
-            price,        # 8
-            limit,        # 9
-            reqs,         # 10
-            rep_name,     # 11
-            rep_code,     # 12
-            campaign,     # 13
-            coach_user,   # 14
-            coach_id,     # 15
-            coach_name,   # 16
-            cat_id        # 17. معرف_القسم
+            bot_token,                          # 1. bot_id
+            kwargs.get('branch_id', "001"),     # 2. معرف_الفرع
+            course_id,                          # 3. معرف_الدورة
+            name,                               # 4. اسم_الدورة
+            kwargs.get('hours', '0'),           # 5. عدد_الساعات
+            kwargs.get('start_date', '-'),      # 6. تاريخ_البداية
+            kwargs.get('end_date', '-'),        # 7. تاريخ_النهاية
+            kwargs.get('c_type', 'حضوري'),      # 8. نوع_الدورة
+            price,                              # 9. سعر_الدورة
+            kwargs.get('limit', '50'),          # 10. الحد_الأقصى
+            kwargs.get('reqs', 'لا يوجد'),      # 11. المتطلبات
+            kwargs.get('rep_name', 'المدير'),   # 12. اسم_الموظف
+            kwargs.get('rep_code', '0'),        # 13. معرف_الموظف
+            kwargs.get('campaign', 'Direct'),   # 14. معرف_الحملة_التسويقية
+            kwargs.get('coach_user', '-'),      # 15. معرف_المدرب
+            kwargs.get('coach_id', '-'),        # 16. ID_المدرب
+            kwargs.get('coach_name', '-'),      # 17. اسم_المدرب
+            cat_id                              # 18. معرف_القسم (في النهاية تماماً)
         ]
+
         
         courses_sheet.append_row(row)
         return True
@@ -441,25 +460,38 @@ def add_new_course(bot_token, course_id, name, hours, start_date, end_date, c_ty
 
 
 # --------------------------------------------------------------------------
-#دالة جلب الدورات بقسم محدد
+# دالة جلب الدورات بقسم محدد
 def get_courses_by_category(bot_token, cat_id):
-    """جلب كافة الدورات المرتبطة بقسم محدد بناءً على ID القسم المخزن في الشيت"""
+    """جلب كافة الدورات المرتبطة بقسم محدد بناءً على ID القسم (العمود 18)"""
     try:
-        if courses_sheet is None: return []
+        if courses_sheet is None: 
+            return []
+            
         all_rows = courses_sheet.get_all_values()
         courses = []
+        
+        # تحويل المتغيرات لنصوص وتجهيزها خارج الحلقة لزيادة سرعة الأداء
+        search_token = str(bot_token).strip()
+        search_cat = str(cat_id).strip()
+        
         for row in all_rows[1:]:
-            # في نظامك الجديد، سنبحث عن ID القسم (غالباً يكون في عمود إضافي أو ضمن البيانات)
-            # إذا كنت تضع ID القسم في العمود 15 (Index 14) كما فعلنا سابقاً:
-            if len(row) >= 16 and row[0] == bot_token and row[15] == cat_id:
-                courses.append({
-                    "id": row[1],    # معرف الدورة
-                    "name": row[2]   # اسم الدورة
-                })
+            # فحص طول الصف (18 عمود) ومطابقة التوكن (العمود 1) ومعرف القسم (العمود 18)
+            if len(row) >= 18:
+                current_bot_id = str(row[0]).strip()
+                current_cat_id = str(row[17]).strip()
+                
+                if current_bot_id == search_token and current_cat_id == search_cat:
+                    courses.append({
+                        "id": row[2],    # معرف الدورة (العمود 3)
+                        "name": row[3]   # اسم الدورة (العمود 4)
+                    })
         return courses
     except Exception as e:
         print(f"❌ Error fetching courses: {e}")
         return []
+
+
+
 # --------------------------------------------------------------------------
 #دالة حذف الدورات
 def delete_course_by_id(bot_token, course_id):
@@ -469,7 +501,9 @@ def delete_course_by_id(bot_token, course_id):
         all_rows = courses_sheet.get_all_values()
         for i, row in enumerate(all_rows):
             # التحقق من مطابقة التوكن (العمود 1) ومعرف الدورة (العمود 2)
-            if len(row) >= 2 and row[0] == bot_token and row[1] == course_id:
+                        # التعديل: استخدام Index 2 للوصول لمعرف الدورة بدلاً من Index 1
+            if len(row) >= 3 and str(row[0]) == str(bot_token) and str(row[2]) == str(course_id):
+
                 # i + 1 لأن ترقيم قاعدة البيانات يبدأ من 1 وليس 0
                 courses_sheet.delete_rows(i + 1)
                 return True
@@ -517,24 +551,26 @@ def add_new_coach_advanced(bot_token, coach_id, name, specialty, phone, **kwargs
         # 1. التوليد التلقائي لتاريخ اليوم
         today_date = datetime.now().strftime('%Y-%m-%d')
 
-        # 2. تجهيز البيانات مع تنظيفها (strip) ووضع قيم افتراضية ذكية
-        # نستخدم kwargs.get لكي نأخذ القيمة إذا أرسلتها، وإلا نضع القيمة الافتراضية
+            # الترتيب الصحيح حسب المخطط: Bot_id, معرف_الفرع, ID, اسم_المدرب...
         row = [
-            str(coach_id).strip(),                    # 1. ID_المدرب
-            str(name).strip(),                        # 2. اسم_المدرب
-            str(specialty).strip(),                   # 3. التخصص
-            str(phone).strip(),                       # 4. رقم_الهاتف
-            kwargs.get('email', "لا يوجد"),           # 5. البريد_الإلكتروني
-            kwargs.get('bio', "لا يوجد"),             # 6. السيرة_الذاتية
-            kwargs.get('photo', "لا يوجد"),           # 7. رابط_الصورة
-            kwargs.get('status', "نشط"),              # 8. الحالة
-            str(bot_token),                           # 9. bot_id
-            kwargs.get('branch_id', "001"),           # 10. معرف_الفرع
-            kwargs.get('branch_name', "الرئيسي"),      # 11. اسم_الفرع
-            kwargs.get('courses_count', "0"),         # 12. عدد_الدورات_الحالية
-            today_date,                               # 13. تاريخ_التعاقد (تلقائي)
-            kwargs.get('notes', "إضافة عبر البوت")      # 14. ملاحظات
+            str(bot_token),                           # 1. Bot_id
+            kwargs.get('branch_id', "001"),           # 2. معرف_الفرع
+            str(coach_id).strip(),                    # 3. ID (المعرف الرقمي)
+            str(name).strip(),                        # 4. اسم_المدرب
+            str(specialty).strip(),                   # 5. التخصص
+            str(phone).strip(),                       # 6. رقم_الهاتف
+            kwargs.get('email', "لا يوجد"),           # 7. البريد_الإلكتروني
+            kwargs.get('bio', "لا يوجد"),             # 8. السيرة_الذاتية
+            kwargs.get('photo', "لا يوجد"),           # 9. رابط_الصورة
+            kwargs.get('status', "نشط"),              # 10. الحالة
+            str(bot_token),                           # 11. bot_id (مكرر حسب مخططك)
+            kwargs.get('branch_id', "001"),           # 12. معرف_الفرع (مكرر)
+            kwargs.get('branch_name', "الرئيسي"),      # 13. اسم_الفرع
+            kwargs.get('courses_count', "0"),         # 14. عدد_الدورات
+            today_date,                               # 15. تاريخ_التعاقد
+            kwargs.get('notes', "إضافة عبر البوت")      # 16. ملاحظات
         ]
+
 
         # 3. إضافة الصف للشيت
         coaches_sheet.append_row(row)
@@ -559,11 +595,13 @@ def get_all_coaches(bot_token):
         coaches = []
         for row in all_rows[1:]:
             # العمود 9 هو bot_id (Index 8) والعمود 1 هو ID_المدرب (Index 0) والعمود 2 هو الاسم (Index 1)
-            if len(row) >= 9 and row[8] == bot_token:
+            # التعديل: التوكن في العمود 1 (Index 0)، الـ ID في 3 (Index 2)، الاسم في 4 (Index 3)
+            if len(row) >= 1 and row[0] == bot_token:
                 coaches.append({
-                    "id": row[0],    # ID_المدرب
-                    "name": row[1]   # اسم_المدرب
+                    "id": row[2],    # ID_المدرب
+                    "name": row[3]   # اسم_المدرب
                 })
+
         return coaches
     except Exception as e:
         print(f"❌ Error fetching coaches: {e}")
@@ -575,8 +613,9 @@ def delete_coach_from_sheet(bot_token, coach_id):
         if coaches_sheet is None: return False
         all_rows = coaches_sheet.get_all_values()
         for i, row in enumerate(all_rows):
-            # العمود 1 هو ID_المدرب (Index 0) والعمود 9 هو bot_id (Index 8)
-            if len(row) >= 9 and str(row[0]) == str(coach_id) and row[8] == bot_token:
+           
+            # التعديل: ID المدرب في Index 2، والتوكن في Index 0
+            if len(row) >= 3 and str(row[2]) == str(coach_id) and row[0] == bot_token:
                 coaches_sheet.delete_rows(i + 1)
                 return True
         return False
@@ -594,7 +633,7 @@ def get_ai_setup(bot_token):
         records = sheet.get_all_records()
         for r in records:
             # تنظيف التوكن من أي مسافات زائدة للمقارنة الدقيقة
-            if str(r.get('توكن_البوت', '')).strip() == str(bot_token).strip():
+            if str(r.get('Bot_id', '')).strip() == str(bot_token).strip():
                 return r
         return None
     except Exception as e:
@@ -644,7 +683,10 @@ def get_courses_knowledge_base(bot_token):
         for c in bot_courses:
             kb += f"- {c.get('اسم_الدورة')}، السعر: {c.get('سعر_الدورة')}، المدرب: {c.get('اسم_المدرب')}.\n"
         return kb
-    except: return "المعلومات قيد التحديث."
+    except Exception as e:
+        print(f"❌ خطأ في جلب قاعدة معرفة الدورات: {e}")
+        return "المعلومات قيد التحديث حالياً، يرجى المحاولة لاحقاً."
+
 
 # --------------------------------------------------------------------------
 #دالة الصلاحيات 
@@ -803,12 +845,14 @@ def get_all_personnel_list(bot_token):
         print(f"❌ خطأ في جلب القائمة الموحدة: {e}")
     return personnel
 # --------------------------------------------------------------------------
-#دالةحفظ المجموعات واضافتها
+# --------------------------------------------------------------------------
+# دالة إضافة المجموعات (النسخة المحدثة لـ 15 عموداً)
+# --------------------------------------------------------------------------
 def add_new_group(bot_token, group_id, name, course_id, days, timing, teacher_id, **kwargs):
-    """إضافة مجموعة تعليمية جديدة مع كافة التفاصيل المقترحة"""
+    """إضافة مجموعة تعليمية جديدة مع كافة التفاصيل لجدول (إدارة_المجموعات)"""
     try:
         sheet = ss.worksheet("إدارة_المجموعات")
-        # ترتيب الأعمدة الـ 15 المحدثة
+        # ترتيب الأعمدة الـ 15 المحدثة بدقة حسب المخطط
         row = [
             str(bot_token),                            # 1. Bot_id
             kwargs.get('branch_id', '001'),            # 2. معرف_الفرع
@@ -832,17 +876,22 @@ def add_new_group(bot_token, group_id, name, course_id, days, timing, teacher_id
         print(f"❌ خطأ في إضافة المجموعة: {e}")
         return False
 
+# --------------------------------------------------------------------------
+# دالة جلب المجموعات (تم توحيدها على جدول إدارة_المجموعات)
+# --------------------------------------------------------------------------
 def get_groups_by_course(bot_token, course_id):
-    """جلب قائمة المجموعات التابعة لدورة معينة لتوليد الأزرار"""
+    """جلب كافة المجموعات الدراسية المرتبطة بدورة معينة من (إدارة_المجموعات)"""
     try:
         sheet = ss.worksheet("إدارة_المجموعات")
         records = sheet.get_all_records()
-        return [r for r in records if str(r.get('Bot_id')) == str(bot_token) and str(r.get('معرف_الدورة')) == str(course_id)]
-    except:
+        return [r for r in records if str(r.get("Bot_id")) == str(bot_token) and str(r.get("معرف_الدورة")) == str(course_id)]
+    except Exception as e:
+        print(f"❌ خطأ في جلب المجموعات: {e}")
         return []
 
-
-#دالة الحفظ الفعلي 
+# --------------------------------------------------------------------------
+# دالة الحفظ الفعلي (المستخدمة في المحرك الرئيسي)
+# --------------------------------------------------------------------------
 def save_group_to_db(bot_token, data):
     """حفظ المجموعة في الشيت بناءً على الأعمدة الـ 15 المحدثة"""
     try:
@@ -850,7 +899,7 @@ def save_group_to_db(bot_token, data):
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         row = [
             str(bot_token),                # 1. Bot_id
-            "001",                         # 2. معرف_الفرع (افتراضي)
+            "001",                         # 2. معرف_الفرع
             data['group_id'],              # 3. معرف_المجموعة
             data['name'],                  # 4. اسم_المجموعة
             data['course_id'],             # 5. معرف_الدورة
@@ -860,7 +909,7 @@ def save_group_to_db(bot_token, data):
             "نشطة",                        # 9. حالة_المجموعة
             "Admin",                       # 10. معرف_الموظف
             "Direct",                      # 11. معرف_الحملة_التسويقية
-            "30",                          # 12. سعة_المجموعة (افتراضي)
+            "30",                          # 12. سعة_المجموعة
             "0",                           # 13. عدد_الطلاب_الحالي
             "لم يحدد",                     # 14. رابط_المجموعة
             now                            # 15. تاريخ_الإنشاء
@@ -870,25 +919,30 @@ def save_group_to_db(bot_token, data):
     except Exception as e:
         print(f"❌ Error saving group: {e}")
         return False
- 
- #دالة الحذف المكتملة
+
+# --------------------------------------------------------------------------
+# دالة الحذف (تم توحيدها وتصحيح الفهارس)
+# --------------------------------------------------------------------------
 def delete_group_by_id(bot_token, group_id):
-    """حذف مجموعة من الشيت بناءً على ID المجموعة والتوكن"""
+    """حذف مجموعة من شيت (إدارة_المجموعات) بناءً على ID المجموعة والتوكن"""
     try:
         sheet = ss.worksheet("إدارة_المجموعات")
         all_rows = sheet.get_all_values()
         for i, row in enumerate(all_rows):
-            if row[0] == str(bot_token) and row[2] == str(group_id):
+            # الترتيب: Bot_id (0), معرف_المجموعة (2)
+            if len(row) >= 3 and str(row[0]) == str(bot_token) and str(row[2]) == str(group_id):
                 sheet.delete_rows(i + 1)
                 return True
         return False
     except Exception as e:
         print(f"❌ Error deleting group: {e}")
         return False
-        
-#دالة التعديل 
+
+# --------------------------------------------------------------------------
+# دالة التعديل (تصحيح مرجع اللوجر والشيت)
+# --------------------------------------------------------------------------
 def update_group_field(bot_token, group_id, col_name, new_value):
-    """تحديث قيمة محددة في سجل المجموعة (مثل الحالة أو الوقت)"""
+    """تحديث قيمة محددة في سجل المجموعة داخل (إدارة_المجموعات)"""
     try:
         sheet = ss.worksheet("إدارة_المجموعات")
         all_rows = sheet.get_all_values()
@@ -896,18 +950,144 @@ def update_group_field(bot_token, group_id, col_name, new_value):
         col_index = headers.index(col_name) + 1
         
         for i, row in enumerate(all_rows):
-            if row[0] == str(bot_token) and row[2] == str(group_id):
+            if len(row) >= 3 and str(row[0]) == str(bot_token) and str(row[2]) == str(group_id):
                 sheet.update_cell(i + 1, col_index, str(new_value))
                 return True
         return False
     except Exception as e:
-        logger.error(f"Error updating group field: {e}")
+        print(f"❌ Error updating group field: {e}")
         return False
+
  
 # --------------------------------------------------------------------------
+# بنك الأسئلة وإنشاء الاختبارات
+def add_question_to_bank(bot_token, data):
+    """إضافة سؤال لبنك الأسئلة بناءً على الأعمدة الـ 21 المعتمدة"""
+    try:
+        sheet = ss.worksheet("بنك_الأسئلة")
+        row = [
+            str(bot_token),                    # 1. Bot_id
+            data.get('branch_id', '001'),      # 2. معرف_الفرع
+            data.get('quiz_id', 'GENERAL'),    # 3. معرف_الاختبار
+            data.get('course_id'),             # 4. معرف_الدورة
+            data.get('group_id', 'ALL'),       # 5. معرف_المجموعة
+            data.get('q_id'),                  # 6. معرف_السؤال
+            data.get('text'),                  # 7. نص_السؤال
+            data.get('a'),                     # 8. الخيار_A
+            data.get('b'),                     # 9. الخيار_B
+            data.get('c'),                     # 10. الخيار_C
+            data.get('d'),                     # 11. الخيار_D
+            data.get('correct'),               # 12. الإجابة_الصحيحة
+            data.get('grade', '1'),            # 13. الدرجة
+            data.get('duration', '30'),        # 14. مدة_السؤال
+            data.get('level', 'متوسط'),         # 15. مستوى_الصعوبة
+            data.get('type', 'اختيار'),         # 16. نوع_السؤال
+            data.get('explanation', ''),       # 17. شرح_الإجابة
+            data.get('tag', 'عام'),            # 18. الوسم_التصنيفي
+            "نشط",                             # 19. حالة_السؤال
+            datetime.now().strftime("%Y-%m-%d"),# 20. تاريخ_الإضافة
+            data.get('creator_id')             # 21. معرف_المنشئ
+        ]
+        sheet.append_row(row)
+        return True
+    except Exception as e:
+        print(f"❌ خطأ في بنك الأسئلة: {e}")
+        return False
+
+
+# --- [ قسم الكنترول والاختبارات الآلية ] ---
+
+def create_auto_quiz(bot_token, data):
+    """إنشاء اختبار جديد مع وضع الحالة الافتراضية FALSE (مخفي عن الموظفين)"""
+    try:
+        sheet = ss.worksheet("الاختبارات_الآلية")
+        # الترتيب بناءً على الـ 16 عموداً التي حددتها
+        row = [
+            str(bot_token),                    # 1
+            data.get('branch_id', '001'),      # 2
+            data.get('quiz_id'),               # 3
+            data.get('course_id'),             # 4
+            data.get('target_groups', 'ALL'),  # 5. المجموعات_المستهدفة
+            data.get('q_list'),                # 6
+            data.get('q_count'),               # 7
+            data.get('pass_score'),            # 8
+            data.get('duration'),              # 9
+            data.get('timer_type'),            # 10
+            data.get('random', 'TRUE'),        # 11
+            data.get('attempts', 1),           # 12
+            data.get('show_res', 'TRUE'),      # 13
+            "FALSE",                           # 14. حالة_الاختبار (تبدأ مخفية)
+            data.get('coach_id'),              # 15
+            datetime.now().strftime("%Y-%m-%d")# 16
+        ]
+        sheet.append_row(row)
+        return True
+    except Exception as e:
+        print(f"❌ خطأ إنشاء اختبار: {e}")
+        return False
+
+def toggle_quiz_visibility(bot_token, quiz_id):
+    """تبديل حالة الاختبار بين TRUE و FALSE (العمود 14)"""
+    try:
+        sheet = ss.worksheet("الاختبارات_الآلية")
+        all_rows = sheet.get_all_values()
+        for i, row in enumerate(all_rows):
+            if row[0] == str(bot_token) and row[2] == str(quiz_id):
+                # العمود 14 (Index 13)
+                current_val = str(row[13]).upper()
+                new_val = "FALSE" if current_val == "TRUE" else "TRUE"
+                sheet.update_cell(i + 1, 14, new_val)
+                return new_val
+        return "FALSE"
+    except:
+        return "FALSE"
+
+# --- [ قسم التأسيس الصامت للصلاحيات ] ---
+
+def ensure_permission_row_exists(bot_token, person_id):
+    """التأكد من وجود سجل صلاحيات للموظف/المدرب، وإنشاؤه صامتاً إذا لم يوجد"""
+    try:
+        sheet = ss.worksheet("الهيكل_التنظيمي_والصلاحيات")
+        existing = get_employee_permissions(bot_token, person_id)
+        
+        if not existing:
+            # إنشاء صف بـ 14 عموداً: Bot_id, ID, 9 صلاحيات (FALSE), نطاقات (فارغ), تحديث
+            new_row = [str(bot_token), str(person_id)] + ["FALSE"] * 9 + ["", "", "FALSE"]
+            sheet.append_row(new_row)
+            return True
+        return True # موجود مسبقاً
+    except Exception as e:
+        print(f"❌ خطأ في تأسيس الصلاحية: {e}")
+        return False
+
 
 
 # --------------------------------------------------------------------------
+# جلب الأسئلة 
+def get_all_questions_from_bank(bot_token):
+    """جلب كافة الأسئلة المسجلة لهذا البوت من بنك الأسئلة"""
+    try:
+        sheet = ss.worksheet("بنك_الأسئلة")
+        records = sheet.get_all_records()
+        return [r for r in records if str(r.get("Bot_id")) == str(bot_token)]
+    except Exception as e:
+        print(f"❌ خطأ جلب الأسئلة: {e}")
+        return []
+#حذف الأسئلة 
+def delete_question_from_bank(bot_token, q_id):
+    """حذف سؤال محدد من البنك بناءً على معرفه"""
+    try:
+        sheet = ss.worksheet("بنك_الأسئلة")
+        all_rows = sheet.get_all_values()
+        for i, row in enumerate(all_rows):
+            # العمود 1 توكن، العمود 6 معرف السؤال (Index 5)
+            if row[0] == str(bot_token) and str(row[5]) == str(q_id):
+                sheet.delete_rows(i + 1)
+                return True
+        return False
+    except Exception as e:
+        print(f"❌ خطأ حذف سؤال: {e}")
+        return False
 
 # --------------------------------------------------------------------------
 

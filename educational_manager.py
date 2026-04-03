@@ -176,14 +176,243 @@ async def confirm_delete_group_ui(update, context, group_id):
 
  
 # --------------------------------------------------------------------------
+#ادارة الاختبارات والاسئلة 
+async def manage_control_ui(update, context):
+    """واجهة الكنترول التعليمي الرئيسية"""
+    query = update.callback_query
+    keyboard = [
+        [InlineKeyboardButton("📝 إدارة الاختبارات", callback_data="manage_quizzes"),
+         InlineKeyboardButton("📚 بنك الأسئلة", callback_data="manage_q_bank")],
+        [InlineKeyboardButton("📝 سجل الإجابات", callback_data="view_exam_logs"),
+         InlineKeyboardButton("📑 إدارة الواجبات", callback_data="manage_homeworks")],
+        [InlineKeyboardButton("🔙 عودة", callback_data="manage_educational")]
+    ]
+    await query.edit_message_text(
+        "🎮 <b>مرحباً بك في غرفة الكنترول التعليمي:</b>\n"
+        "من هنا يمكنك التحكم في الاختبارات، بنك الأسئلة، وتصحيح الواجبات.",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="HTML"
+    )
+
+async def q_bank_manager_ui(update, context):
+    """واجهة إدارة بنك الأسئلة (إضافة/عرض/حذف/تعديل)"""
+    query = update.callback_query
+    keyboard = [
+        [InlineKeyboardButton("➕ إضافة سؤال يدوي", callback_data="add_q_manual")],
+        [InlineKeyboardButton("📥 استيراد أسئلة (Excel)", callback_data="import_q_excel")],
+        [InlineKeyboardButton("🔍 استعراض وحذف الأسئلة", callback_data="browse_q_bank")],
+        [InlineKeyboardButton("🔙 عودة للكنترول", callback_data="manage_control")]
+    ]
+    await query.edit_message_text(
+        "🗄 <b>مخزن بنك الأسئلة:</b>\n"
+        "يمكنك بناء قاعدة بيانات لأسئلتك واستخدامها في عدة اختبارات لاحقاً.",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="HTML"
+    )
+
+
+async def question_bank_ui(update, context):
+    """واجهة بنك الأسئلة"""
+    query = update.callback_query
+    keyboard = [
+        [InlineKeyboardButton("➕ إضافة سؤال يدوي", callback_data="add_q_manual")],
+        [InlineKeyboardButton("📥 استيراد أسئلة (Excel)", callback_data="import_q_excel")],
+        [InlineKeyboardButton("🔍 استعراض الأسئلة", callback_data="browse_questions")],
+        [InlineKeyboardButton("🔙 عودة للكنترول", callback_data="manage_control")]
+    ]
+    await query.edit_message_text(
+        "🗄 <b>مخزن بنك الأسئلة:</b>\n"
+        "قم ببناء قاعدة أسئلتك لاستخدامها في الاختبارات الآلية لاحقاً.",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="HTML"
+    )
+ 
+
 
 # --------------------------------------------------------------------------
+async def quiz_options_ui(update, context, quiz_id):
+    """واجهة التحكم في الاختبار للأدمن (مع زر الظهور/الإخفاء)"""
+    query = update.callback_query
+    bot_token = context.bot.token
+    
+    # جلب بيانات الاختبار لمعرفة حالته الحالية
+    from sheets import ss
+    sheet = ss.worksheet("الاختبارات_الآلية")
+    all_q = sheet.get_all_records()
+    quiz = next((q for q in all_q if str(q['معرف_الاختبار']) == str(quiz_id)), {})
+    
+    status = str(quiz.get('حالة_الاختبار', 'FALSE')).upper()
+    icon = "👁️ متاح للموظفين" if status == "TRUE" else "🚫 مخفي عن الموظفين"
+    
+    keyboard = [
+        [InlineKeyboardButton(f"{icon}", callback_data=f"q_toggle_vis_{quiz_id}")],
+        [InlineKeyboardButton("🗑️ حذف الاختبار", callback_data=f"quiz_confirm_del_{quiz_id}")],
+        [InlineKeyboardButton("🔙 عودة", callback_data="manage_quizzes")]
+    ]
+    
+    await query.edit_message_text(
+        f"🛠️ <b>إدارة الاختبار:</b> <code>{quiz_id}</code>\n"
+        f"الحالة الحالية: <b>{status}</b>",
+        reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML"
+    )
+    
+async def manage_personnel_ui(update, context):
+    """عرض القائمة الموحدة للموظفين والمدربين من دالتك الأصلية"""
+    query = update.callback_query
+    bot_token = context.bot.token
+    
+    # استخدام دالتك الموحدة
+    from sheets import get_all_personnel_list
+    people = get_all_personnel_list(bot_token)
+    
+    if not people:
+        await query.edit_message_text("⚠️ لا يوجد موظفون أو مدربون مسجلون حالياً.")
+        return
+
+    keyboard = []
+    for p in people:
+        label = f"👤 {p['name']} ({p['type']})"
+        # عند الضغط، نرسل الـ ID لعملية التأسيس والضبط
+        keyboard.append([InlineKeyboardButton(label, callback_data=f"setup_p_perms_{p['id']}")])
+    
+    keyboard.append([InlineKeyboardButton("🔙 عودة", callback_data="tech_settings")])
+    await query.edit_message_text("👥 <b>إدارة الصلاحيات والمهام:</b>\nاختر الشخص للبدء بضبط مهامه:", 
+                                 reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+ 
+# --------------------------------------------------------------------------
+# دالة اختيار الدورة لربط السؤال بها
+async def start_add_question_ui(update, context):
+    """الخطوة 1: اختيار الدورة لربط السؤال بها في بنك الأسئلة"""
+    query = update.callback_query
+    bot_token = context.bot.token
+    
+    # جلب الدورات الخاصة بهذا البوت فقط
+    from sheets import courses_sheet
+    all_courses = courses_sheet.get_all_records()
+    bot_courses = [c for c in all_courses if str(c.get('bot_id')) == str(bot_token)]
+    
+    if not bot_courses:
+        await query.edit_message_text("⚠️ لا توجد دورات حالياً، يجب إضافة دورة أولاً لربط الأسئلة بها.")
+        return
+
+    keyboard = [[InlineKeyboardButton(f"📘 {c['اسم_الدورة']}", callback_data=f"sel_q_crs_{c['معرف_الدورة']}")] for c in bot_courses]
+    keyboard.append([InlineKeyboardButton("🔙 عودة", callback_data="manage_q_bank")])
+    
+    await query.edit_message_text("🎯 <b>إضافة سؤال يدوي:</b>\nاختر الدورة التي يتبع لها هذا السؤال لربطها ببنك الأسئلة:", 
+                                 reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+
+
 
 # --------------------------------------------------------------------------
+# واجهة لعرض الأسئلة كأزرار 
+async def browse_q_bank_ui(update, context):
+    """عرض قائمة الأسئلة الموجودة في البنك لاختيار أحدها"""
+    query = update.callback_query
+    bot_token = context.bot.token
+    
+    from sheets import get_all_questions_from_bank
+    questions = get_all_questions_from_bank(bot_token)
+    
+    if not questions:
+        await query.edit_message_text("🗄 <b>بنك الأسئلة فارغ حالياً.</b>\nابدأ بإضافة أسئلة أولاً لتظهر هنا.", 
+                                     reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 عودة", callback_data="manage_q_bank")]]), parse_mode="HTML")
+        return
+
+    keyboard = []
+    # عرض أول 10 أسئلة (لضمان عدم تجاوز حجم الرسالة)
+    for q in questions[:10]:
+        # نأخذ أول 30 حرف من السؤال كعنوان للزر
+        q_text = (q['نص_السؤال'][:30] + '..') if len(q['نص_السؤال']) > 30 else q['نص_السؤال']
+        keyboard.append([InlineKeyboardButton(f"❓ {q_text}", callback_data=f"view_q_det_{q['معرف_السؤال']}")])
+    
+    keyboard.append([InlineKeyboardButton("🔙 عودة", callback_data="manage_q_bank")])
+    await query.edit_message_text(f"🔍 <b>استعراض الأسئلة ({len(questions)} سؤال):</b>\nاختر سؤالاً لعرض تفاصيله أو حذفه:", 
+                                 reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+async def view_question_details_ui(update, context, q_id):
+    """عرض تفاصيل السؤال مع زر الحذف"""
+    query = update.callback_query
+    bot_token = context.bot.token
+    
+    from sheets import get_all_questions_from_bank
+    all_q = get_all_questions_from_bank(bot_token)
+    q = next((item for item in all_q if str(item['معرف_السؤال']) == str(q_id)), None)
+    
+    if not q:
+        await query.answer("⚠️ تعذر العثور على السؤال.")
+        return
+
+    text = (
+        f"📝 <b>تفاصيل السؤال:</b>\n"
+        f"━━━━━━━━━━━━━━\n"
+        f"❓ <b>السؤال:</b> {q['نص_السؤال']}\n"
+        f"🅰️ الخيار A: {q['الخيار_A']}\n"
+        f"🅱️ الخيار B: {q['الخيار_B']}\n"
+        f"🆃 الخيار C: {q['الخيار_C']}\n"
+        f"🅳 الخيار D: {q['الخيار_D']}\n\n"
+        f"✅ <b>الإجابة الصحيحة:</b> {q['الإجابة_الصحيحة']}\n"
+        f"🎯 الدرجة: {q['الدرجة']} | 📊 المستوى: {q['مستوى_الصعوبة']}\n"
+        f"📚 الدورة: <code>{q['معرف_الدورة']}</code>\n"
+        f"━━━━━━━━━━━━━━"
+    )
+    
+    keyboard = [
+        [InlineKeyboardButton("🗑️ حذف السؤال نهائياً", callback_data=f"exec_del_q_{q_id}")],
+        [InlineKeyboardButton("🔙 عودة للقائمة", callback_data="browse_q_bank")]
+    ]
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
 
 # --------------------------------------------------------------------------
+# بدء عملية إنشاء الاختبارات واختيار المجموعات والدورات
+async def quiz_create_start_ui(update, context):
+    """الخطوة 1: اختيار الدورة المراد إنشاء اختبار آلي لها"""
+    query = update.callback_query
+    bot_token = context.bot.token
+    
+    from sheets import courses_sheet
+    all_courses = courses_sheet.get_all_records()
+    bot_courses = [c for c in all_courses if str(c.get('bot_id')) == str(bot_token)]
+    
+    if not bot_courses:
+        await query.edit_message_text("⚠️ يجب إضافة دورة تعليمية أولاً لتتمكن من إنشاء اختبار لها.")
+        return
 
-# --------------------------------------------------------------------------
+    keyboard = [[InlineKeyboardButton(f"📘 {c['اسم_الدورة']}", callback_data=f"q_gen_crs_{c['معرف_الدورة']}")] for c in bot_courses]
+    keyboard.append([InlineKeyboardButton("🔙 عودة", callback_data="manage_control")])
+    
+    await query.edit_message_text("📝 <b>إنشاء اختبار آلي جديد:</b>\nاختر الدورة التدريبية المراد سحب الأسئلة لها:", 
+                                 reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+async def quiz_gen_select_groups_ui(update, context, course_id):
+    """الخطوة 2: اختيار المجموعات المستهدفة (نظام الاختيار المتعدد)"""
+    query = update.callback_query
+    bot_token = context.bot.token
+    
+    from sheets import get_groups_by_course
+    groups = get_groups_by_course(bot_token, course_id)
+    
+    if 'temp_quiz' not in context.user_data:
+        context.user_data['temp_quiz'] = {'course_id': course_id, 'target_groups': []}
+
+    keyboard = []
+    # زر "الكل"
+    all_icon = "✅" if "ALL" in context.user_data['temp_quiz']['target_groups'] else "⬜"
+    keyboard.append([InlineKeyboardButton(f"{all_icon} كافة المجموعات", callback_data=f"q_gen_grp_ALL_{course_id}")])
+    
+    for g in groups:
+        g_id = str(g['معرف_المجموعة'])
+        icon = "✅" if g_id in context.user_data['temp_quiz']['target_groups'] else "⬜"
+        keyboard.append([InlineKeyboardButton(f"{icon} {g['اسم_المجموعة']}", callback_data=f"q_gen_grp_{g_id}_{course_id}")])
+    
+    keyboard.append([InlineKeyboardButton("🚀 الخطوة التالية (الإعدادات)", callback_data=f"q_gen_next_settings")])
+    keyboard.append([InlineKeyboardButton("🔙 تراجع", callback_data="manage_control")])
+    
+    await query.edit_message_text(f"👥 <b>تحديد المجموعات:</b>\nاختر المجموعات التي سيظهر لها الاختبار في لوحتهم:", 
+                                 reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+
 
 # --------------------------------------------------------------------------
 
