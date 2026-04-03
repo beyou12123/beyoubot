@@ -3,6 +3,7 @@ from telegram.ext import ContextTypes
 from datetime import datetime
 import uuid
 import time
+import random, string, re
 # استيراد الدوال من ملف sheets (تأكد من مطابقة أسماء الدوال لما هو موجود في ملف sheets.py)
 from sheets import (
     get_groups_by_course, 
@@ -16,6 +17,7 @@ from sheets import (
     check_user_permission, # للتأكد من هوية الموظف
     delete_group_by_id  # تم تصحيح الاسم هنا ليتطابق مع المحرك
 )
+
 
 async def manage_groups_main(update, context, course_id):
     """الواجهة الرئيسية لإدارة مجموعات دورة محددة"""
@@ -422,26 +424,51 @@ async def quiz_gen_select_groups_ui(update, context, course_id):
 
 # --------------------------------------------------------------------------
 #جدول المحاضرات
+# --- [ دالة عرض الجداول المحدثة بمنطق المالك المطلق ] ---
+
 async def show_lectures_logic(update, context):
-    """المنطق الذكي لعرض المحاضرات بناءً على نوع المستخدم"""
+    """المنطق الذكي والمطلق لعرض المحاضرات (طالب، موظف، أو مالك)"""
     query = update.callback_query
     user_id = update.effective_user.id
     bot_token = context.bot.token
     
-    # 1. محاولة جلب بيانات الطالب أولاً
+    # 1. جلب معرف المالك من الإعدادات لضمان الصلاحية المطلقة
+    from sheets import get_bot_config, courses_sheet
+    config = get_bot_config(bot_token)
+    bot_owner_id = int(config.get("admin_ids", 0))
+
+    # --- [ أ: مسار المالك - الوصول الشامل بدون قيود ] ---
+    if user_id == bot_owner_id:
+        # جلب كافة الدورات المسجلة لهذا البوت من ورقة الدورات مباشرة
+        all_courses = courses_sheet.get_all_records()
+        owner_courses = [c for c in all_courses if str(c.get('bot_id')) == str(bot_token)]
+        
+        if owner_courses:
+            keyboard = []
+            for course in owner_courses:
+                # عرض كافة الدورات للمالك ليختار أي مجموعة يريد رؤية جدولها
+                keyboard.append([InlineKeyboardButton(f"📚 {course['اسم_الدورة']}", callback_data=f"lec_course_{course['معرف_الدورة']}")])
+            
+            keyboard.append([InlineKeyboardButton("🔙 العودة للقائمة", callback_data="main_menu")])
+            await query.edit_message_text(
+                "👑 <b>مرحباً بك يا دكتور (المالك):</b>\nتفضل باختيار الدورة لعرض جداول مجموعاتها بالكامل:", 
+                reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML"
+            )
+        else:
+            await query.answer("⚠️ لا توجد أي دورات مضافة في المنصة حالياً.", show_alert=True)
+        return # إنهاء الدالة للمالك
+
+    # --- [ ب: مسار الطالب - جلب بياناته المسجلة ] ---
     student_data = get_student_enrollment_data(bot_token, user_id)
     
     if student_data:
-        # --- مسار الطالب: عرض الجدول المباشر ---
         lectures = get_lectures_by_group(bot_token, student_data['group_id'])
-        
         msg = (
             f"<b>🗓 جدول محاضراتك يا {student_data['student_name']}</b>\n"
             f"📚 الدورة: {student_data['course_name']}\n"
             f"👥 المجموعة: {student_data['group_name']}\n"
             f"---------------------------\n"
         )
-        
         keyboard = []
         if lectures:
             for lec in lectures:
@@ -451,7 +478,6 @@ async def show_lectures_logic(update, context):
                     f"👨‍🏫 المدرب: {lec.get('اسم_المدرب')}\n"
                     f"📝 ملاحظة: {lec.get('ملاحظات', '-')}\n\n"
                 )
-                # إضافة زر الانضمام إذا وجد رابط
                 if lec.get('رابط_الحصة') and str(lec.get('رابط_الحصة')).startswith('http'):
                     keyboard.append([InlineKeyboardButton(f"🔗 انضم لمحاضرة {lec.get('التاريخ')}", url=lec.get('رابط_الحصة'))])
         else:
@@ -461,7 +487,7 @@ async def show_lectures_logic(update, context):
         await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
         
     else:
-        # --- مسار الموظف: رحلة الاختيار بناءً على الصلاحيات ---
+        # --- [ ج: مسار الموظف - بناءً على الصلاحيات المقيدة في الشيت ] ---
         allowed_courses = get_employee_allowed_courses(bot_token, user_id)
         
         if allowed_courses:
@@ -470,24 +496,147 @@ async def show_lectures_logic(update, context):
                 keyboard.append([InlineKeyboardButton(f"📚 {course['name']}", callback_data=f"lec_course_{course['id']}")])
             
             keyboard.append([InlineKeyboardButton("🔙 العودة", callback_data="main_menu")])
-            await query.edit_message_text("⚙️ <b>لوحة الموظف:</b>\nيرجى اختيار الدورة لعرض مجموعاتها المسموحة:", 
-                                          reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+            await query.edit_message_text(
+                "⚙️ <b>لوحة الموظف:</b>\nيرجى اختيار الدورة لعرض مجموعاتها المسموحة لك:", 
+                reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML"
+            )
         else:
-            await query.answer("⚠️ عذراً، لا تملك صلاحيات لعرض الجداول أو لست مسجلاً كطالب.", show_alert=True)
- 
+            # دالة الحماية النهائية: تنبيه المستخدم غير المسجل بدلاً من الصمت
+            await query.answer("⚠️ تنبيه: هويتك غير مسجلة كطالب أو موظف في قاعدة بيانات هذا البوت.", show_alert=True)
 
+# --------------------------------------------------------------------------
+#دالة إضافة الاكود 
+# 1. بداية العملية وجلب الدورات
+async def add_discount_start(update, context):
+    query = update.callback_query
+    from sheets import courses_sheet
+    all_courses = courses_sheet.get_all_records()
+    bot_courses = [c for c in all_courses if str(c.get('bot_id')) == str(context.bot.token)]
+    
+    keyboard = []
+    for c in bot_courses:
+        keyboard.append([InlineKeyboardButton(f"📚 {c['اسم_الدورة']}", callback_data=f"dsc_check_{c['معرف_الدورة']}")])
+    keyboard.append([InlineKeyboardButton("🔙 إلغاء", callback_data="discount_codes")])
+    
+    await query.edit_message_text("🎯 <b>الخطوة 1:</b> اختر الدورة المراد إنشاء كود خصم لها:", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
+# 2. التحقق من وجود كود سابق
+async def process_dsc_check(update, context, course_id):
+    query = update.callback_query
+    from sheets import check_course_has_discount
+    existing_code = check_course_has_discount(context.bot.token, course_id)
+    
+    context.user_data['temp_disc'] = {'course_id': course_id}
+    
+    if existing_code:
+        msg = f"⚠️ <b>تنبيه:</b> يوجد كود خصم سابق لهذه الدورة وهو: <code>{existing_code}</code>\n\nهل تريد إضافة كود خصم آخر؟"
+        keyboard = [
+            [InlineKeyboardButton("✅ نعم", callback_data="dsc_continue"), 
+             InlineKeyboardButton("❌ لا", callback_data="discount_codes")]
+        ]
+        await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+    else:
+        await process_dsc_ask_desc(update, context)
+
+# 3. طلب الاسم الوصفي (شرط 8 حروف)
+async def process_dsc_ask_desc(update, context):
+    context.user_data['action'] = 'awaiting_dsc_desc'
+    msg = "📝 <b>الخطوة 2:</b> أرسل الاسم الوصفي للكود (مثلاً: خصم عيد):\n⚠️ يجب ألا يزيد عن 8 حروف."
+    if update.callback_query:
+        await update.callback_query.edit_message_text(msg, parse_mode="HTML")
+    else:
+        await update.message.reply_text(msg, parse_mode="HTML")
+
+async def validate_dsc_desc(update, context):
+    text = update.message.text.strip()
+    if len(text) > 8:
+        await update.message.reply_text("❌ <b>خطأ:</b> الاسم طويل جداً، أرسل اسماً لا يزيد عن 8 حروف:")
+        return
+    context.user_data['temp_disc']['desc'] = text
+    context.user_data['action'] = 'awaiting_dsc_value'
+    await update.message.reply_text("💰 <b>الخطوة 3:</b> أرسل قيمة الخصم كرقـم فقط (مثلاً 10 لتعني 10%):")
+
+# 4. طلب التاريخ (تنسيق محدد)
+async def validate_dsc_value(update, context):
+    text = update.message.text.strip()
+    if not text.isdigit():
+        await update.message.reply_text("❌ <b>خطأ:</b> يرجى إرسال أرقام فقط (مثلاً: 15):")
+        return
+    context.user_data['temp_disc']['value'] = text
+    context.user_data['action'] = 'awaiting_dsc_expiry'
+    await update.message.reply_text("📅 <b>الخطوة 4:</b> أرسل تاريخ انتهاء الكود بصيغة <code>YYYY-MM-DD</code>:\nمثال: <code>2026-12-31</code>")
+
+# 5. طلب الحد الأقصى (أرقام إنجليزية فقط)
+async def validate_dsc_expiry(update, context):
+    text = update.message.text.strip()
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", text):
+        await update.message.reply_text("❌ <b>خطأ في التنسيق!</b> أرسل التاريخ بهذا الشكل <code>2026-01-01</code> حصراً:")
+        return
+    context.user_data['temp_disc']['expiry'] = text
+    context.user_data['action'] = 'awaiting_dsc_max'
+    await update.message.reply_text("🔢 <b>الخطوة 5:</b> أرسل <b>الحد الأقصى لاستخدام الكود</b> (أرقام إنجليزية فقط):")
+
+# 6. التوليد النهائي والحفظ
+async def validate_dsc_max(update, context):
+    text = update.message.text.strip()
+    if not text.isdigit():
+        await update.message.reply_text("❌ <b>خطأ:</b> أرسل أرقاماً إنجليزية فقط:")
+        return
+    
+    d = context.user_data['temp_disc']
+    d['max_use'] = text
+    
+    # توليد الكود (6 حروف كبيرة + رقمين)
+    chars = ''.join(random.choices(string.ascii_uppercase, k=6))
+    nums = ''.join(random.choices(string.digits, k=2))
+    d['final_code'] = chars + nums
+    
+    from sheets import save_discount_code_full
+    if save_discount_code_full(context.bot.token, d):
+        summary = (
+            f"✅ <b>تم إنشاء كود الخصم بنجاح!</b>\n\n"
+            f"🎫 الكود: <code>{d['final_code']}</code>\n"
+            f"📝 الوصف: {d['desc']}\n"
+            f"💰 القيمة: {d['value']}% | 🔢 السعة: {d['max_use']}\n"
+            f"📅 ينتهي في: {d['expiry']}"
+        )
+        await update.message.reply_text(summary, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 العودة", callback_data="discount_codes")]]), parse_mode="HTML")
+        context.user_data['action'] = None
+    else:
+        await update.message.reply_text("❌ حدث خطأ أثناء الحفظ في الشيت.")
 
 
 # --------------------------------------------------------------------------
 #دالة عرض اكود الخصم 
+# --- [ دالة إدارة وأكواد الخصم المحدثة للمالك والطلاب ] ---
+
 async def show_discount_codes_logic(update, context):
-    """عرض كافة الأكواد النشطة للمستخدمين"""
+    """إدارة أكواد الخصم: عرض للطلاب ولوحة تحكم شاملة للمالك"""
     query = update.callback_query
+    user_id = update.effective_user.id
     bot_token = context.bot.token
     
+    # 1. جلب معرف المالك للتحقق من الصلاحية المطلقة
+    from sheets import get_bot_config, ss
+    config = get_bot_config(bot_token)
+    bot_owner_id = int(config.get("admin_ids", 0))
+
+    # --- [ أ: مسار المالك - لوحة التحكم الكاملة ] ---
+    if user_id == bot_owner_id:
+        keyboard = [
+            [InlineKeyboardButton("➕ إضافة كود جديد", callback_data="add_discount_start")],
+            [InlineKeyboardButton("🔍 عرض وإدارة الأكواد", callback_data="list_all_discounts")],
+            [InlineKeyboardButton("🔙 العودة للقائمة", callback_data="main_menu")]
+        ]
+        await query.edit_message_text(
+            "🎟 <b>لوحة إدارة أكواد الخصم (المالك):</b>\n"
+            "يمكنك إضافة أكواد جديدة أو تعديل وحذف الأكواد الحالية من هنا.",
+            reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML"
+        )
+        return
+
+    # --- [ ب: مسار الطالب - العرض البسيط للأكواد النشطة فقط ] ---
     codes = get_active_discount_codes(bot_token)
-    
     msg = "<b>🎟 أكواد الخصم المتاحة حالياً:</b>\n\n"
     if codes:
         for c in codes:
@@ -501,9 +650,74 @@ async def show_discount_codes_logic(update, context):
     else:
         msg += "⚠️ لا توجد أكواد خصم نشطة حالياً."
         
-    keyboard = [[InlineKeyboardButton("🔙 العودة للقائمة", callback_data="main_menu")]]
+    keyboard = [[InlineKeyboardButton("🔙 العودة", callback_data="main_menu")]]
     await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
- 
+
+# --- [ ج: دالة عرض الأكواد كأزرار بناءً على عمود الوصف ] ---
+
+async def list_all_discounts_ui(update, context):
+    """عرض كافة الأكواد للمالك كأزرار تحمل 'الوصف'"""
+    query = update.callback_query
+    bot_token = context.bot.token
+    
+    # جلب البيانات مباشرة من ورقة أكواد_الخصم
+    from sheets import ss
+    sheet = ss.worksheet("أكواد_الخصم")
+    records = sheet.get_all_records()
+    
+    keyboard = []
+    # تصفية الأكواد التابعة لهذا البوت فقط
+    bot_codes = [r for r in records if str(r.get('Bot_id')) == str(bot_token)]
+    
+    if bot_codes:
+        for r in bot_codes:
+            # استخدام عمود "الوصف" كاسم للزر كما طلبت
+            btn_label = r.get('الوصف') if r.get('الوصف') else f"كود: {r.get('معرف_الخصم')}"
+            keyboard.append([InlineKeyboardButton(f"🎫 {btn_label}", callback_data=f"view_disc_{r.get('معرف_الخصم')}")])
+    else:
+        await query.answer("⚠️ لا توجد أكواد مسجلة حالياً.", show_alert=True)
+        return
+
+    keyboard.append([InlineKeyboardButton("🔙 عودة", callback_data="discount_codes")])
+    await query.edit_message_text("🎯 <b>اختر الكود المراد إدارته:</b>", 
+                                 reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+# --- [ د: عرض معلومات الكود التفصيلية للمالك ] ---
+
+async def view_discount_details_ui(update, context, disc_id):
+    """عرض بيانات الكود كاملة مع أزرار (تعديل، حذف، رجوع)"""
+    query = update.callback_query
+    bot_token = context.bot.token
+    
+    from sheets import ss
+    sheet = ss.worksheet("أكواد_الخصم")
+    records = sheet.get_all_records()
+    # البحث عن الكود المحدد
+    d = next((r for r in records if str(r.get('Bot_id')) == str(bot_token) and str(r.get('معرف_الخصم')) == str(disc_id)), None)
+    
+    if d:
+        text = (
+            f"ℹ️ <b>تفاصيل كود الخصم:</b>\n"
+            f"━━━━━━━━━━━━━━\n"
+            f"🎫 الكود: <code>{d.get('معرف_الخصم')}</code>\n"
+            f"📝 الوصف: {d.get('الوصف')}\n"
+            f"💰 القيمة: {d.get('قيمة_الخصم')} ({d.get('نوع_الخصم')})\n"
+            f"📊 الاستخدام: {d.get('عدد_الاستخدامات')} / {d.get('الحد_الأقصى_للاستخدام')}\n"
+            f"📅 الصلاحية: من {d.get('تاريخ_البداية')} إلى {d.get('تاريخ_الانتهاء')}\n"
+            f"📚 الدورة: <code>{d.get('معرف_الدورة')}</code>\n"
+            f"🟢 الحالة: {d.get('الحالة')}\n"
+            f"━━━━━━━━━━━━━━"
+        )
+        keyboard = [
+            [InlineKeyboardButton("📝 تعديل", callback_data=f"edit_disc_{disc_id}"),
+             InlineKeyboardButton("🗑️ حذف", callback_data=f"confirm_del_disc_{disc_id}")],
+            [InlineKeyboardButton("🔙 رجوع للقائمة", callback_data="list_all_discounts")]
+        ]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+    else:
+        await query.answer("❌ تعذر العثور على بيانات الكود.")
+
+
 
 
 # --------------------------------------------------------------------------

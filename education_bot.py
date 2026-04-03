@@ -659,7 +659,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
                 [InlineKeyboardButton("📁 إدارة الأقسام", callback_data="manage_cats"), InlineKeyboardButton("📚 إدارة الدورات", callback_data="manage_courses")],
                 [InlineKeyboardButton("المكتبة الشاملة", callback_data="manage_library"), InlineKeyboardButton("الأوسمة والإنجازات", callback_data="honors_achievements")],
                 [InlineKeyboardButton("إدارة المجموعات", callback_data="manage_group"), InlineKeyboardButton("الأسئلة الشائعة", callback_data="frequently_guestions")],
-                [InlineKeyboardButton("جداول المحاضرات", callback_data="schedules_lectures"), InlineKeyboardButton("أكواد الخصم", callback_data="frequently_guestions")],
+                [InlineKeyboardButton("جداول المحاضرات", callback_data="schedules_lectures"), InlineKeyboardButton("أكواد الخصم", callback_data="discount_codes")],
                 [InlineKeyboardButton("الإدارة المالية", callback_data="manage_financial"), InlineKeyboardButton("إدارة الفروع", callback_data="manage_branches")],
                 [InlineKeyboardButton("🎟 الكوبونات", callback_data="manage_coupons"), InlineKeyboardButton("📢 الإعلانات", callback_data="manage_ads")],
                 [InlineKeyboardButton("الكنترول", callback_data="manage_control")],
@@ -669,14 +669,50 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 # --------------------------------------------------------------------------
 #قسم جدول المحاضرات 
     # داخل دالة معالجة الأزرار في education_bot.py
+    elif data.startswith("dsc_check_"):
+        course_id = data.replace("dsc_check_", "")
+        from educational_manager import process_dsc_check
+        await process_dsc_check(update, context, course_id)
+        
+    elif data == "dsc_continue":
+        from educational_manager import process_dsc_ask_desc
+        await process_dsc_ask_desc(update, context)
+
+
+# ------------------------------------------------------
+    # 1. معالجة جداول المحاضرات
     elif data == "schedules_lectures":
         from educational_manager import show_lectures_logic
         await show_lectures_logic(update, context)
         
-    elif data == "frequently_guestions": # استخدام نفس الـ data التي اخترتها
+    # 2. معالجة فتح لوحة أكواد الخصم (مرة واحدة فقط)
+    elif data == "discount_codes":
         from educational_manager import show_discount_codes_logic
         await show_discount_codes_logic(update, context)
 
+    # 3. معالجات المالك المضافة مؤخراً (العرض والتفاصيل والحذف)
+    elif data == "list_all_discounts":
+        from educational_manager import list_all_discounts_ui
+        await list_all_discounts_ui(update, context)
+
+    elif data.startswith("view_disc_"):
+        disc_id = data.replace("view_disc_", "")
+        from educational_manager import view_discount_details_ui
+        await view_discount_details_ui(update, context, disc_id)
+
+    elif data.startswith("confirm_del_disc_"):
+        disc_id = data.replace("confirm_del_disc_", "")
+        from sheets import ss
+        sheet = ss.worksheet("أكواد_الخصم")
+        try:
+            cell = sheet.find(disc_id, in_column=3)
+            if cell:
+                sheet.delete_rows(cell.row)
+                await query.answer("✅ تم حذف كود الخصم بنجاح!", show_alert=True)
+                from educational_manager import list_all_discounts_ui
+                await list_all_discounts_ui(update, context)
+        except:
+            await query.answer("❌ فشل الحذف، قد يكون الكود غير موجود.", show_alert=True)
 
 # --------------------------------------------------------------------------
     # --- [ قسم إدارة الكنترول والاختبارات ] ---
@@ -1333,6 +1369,26 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
             
            
 # --------------------------------------------------------------------------
+        # --- [ معالجة خطوات إضافة كود الخصم نصياً ] ---
+        elif action == 'awaiting_dsc_desc':
+            from educational_manager import validate_dsc_desc
+            await validate_dsc_desc(update, context)
+            return
+
+        elif action == 'awaiting_dsc_value':
+            from educational_manager import validate_dsc_value
+            await validate_dsc_value(update, context)
+            return
+
+        elif action == 'awaiting_dsc_expiry':
+            from educational_manager import validate_dsc_expiry
+            await validate_dsc_expiry(update, context)
+            return
+
+        elif action == 'awaiting_dsc_max':
+            from educational_manager import validate_dsc_max
+            await validate_dsc_max(update, context)
+            return
 
 
 # --------------------------------------------------------------------------
