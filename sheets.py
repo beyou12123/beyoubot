@@ -1091,6 +1091,23 @@ def delete_question_from_bank(bot_token, q_id):
         return False
 
 # --------------------------------------------------------------------------
+#استيراد المجموعات 
+def get_all_categories(bot_token):
+    """جلب كافة الأقسام المتاحة لبوت معين"""
+    try:
+        if departments_sheet is None: return []
+        # جلب كافة البيانات من شيت الأقسام
+        records = departments_sheet.get_all_records()
+        # تصفية الأقسام حسب التوكن وتنسيقها
+        return [
+            {"id": r.get("معرف_القسم"), "name": r.get("اسم_القسم")}
+            for r in records 
+            if str(r.get("Bot_id")).strip() == str(bot_token).strip()
+        ]
+    except Exception as e:
+        print(f"❌ Error fetching categories: {e}")
+        return []
+
 
 # --------------------------------------------------------------------------
 
