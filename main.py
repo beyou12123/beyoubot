@@ -35,8 +35,7 @@ from sheets import (
     get_bot_config, 
     add_log_entry, 
     get_total_bots_count,
-    get_total_factory_users, # دالة إحصائيات مستخدمي المصنع
-    get_all_active_bots
+    get_total_factory_users # دالة إحصائيات مستخدمي المصنع
 )
 
 # --- الإعدادات الأساسية ---
@@ -116,8 +115,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # استيراد الدالة المطلوبة من sheets
     from sheets import save_user, get_total_factory_users
-
-
+    
     # محاولة حفظ المستخدم (الدالة تعيد True إذا كان المستخدم جديداً)
     is_new = save_user(user.id, user.username)
     
@@ -609,9 +607,7 @@ async def start_all_sub_bots():
         bot_type = bot_data.get("نوع البوت")
         
         # تشغيل البوتات تلقائياً باستخدام المحرك الديناميكي
-
-
-
+        asyncio.create_task(run_dynamic_bot(token, bot_type, owner_id))
 
 # بناء التطبيق
 app = ApplicationBuilder().token(TOKEN).build()
