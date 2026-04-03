@@ -336,17 +336,17 @@ def add_new_category(bot_token, cat_id, cat_name):
         current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
         if departments_sheet is not None:
-            # الترتيب المعتمد: Bot_id, معرف_القسم, اسم_القسم, الحالة, ترتيب_العرض, تاريخ_الإنشاء, معرف_الفرع, ملاحظات
-        # الترتيب الصحيح حسب المخطط: ID, اليوزر, الاسم, التوكن, الحالة, التاريخ, ملاحظات
-        row = [
-            str(user_id), 
-            f"@{username}" if username else "لا يوجد", 
-            full_name, 
-            bot_token,      # التوكن في العمود الرابع (Index 3)
-            "نشط", 
-            current_date,   # التاريخ في العمود السادس (Index 5)
-            "تسجيل تلقائي"  # ملاحظات
-        ]
+            # يجب أن تكون كل الأسطر التالية مزاحة (Indented) لليمين
+            row = [
+                bot_token,      # معرف البوت أو التوكن
+                cat_id,         # معرف القسم
+                cat_name,       # اسم القسم
+                "نشط",          # الحالة
+                "1",            # ترتيب العرض (مثال)
+                current_date,   # تاريخ الإنشاء
+                "قسم رئيسي",     # معرف الفرع أو ملاحظات
+                "إضافة تلقائية"  # ملاحظات إضافية
+            ]
 
             departments_sheet.append_row(row)
             return True
@@ -354,6 +354,7 @@ def add_new_category(bot_token, cat_id, cat_name):
     except Exception as e:
         print(f"❌ Error in add_new_category: {e}")
         return False
+
 
 # --------------------------------------------------------------------------
 def add_new_category(bot_token, cat_id, cat_name):
