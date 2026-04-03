@@ -149,43 +149,58 @@ def save_bot(owner_id, bot_type, bot_name, bot_token):
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         bot_token = str(bot_token).strip()
         
-        # 1. البحث عن التوكن في ورقة "البوتات_المصنوعة" لمنع التكرار
+        # 1. جلب اسم البوت واليوزرنايم تلقائياً لضمان الدقة
+        real_bot_name = bot_name
+        username_bot = ""
         try:
-            # البحث في العمود الرابع (D) حيث يوجد التوكن
-            cell = bots_sheet.find(bot_token)
-        except:
-            cell = None
+            import requests
+            res = requests.get(f"https://api.telegram.org/bot{bot_token}/getMe").json()
+            if res.get("ok"):
+                real_bot_name = res["result"]["first_name"]
+                username_bot = res["result"]["username"]
+        except: pass
 
-        # تجهيز بيانات الصف (18 عموداً)
+        # 2. معالجة ورقة "البوتات_المصنوعة" (تحديث أو إضافة)
         bot_row = [
-            str(owner_id), bot_type, bot_name, bot_token, 
-            "نشط", "", "", now, "", 0, 0, "جيد", 
-            "", "polling", "free", "", "true", ""
+            str(owner_id), bot_type, real_bot_name, bot_token, 
+            "نشط", bot_token.split(':')[0], username_bot, 
+            now, "", 0, 0, "جيد", "", "polling", "free", "", "true", ""
+        ]
+        
+        try:
+            cell_bot = bots_sheet.find(bot_token)
+            # إذا وجده، نحدث السطر
+            range_to_update = f"A{cell_bot.row}:R{cell_bot.row}"
+            bots_sheet.update(range_to_update, [bot_row])
+            print(f"♻️ تم تحديث بيانات البوت في السطر {cell_bot.row}")
+        except:
+            # إذا لم يجده، نضيفه
+            bots_sheet.append_row(bot_row)
+            print("✨ تم إضافة بوت جديد")
+
+        # 3. حل مشكلة تكرار "إعدادات_المحتوى" (فحص مستقل)
+        content_row = [
+            bot_token, "أهلاً بك! 🤖", "لا توجد قوانين حالياً.", 
+            "عذراً، البوت متوقف مؤقتاً.", "false", "false", "true", "[]", "[]", 
+            str(owner_id), "ar", "default", "0", "true", "[]"
         ]
 
-        if cell:
-            # تحديث السطر الحالي بدلاً من إضافة سطر جديد
-            # نحدد المدى من العمود A إلى R في سطر البوت المكتشف
-            range_to_update = f"A{cell.row}:R{cell.row}"
-            bots_sheet.update(range_to_update, [bot_row])
-            print(f"♻️ تم تحديث بيانات البوت (التوكن موجود مسبقاً في السطر {cell.row})")
-        else:
-            # إضافة سطر جديد فقط إذا كان البوت يسجل لأول مرة
-            bots_sheet.append_row(bot_row)
-            
-            # إضافة إعدادات المحتوى فقط للبوتات الجديدة لعدم تصفير الإعدادات القديمة
-            content_row = [
-                bot_token, "أهلاً بك في بوتك الجديد! 🤖", "لا توجد قوانين حالياً.", 
-                "عذراً، البوت متوقف مؤقتاً.", "false", "false", "true", "[]", "[]", 
-                str(owner_id), "ar", "default", "0", "true", "[]"
-            ]
+        try:
+            # هنا يكمن الحل: نبحث عن التوكن في ورقة المحتوى أيضاً
+            cell_content = content_sheet.find(bot_token)
+            # إذا وجده، نحدث فقط معرف الأدمن لضمان ملكية البوت ولا نكرر الصف
+            content_sheet.update_cell(cell_content.row, 10, str(owner_id))
+            print(f"✅ التوكن موجود مسبقاً في المحتوى، تم تحديث المالك فقط")
+        except:
+            # نضيف صف المحتوى فقط إذا لم يكن التوكن موجوداً إطلاقاً
             content_sheet.append_row(content_row)
-            print(f"✨ تم تسجيل بوت جديد بنجاح")
+            print("📝 تم إنشاء إعدادات محتوى جديدة")
 
         return True
     except Exception as e:
-        print(f"❌ خطأ في تحديث/حفظ البوت: {e}")
+        print(f"❌ خطأ حرج في save_bot: {e}")
         return False
+
 
 # --------------------------------------------------------------------------
 def update_content_setting(bot_id, column_name, new_value):
