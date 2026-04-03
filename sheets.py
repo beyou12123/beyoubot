@@ -140,22 +140,54 @@ def save_user(user_id, username):
     except Exception as e:
         print(f"❌ خطأ تسجيل مستخدم: {e}")
         return False
-
+# --------------------------------------------------------------------------
 def save_bot(owner_id, bot_type, bot_name, bot_token):
     global bots_sheet, content_sheet
     if bots_sheet is None or content_sheet is None:
         if not connect_to_google(): return False
     try:
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        bot_row = [str(owner_id), bot_type, bot_name, bot_token, "نشط", "", "", now, "", 0, 0, "جيد", "", "polling", "free", "", "true", ""]
-        bots_sheet.append_row(bot_row)
-        content_row = [bot_token, "أهلاً بك في بوتك الجديد! 🤖", "لا توجد قوانين حالياً.", "عذراً، البوت متوقف مؤقتاً.", "false", "false", "true", "[]", "[]", str(owner_id), "ar", "default", "0", "true", "[]"]
-        content_sheet.append_row(content_row)
+        bot_token = str(bot_token).strip()
+        
+        # 1. البحث عن التوكن في ورقة "البوتات_المصنوعة" لمنع التكرار
+        try:
+            # البحث في العمود الرابع (D) حيث يوجد التوكن
+            cell = bots_sheet.find(bot_token)
+        except:
+            cell = None
+
+        # تجهيز بيانات الصف (18 عموداً)
+        bot_row = [
+            str(owner_id), bot_type, bot_name, bot_token, 
+            "نشط", "", "", now, "", 0, 0, "جيد", 
+            "", "polling", "free", "", "true", ""
+        ]
+
+        if cell:
+            # تحديث السطر الحالي بدلاً من إضافة سطر جديد
+            # نحدد المدى من العمود A إلى R في سطر البوت المكتشف
+            range_to_update = f"A{cell.row}:R{cell.row}"
+            bots_sheet.update(range_to_update, [bot_row])
+            print(f"♻️ تم تحديث بيانات البوت (التوكن موجود مسبقاً في السطر {cell.row})")
+        else:
+            # إضافة سطر جديد فقط إذا كان البوت يسجل لأول مرة
+            bots_sheet.append_row(bot_row)
+            
+            # إضافة إعدادات المحتوى فقط للبوتات الجديدة لعدم تصفير الإعدادات القديمة
+            content_row = [
+                bot_token, "أهلاً بك في بوتك الجديد! 🤖", "لا توجد قوانين حالياً.", 
+                "عذراً، البوت متوقف مؤقتاً.", "false", "false", "true", "[]", "[]", 
+                str(owner_id), "ar", "default", "0", "true", "[]"
+            ]
+            content_sheet.append_row(content_row)
+            print(f"✨ تم تسجيل بوت جديد بنجاح")
+
         return True
     except Exception as e:
-        print(f"❌ خطأ حفظ بوت: {e}")
+        print(f"❌ خطأ في تحديث/حفظ البوت: {e}")
         return False
 
+# --------------------------------------------------------------------------
 def update_content_setting(bot_id, column_name, new_value):
     global content_sheet
     if content_sheet is None:
@@ -1107,7 +1139,6 @@ def get_all_categories(bot_token):
     except Exception as e:
         print(f"❌ Error fetching categories: {e}")
         return []
-
 
 # --------------------------------------------------------------------------
 
