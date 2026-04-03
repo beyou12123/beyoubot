@@ -610,7 +610,7 @@ async def start_all_sub_bots():
         
         # تشغيل البوتات تلقائياً باستخدام المحرك الديناميكي
 
-        asyncio.create_task(run_dynamic_bot(token, owner_id))
+        async def run_dynamic_bot(token, owner_id, user_id):
 
 
 # بناء التطبيق
