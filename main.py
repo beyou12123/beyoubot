@@ -35,7 +35,7 @@ from sheets import (
     get_bot_config, 
     add_log_entry, 
     get_total_bots_count,
-    get_total_factory_users, # دالة إحصائيات مستخدمي المصنع
+    get_total_factory_users # دالة إحصائيات مستخدمي المصنع
     get_all_active_bots
 )
 
@@ -610,7 +610,8 @@ async def start_all_sub_bots():
         
         # تشغيل البوتات تلقائياً باستخدام المحرك الديناميكي
 
-        async def run_dynamic_bot(token, owner_id, user_id):
+asyncio.create_task(run_dynamic_bot(token, owner_id, owner_id))
+
 
 
 # بناء التطبيق
