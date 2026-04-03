@@ -322,6 +322,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
                 "نص_السؤال": ["ما هي دالة الطباعة في بايثون؟"],
                 "الخيار_1": ["print()"],
                 "الخيار_2": ["echo()"],
+                "الخيار_3": ["echo()"],
                 "الإجابة_الصحيحة": ["print()"]
             },
             "الكوبونات": {
