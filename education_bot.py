@@ -161,11 +161,13 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         await add_discount_start(update, context)
 
     # 4. معالجة خطوات التحقق من الدورة والاستمرار
-    elif data.startswith("dsc_check_"):
-        course_id = data.replace("dsc_check_", "")
+    # التعديل المطلوب لضمان الاستجابة وعدم التجمد:
+    elif data.startswith("d_ch_"): # استخدمنا d_ch_ بدلاً من dsc_check_
+        course_id = data.replace("d_ch_", "")
         from educational_manager import process_dsc_check
         await process_dsc_check(update, context, course_id)
-        
+
+       
     elif data == "dsc_continue":
         from educational_manager import process_dsc_ask_desc
         await process_dsc_ask_desc(update, context)

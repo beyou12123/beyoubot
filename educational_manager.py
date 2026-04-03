@@ -506,18 +506,27 @@ async def show_lectures_logic(update, context):
 # --------------------------------------------------------------------------
 #دالة إضافة الاكود 
 # 1. بداية العملية وجلب الدورات
+# --- [ النسخة المصححة لضمان عمل الأزرار ] ---
 async def add_discount_start(update, context):
     query = update.callback_query
     from sheets import courses_sheet
     all_courses = courses_sheet.get_all_records()
-    bot_courses = [c for c in all_courses if str(c.get('bot_id')) == str(context.bot.token)]
+    bot_token = str(context.bot.token)
+    bot_courses = [c for c in all_courses if str(c.get('bot_id')) == bot_token]
     
     keyboard = []
     for c in bot_courses:
-        keyboard.append([InlineKeyboardButton(f"📚 {c['اسم_الدورة']}", callback_data=f"dsc_check_{c['معرف_الدورة']}")])
+        # قمنا باختصار dsc_check_ إلى d_ch_ لتوفير مساحة للـ ID
+        course_id = str(c['معرف_الدورة'])
+        keyboard.append([InlineKeyboardButton(f"📚 {c['اسم_الدورة']}", callback_data=f"d_ch_{course_id}")])
+    
     keyboard.append([InlineKeyboardButton("🔙 إلغاء", callback_data="discount_codes")])
     
-    await query.edit_message_text("🎯 <b>الخطوة 1:</b> اختر الدورة المراد إنشاء كود خصم لها:", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+    await query.edit_message_text(
+        "🎯 <b>الخطوة 1:</b> اختر الدورة المراد إنشاء كود خصم لها:", 
+        reply_markup=InlineKeyboardMarkup(keyboard), 
+        parse_mode="HTML"
+    )
 
 # 2. التحقق من وجود كود سابق
 async def process_dsc_check(update, context, course_id):
