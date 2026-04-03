@@ -599,7 +599,6 @@ admin_module_conv = ConversationHandler(
 # --- دالة تشغيل البوتات المصنوعة تلقائياً ---
 async def start_all_sub_bots():
     from sheets import get_all_active_bots
-    
     active_bots = get_all_active_bots()
     print(f"🔄 جاري محاولة تشغيل {len(active_bots)} بوت مصنوع...")
     
@@ -607,6 +606,10 @@ async def start_all_sub_bots():
         token = bot_data.get("التوكن")
         owner_id = bot_data.get("ID المالك")
         bot_type = bot_data.get("نوع البوت")
+        if token and bot_type:
+            # تشغيل كل بوت في مهمة مستقلة لضمان عدم توقف المصنع
+            asyncio.create_task(run_dynamic_bot(token, bot_type, owner_id))
+
         
         # تشغيل البوتات تلقائياً باستخدام المحرك الديناميكي
 

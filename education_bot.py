@@ -64,33 +64,39 @@ def get_admin_panel():
 
 
 # --- [ المعالجات الأساسية - أمر البداية ] ---
-
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """معالجة أمر /start برسائل ترحيبية ذكية يحددها المسؤول حسب الوقت"""
+    """معالجة أمر /start برسائل ترحيبية ذكية"""
     from datetime import datetime
     user = update.effective_user
     bot_token = context.bot.token
+    
+    # تحديد هل القادم ضغطة زر أم رسالة نصية
+    query = update.callback_query
     
     # جلب كافة الإعدادات من قاعدة البيانات
     config = get_bot_config(bot_token)
     bot_owner_id = int(config.get("admin_ids", 0))
 
-    # ... (بعد جلب bot_owner_id)
     from sheets import get_ai_setup
     ai_config = get_ai_setup(bot_token)
     
-    # تصحيح الـ HTML والإزاحة لضمان استجابة البوت
-
     if user.id == bot_owner_id:
         if not ai_config or not ai_config.get('اسم_المؤسسة'):
-
             context.user_data['action'] = 'awaiting_institution_name'
-            await update.message.reply_text(
+            
+            text = (
                 "👋 <b>أهلاً بك يا دكتور!</b>\n\n"
-                "قبل البدء، يرجى إرسال <b>اسم المنصة التعليمية</b> الخاصة بك:",
-                parse_mode="HTML"
+                "قبل البدء، يرجى إرسال <b>اسم المنصة التعليمية</b> الخاصة بك:"
             )
+
+            # --- التعديل الجوهري هنا ---
+            if query: # إذا كان المستخدم ضغط على زر "عودة"
+                await query.answer()
+                await query.edit_message_text(text, parse_mode="HTML")
+            else: # إذا كان المستخدم أرسل /start
+                await update.message.reply_text(text, parse_mode="HTML")
             return
+
 
 
 
