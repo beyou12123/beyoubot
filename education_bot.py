@@ -146,7 +146,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
     await query.answer()
 # --------------------------------------------------------------------------
     # 1. معالجة جداول المحاضرات
-    elif data == "schedules_lectures":
+    if data == "schedules_lectures":
         from educational_manager import show_lectures_logic
         await show_lectures_logic(update, context)
         
