@@ -1495,7 +1495,25 @@ def seed_default_settings(bot_token):
         print(f"❌ خطأ أثناء تعبئة الإعدادات: {e}")
         return False
 
-
+# استبدال النقاط 
+def redeem_points_for_course(bot_token, user_id, course_price):
+    """التحقق من الرصيد وخصم النقاط لفتح دورة"""
+    try:
+        sheet_users = ss.worksheet("المخدمين")
+        user_cell = sheet_users.find(str(user_id), in_column=1)
+        
+        if user_cell:
+            current_balance = float(sheet_users.cell(user_cell.row, 11).value or 0)
+            if current_balance >= float(course_price):
+                # خصم النقاط
+                new_balance = current_balance - float(course_price)
+                sheet_users.update_cell(user_cell.row, 11, new_balance)
+                return True, new_balance
+        return False, 0
+    except Exception as e:
+        print(f"❌ خطأ في عملية الاستبدال: {e}")
+        return False, 0
+ 
 # --------------------------------------------------------------------------
 
 # --------------------------------------------------------------------------

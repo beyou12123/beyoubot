@@ -252,10 +252,13 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             f"💡 <i>يمكنك استبدال النقاط بفتح الدورات المدفوعة فور وصولك للحد المطلوب.</i>"
         )
         
-        keyboard = [
-            [InlineKeyboardButton("🔄 تحديث الإحصائيات", callback_data="referral_system")],
-            [InlineKeyboardButton("🔙 العودة للقائمة", callback_data="main_menu")]
-        ]
+        # تعديل أزرار قائمة الإحالة لتشمل المتجر
+keyboard = [
+    [InlineKeyboardButton("🛒 استبدال النقاط بالدورات", callback_data="redeem_store")],
+    [InlineKeyboardButton("🔄 تحديث الإحصائيات", callback_data="referral_system")],
+    [InlineKeyboardButton("🔙 العودة للقائمة", callback_data="main_menu")]
+]
+
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
     # معالج تعطيل/تفعيل الكود مؤقتاً
@@ -278,6 +281,64 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
                 await view_discount_details_ui(update, context, disc_id)
         except Exception as e:
             await query.answer("❌ فشل تحديث الحالة.")
+
+#استبدل النقاط 
+    # أضف هذا الشرط داخل دالة contact_callback_handler في education_bot.py
+    elif data == "redeem_store":
+        await query.answer()
+        from sheets import get_user_referral_stats, get_bot_setting, get_courses_by_category
+        
+        stats = get_user_referral_stats(bot_token, user_id)
+        current_balance = stats.get('balance', 0)
+        
+        # جلب سعر الدورة الموحد من الإعدادات (أو يمكنك جعلها لكل دورة)
+        redeem_cost = get_bot_setting(bot_token, "min_points_redeem", default=100)
+        
+        text = (
+            f"🛒 <b>متجر استبدال النقاط</b>\n"
+            f"━━━━━━━━━━━━━━\n"
+            f"رصيدك الحالي: 💰 <b>{current_balance} نقطة</b>\n"
+            f"تكلفة فتح أي دورة: 🎫 <b>{redeem_cost} نقطة</b>\n\n"
+            f"اختر الدورة التي تود فتحها برصيدك:"
+        )
+        
+        # جلب الدورات المتاحة (يمكنك تعديل هذا لجلب دورات محددة فقط)
+        # هنا سنعرض مثالاً لجلب كافة الدورات لتبسيط الاختيار
+        from sheets import ss
+        courses_ws = ss.worksheet("الدورات_التدريبية")
+        all_courses = courses_ws.get_all_records()
+        
+        keyboard = []
+        for course in all_courses:
+            if str(course.get('Bot_id')) == str(bot_token):
+                c_name = course.get('اسم_الدورة')
+                c_id = course.get('ID_الدورة')
+                
+                # زر الشراء يتغير حسب الرصيد
+                if float(current_balance) >= float(redeem_cost):
+                    keyboard.append([InlineKeyboardButton(f"✅ فتح: {c_name}", callback_data=f"buy_c_{c_id}")])
+                else:
+                    keyboard.append([InlineKeyboardButton(f"🔒 {c_name} (تحتاج نقاط)", callback_data="insufficient_points")])
+        
+        keyboard.append([InlineKeyboardButton("🔙 العودة", callback_data="referral_system")])
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+    # معالج عملية الشراء الفعلية
+    elif data.startswith("buy_c_"):
+        course_id = data.replace("buy_c_", "")
+        from sheets import get_bot_setting, redeem_points_for_course
+        
+        redeem_cost = get_bot_setting(bot_token, "min_points_redeem", default=100)
+        success, new_balance = redeem_points_for_course(bot_token, user_id, redeem_cost)
+        
+        if success:
+            await query.answer("🎉 مبروك! تم فتح الدورة بنجاح", show_alert=True)
+            # هنا يمكنك إضافة كود لإرسال رابط الدورة للطالب أو تسجيله فيها آلياً
+            await query.edit_message_text(f"✅ تم شراء الدورة بنجاح!\nرصيدك المتبقي: {new_balance} نقطة.\nيمكنك الآن البدء بالدراسة من القائمة الرئيسية.")
+        else:
+            await query.answer("❌ فشلت العملية، تأكد من رصيدك.", show_alert=True)
+ 
+
 
 
 # --------------------------------------------------------------------------
