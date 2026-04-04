@@ -3,7 +3,10 @@ from telegram.ext import ContextTypes
 from datetime import datetime
 import uuid
 import time
-import random, string, re
+import random
+import string
+import re
+
 # استيراد الدوال من ملف sheets (تأكد من مطابقة أسماء الدوال لما هو موجود في ملف sheets.py)
 from sheets import (
     get_groups_by_course, 
@@ -559,37 +562,37 @@ async def process_dsc_ask_desc(update, context):
 async def validate_dsc_desc(update, context):
     text = update.message.text.strip()
     if len(text) > 8:
-        await update.message.reply_text("❌ <b>خطأ:</b> الاسم طويل جداً، أرسل اسماً لا يزيد عن 8 حروف:")
+        await update.message.reply_text("❌ <b>خطأ:</b> الاسم طويل جداً، أرسل اسماً لا يزيد عن 8 حروف:", parse_mode="HTML")
         return
     context.user_data['temp_disc']['desc'] = text
     context.user_data['action'] = 'awaiting_dsc_value'
-    await update.message.reply_text("💰 <b>الخطوة 3:</b> أرسل قيمة الخصم كرقـم فقط (مثلاً 10 لتعني 10%):")
+    await update.message.reply_text("💰 <b>الخطوة 3:</b> أرسل قيمة الخصم كرقـم فقط (مثلاً 10 لتعني 10%):", parse_mode="HTML")
 
 # 4. طلب التاريخ (تنسيق محدد)
 async def validate_dsc_value(update, context):
     text = update.message.text.strip()
     if not text.isdigit():
-        await update.message.reply_text("❌ <b>خطأ:</b> يرجى إرسال أرقام فقط (مثلاً: 15):")
+        await update.message.reply_text("❌ <b>خطأ:</b> يرجى إرسال أرقام فقط (مثلاً: 15):", parse_mode="HTML")
         return
     context.user_data['temp_disc']['value'] = text
     context.user_data['action'] = 'awaiting_dsc_expiry'
-    await update.message.reply_text("📅 <b>الخطوة 4:</b> أرسل تاريخ انتهاء الكود بصيغة <code>YYYY-MM-DD</code>:\nمثال: <code>2026-12-31</code>")
+    await update.message.reply_text("📅 <b>الخطوة 4:</b> أرسل تاريخ انتهاء الكود بصيغة <code>YYYY-MM-DD</code>:\nمثال: <code>2026-12-31</code>", parse_mode="HTML")
 
 # 5. طلب الحد الأقصى (أرقام إنجليزية فقط)
 async def validate_dsc_expiry(update, context):
     text = update.message.text.strip()
     if not re.match(r"^\d{4}-\d{2}-\d{2}$", text):
-        await update.message.reply_text("❌ <b>خطأ في التنسيق!</b> أرسل التاريخ بهذا الشكل <code>2026-01-01</code> حصراً:")
+        await update.message.reply_text("❌ <b>خطأ في التنسيق!</b> أرسل التاريخ بهذا الشكل <code>2026-01-01</code> حصراً:", parse_mode="HTML")
         return
     context.user_data['temp_disc']['expiry'] = text
     context.user_data['action'] = 'awaiting_dsc_max'
-    await update.message.reply_text("🔢 <b>الخطوة 5:</b> أرسل <b>الحد الأقصى لاستخدام الكود</b> (أرقام إنجليزية فقط):")
+    await update.message.reply_text("🔢 <b>الخطوة 5:</b> أرسل <b>الحد الأقصى لاستخدام الكود</b> (أرقام إنجليزية فقط):", parse_mode="HTML")
 
 # 6. التوليد النهائي والحفظ
 async def validate_dsc_max(update, context):
     text = update.message.text.strip()
     if not text.isdigit():
-        await update.message.reply_text("❌ <b>خطأ:</b> أرسل أرقاماً إنجليزية فقط:")
+        await update.message.reply_text("❌ <b>خطأ:</b> أرسل أرقاماً إنجليزية فقط:", parse_mode="HTML")
         return
     
     d = context.user_data['temp_disc']
