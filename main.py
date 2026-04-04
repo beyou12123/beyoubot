@@ -29,6 +29,7 @@ from telegram.ext import (
 )
 
 # استيراد الدوال من ملف البرمجة الخاص بقاعدة البيانات(sheets.py)
+
 from sheets import (
     save_user, 
     save_bot, 
@@ -36,9 +37,13 @@ from sheets import (
     get_bot_config, 
     add_log_entry, 
     get_total_bots_count,
-    get_total_factory_users, # دالة إحصائيات مستخدمي المصنع
-    get_all_active_bots
+    get_total_factory_users,
+    get_all_active_bots,
+    setup_bot_factory_database, # أضف هذه أيضاً لأنها المحرك الرئيسي
+    ensure_sheet_schema,
+    ensure_all_sheets_schema
 )
+
 
 # --- الإعدادات الأساسية ---
 TOKEN = "8532487667:AAGYgoSw-S2G7ruf_To8LGGd5OGCfn_T6dw"
