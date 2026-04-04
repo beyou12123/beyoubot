@@ -508,6 +508,72 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 
+    # تهيئة الورق والإعدادات مع لودينج "وميض ألوان مستمر" في ملف main.py
+    elif data == "run_setup_db_now":
+        # 1. قائمة الألوان للمحاكاة البصرية المستمرة
+        loading_colors = ["🔴", "🟠", "🟡", "🟢", "🔵", "🟣"]
+        
+        base_loading_msg = (
+            "<b>جاري تشغيل محركات المصنع...</b>\n"
+            "━━━━━━━━━━━━━━\n"
+            "🔄 جاري فحص وإنشاء جداول قاعدة البيانات...\n"
+            "🎨 جاري تنسيق الصفوف والألوان تلقائياً...\n"
+            "⚙️ جاري زرع الإعدادات الافتراضية للبوت...\n\n"
+            "<i>يرجى الانتظار، العملية مستمرة حتى اكتمال كافة الجداول...</i>"
+        )
+
+        # 2. بدء العمل الفعلي فوراً وتمرير التوكن
+        from sheets import setup_bot_factory_database
+        
+        # إنشاء المهمة لتعمل في الخلفية لكي لا يتجمد البوت
+        setup_task = asyncio.create_task(asyncio.to_thread(setup_bot_factory_database, context.bot.token))
+        
+        # 3. حلقة التكرار لتغيير الألوان (تمنع الشعور بالتوقف)
+        color_index = 0
+        while not setup_task.done():
+            try:
+                # اختيار اللون التالي من المصفوفة
+                current_color = loading_colors[color_index % len(loading_colors)]
+                
+                # تحديث الرسالة باللون الجديد
+                # استخدمنا try/except هنا لتجنب أخطاء تليجرام عند التحديث السريع
+                await query.edit_message_text(
+                    f"{current_color} {base_loading_msg}", 
+                    parse_mode="HTML"
+                )
+                
+                color_index += 1
+                # تأخير بسيط لضمان سلاسة الألوان وعدم حظر البوت
+                await asyncio.sleep(1) 
+            except Exception:
+                # في حال حدث خطأ بسيط في التحديث، ننتظر قليلاً ونكمل
+                await asyncio.sleep(1)
+                continue
+        
+        # 4. انتظار النتيجة النهائية بعد اكتمال المهمة
+        sheets_count = await setup_task
+        
+        # 5. عرض النتيجة النهائية (رسالة النجاح)
+        if sheets_count > 0:
+            result_text = (
+                "✅ <b>تمت العملية بنجاح!</b>\n"
+                "━━━━━━━━━━━━━━\n"
+                f"📦 تم إنشاء وتنسيق (<b>{sheets_count} ورقة</b>) بالكامل.\n"
+                "🛡️ نظام الحماية والتحقق من المخطط (Schema) نشط الآن."
+            )
+        else:
+            result_text = "❌ <b>فشلت العملية!</b>\nحدث خطأ أثناء الاتصال بجوجل شيت، يرجى مراجعة سجلات السيرفر."
+            
+        keyboard = [[InlineKeyboardButton("🔙 العودة للوحة التحكم", callback_data="open_admin_panel")]]
+        
+        # إظهار رسالة النجاح النهائية
+        await query.edit_message_text(result_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+
+
+
+# --------------------------------------------------------------------------
+
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دالة إلغاء عملية إنشاء البوت والعودة للقائمة الرئيسية"""
