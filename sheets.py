@@ -432,6 +432,32 @@ def get_total_factory_users():
     try: return len(users_sheet.col_values(1)) - 1
     except: return 0
 
+# --------------------------------------------------------------------------
+def safe_api_call(func, *args, **kwargs):
+    """
+    الوسيط الذكي: 
+    - يعالج مشكلة (name 'safe_api_call' is not defined).
+    - يعالج مشكلة (Quota exceeded 429) عبر الانتظار وإعادة المحاولة.
+    """
+    for attempt in range(RETRY_ATTEMPTS):
+        try:
+            # محاولة تنفيذ الطلب (سواء كان إضافة ورقة أو قراءة بيانات)
+            return func(*args, **kwargs)
+        except gspread.exceptions.APIError as e:
+            if "429" in str(e):
+                # إذا تجاوزنا الكوتا، ننتظر وقتاً يتضاعف مع كل محاولة
+                wait_time = (attempt + 1) * 3 
+                logger.warning(f"⚠️ تجاوزت كوتا جوجل. انتظر {wait_time} ثانية (محاولة {attempt + 1})...")
+                time.sleep(wait_time)
+            else:
+                # إذا كان خطأ آخر، نرفعه للنظام
+                raise e
+        except Exception as e:
+            logger.error(f"❌ خطأ غير متوقع في طلب API: {e}")
+            time.sleep(1)
+    return None
+
+# --------------------------------------------------------------------------
 #دالة إنشاء وتجهيز الورق
 def setup_bot_factory_database(bot_token=None):
     """المحرك الشامل: ينشئ الجداول، ينسق الهيدرز، يزرع الإعدادات، ويعيد عدد الأوراق ديناميكياً"""
@@ -467,10 +493,11 @@ def setup_bot_factory_database(bot_token=None):
             
             if AUTO_RESIZE and (not current_headers or set(current_headers) != set(headers)):
                 safe_api_call(worksheet.columns_auto_resize, 0, len(headers))
-                
+            time.sleep(0.5)
         except Exception as e: 
             print(f"❌ خطأ تهيئة {sheet_name}: {e}")
-
+            
+            
     if all_requests:
         for i in range(0, len(all_requests), BATCH_SIZE):
             safe_api_call(ss.batch_update, {"requests": all_requests[i:i+BATCH_SIZE]})
