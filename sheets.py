@@ -234,8 +234,8 @@ def connect_to_google():
         client = gspread.authorize(creds)
         ss = client.open_by_key(SPREADSHEET_ID)
         
-        # ربط الأوراق (استخدام ss المفتوح بدلاً من spreadsheet غير المعرف)
-        def safe_get(name):
+        # --- [إصلاح: تعريف الدالة المساعدة بشكل صحيح] ---
+        def safe_get_sheet(name):
             try: return ss.worksheet(name)
             except: return None
 
@@ -253,30 +253,17 @@ def connect_to_google():
         courses_sheet = safe_get_sheet("الدورات_التدريبية")
         faq_sheet = safe_get_sheet("الأسئلة_الشائعة")
         meta_sheet = safe_get_sheet("_meta")
-        coaches_sheet = ss.worksheet("المدربين") 
+        coaches_sheet = safe_get_sheet("المدربين") 
         lectures_sheet = safe_get_sheet("جدول_المحاضرات")
 
-        # --- التصحيح الجوهري هنا ---
-        structures = get_sheets_structure() # الآن أصبحت معروفة للبوت
-        ensure_all_sheets_schema(ss, structures) # تمرير ss المعرف فعلياً
+        structures = get_sheets_structure() 
+        ensure_all_sheets_schema(ss, structures) 
         
         print("✅ تم الاتصال بنجاح وتحديث كافة المخططات.")
         return True
     except Exception as e:
         print(f"❌ فشل الاتصال النهائي: {str(e)}")
         return False
-
-#نظام إعادة المحاولة 
-def safe_api_call(func, *args, **kwargs):
-    """نظام إعادة المحاولة التلقائي لضمان استقرار العمليات"""
-    for attempt in range(RETRY_ATTEMPTS):
-        try:
-            return func(*args, **kwargs)
-        except Exception as e:
-            wait_time = (attempt + 1) * 2
-            print(f"⚠️ API Retry {attempt+1}/{RETRY_ATTEMPTS} failed: {e}. Retrying in {wait_time}s...")
-            time.sleep(wait_time)
-    raise Exception("❌ Critical API Failure after multiple attempts.")
 
 # تنفيذ محاولة الاتصال الفورية
 connect_to_google() 

@@ -697,6 +697,9 @@ if __name__ == "__main__":
             
         loop.create_task(start_all_sub_bots()) 
         print("🚀 مصنع البوتات يعمل الآن بكافة محركاته...")
-        app.run_polling()
+        
+        # --- [إصلاح: إضافة drop_pending_updates لإنهاء التعارض] ---
+        app.run_polling(drop_pending_updates=True) 
+        
     except Exception as e:
         print(f"🔴 خطأ في إقلاع المصنع: {e}")
