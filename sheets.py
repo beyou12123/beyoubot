@@ -157,14 +157,15 @@ def ensure_sheet_schema(worksheet, required_headers):
 # دالة النظام الشامل 
 def ensure_all_sheets_schema(spreadsheet, sheets_structure):
     """
-    نظام ذكي شامل:
-    - ينشئ الورقة إذا غير موجودة
-    - يفحص الأعمدة
-    - يضيف الناقص فقط
-    - لا يحذف أي شيء
+    نظام مزامنة ذكي (النسخة المطورة):
+    - يجلب قائمة الأوراق بالكامل مرة واحدة لتوفير طلبات API.
+    - يتفادى خطأ "A sheet with the name ... already exists".
+    - [span_1](start_span)يضيف الأعمدة الناقصة فقط ولا يلمس البيانات الموجودة.[span_1](end_span)
     """
-
     try:
+        # خطوة ذكية: جلب أسماء كل الأوراق الموجودة حالياً في ملف جوجل شيت دفعة واحدة
+        existing_sheet_names = [ws.title for ws in spreadsheet.worksheets()]
+        
         for sheet_def in sheets_structure:
             sheet_name = sheet_def.get("name")
             required_headers = sheet_def.get("cols", [])
@@ -172,22 +173,24 @@ def ensure_all_sheets_schema(spreadsheet, sheets_structure):
             if not sheet_name or not required_headers:
                 continue
 
-            try:
-                worksheet = spreadsheet.worksheet(sheet_name)
-            except:
-                # إذا الورقة غير موجودة → يتم إنشاؤها
+            # التحقق محلياً من القائمة بدلاً من سؤال جوجل في كل مرة
+            if sheet_name not in existing_sheet_names:
+                # إنشاء الورقة فقط إذا لم تكن موجودة فعلياً في القائمة
                 worksheet = spreadsheet.add_worksheet(
                     title=sheet_name,
                     rows="1000",
                     cols=str(len(required_headers) + 10)
                 )
-                print(f"🆕 تم إنشاء الورقة: {sheet_name}")
+                print(f"🆕 تم إنشاء الورقة بنجاح: {sheet_name}")
+            else:
+                # إذا كانت موجودة، نفتحها لنفحص أعمدتها
+                worksheet = spreadsheet.worksheet(sheet_name)
 
-            # استخدام الدالة الذكية
-            ensure_sheet_schema(worksheet, required_headers)
+            # فحص وتحديث الأعمدة الناقصة (الدالة المساعدة الموجودة لديك مسبقاً)
+            [span_2](start_span)ensure_sheet_schema(worksheet, required_headers)[span_2](end_span)
 
     except Exception as e:
-        print(f"❌ خطأ عام في فحص جميع الأوراق: {e}")
+        print(f"❌ خطأ في مزامنة الأوراق: {e}")
 
 # --------------------------------------------------------------------------
 # كاش داخلي لتسريع العمليات
