@@ -312,7 +312,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         
         keyboard = []
         for course in all_courses:
-            if str(course.get('Bot_id')) == str(bot_token):
+            if str(course.get('bot_id')) == str(bot_token):
                 c_name = course.get('اسم_الدورة')
                 c_id = course.get('ID_الدورة')
                 
