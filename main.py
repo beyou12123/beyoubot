@@ -380,7 +380,7 @@ async def owner_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [
         [InlineKeyboardButton("📊 إحصائيات البوتات", callback_data="stats_all")],
-        [InlineKeyboardButton("⚙️ تهيئة الجداول", callback_data="setup_db_menu")],
+        [InlineKeyboardButton("⚙️ تهيئة الجداول", callback_data="run_setup_db_now")],
         [InlineKeyboardButton("📢 إذاعة للمشتركين", callback_data="broadcast_owners")],
         [InlineKeyboardButton("🔄 تحديث السيرفر", callback_data="restart_factory")],
         [InlineKeyboardButton("🔙 العودة", callback_data="back_to_main")]
