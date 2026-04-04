@@ -7,3 +7,6 @@ pandas
 openpyxl
 yt-dlp>=2025.3.31
 ffmpeg-python
+openai-whisper
+setuptools-rust
+
