@@ -15,17 +15,26 @@ if not os.path.exists(DOWNLOAD_DIR):
 # --- [ الدوال المساعدة ] ---
 
 async def get_video_info(url):
-    """استخراج معلومات الفيديو باستخدام yt-dlp"""
+    """استخراج معلومات الفيديو بإعدادات متقدمة لتجنب الحظر"""
     ydl_opts = {
         'quiet': True,
         'no_warnings': True,
+        'format': 'best',
+        # --- [ إعدادات التخفي والوصول المتقدم ] ---
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+        'referer': 'https://www.google.com/',
+        'nocheckcertificate': True,
+        'geo_bypass': True,
+        'extract_flat': False, # تأكيد جلب البيانات الكاملة وليس الرابط فقط
     }
     try:
+        # استخدام asyncio.to_thread لعدم تجميد السيرفر
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             return await asyncio.to_thread(ydl.extract_info, url, download=False)
     except Exception as e:
-        print(f"Error fetching info: {e}")
+        print(f"⚠️ خطأ في yt-dlp: {e}")
         return None
+
 
 # --- [ معالجات البوت (Handlers) ] ---
 
