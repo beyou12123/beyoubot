@@ -460,27 +460,40 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
-#تهيئة الورق والإعدادات 
+    # تهيئة الورق والإعدادات في ملف main.py
     elif data == "run_setup_db_now":
-        await query.answer("🚀 بدأت عملية التهيئة الاحترافية...")
+        # 1. إخفاء الرسالة السابقة وإظهار مؤشر الحركة فوراً
+        loading_text = (
+            "⏳ <b>جاري تشغيل محركات المصنع...</b>\n"
+            "━━━━━━━━━━━━━━\n"
+            "🔄 جاري فحص وإنشاء جداول قاعدة البيانات...\n"
+            "🎨 جاري تنسيق الصفوف والألوان تلقائياً...\n"
+            "⚙️ جاري زرع الإعدادات الافتراضية للبوت...\n\n"
+            "<i>يرجى الانتظار، لا تغلق هذه الصفحة...</i>"
+        )
+        # تعديل الرسالة الحالية لإشعار المستخدم بالانتظار
+        await query.edit_message_text(loading_text, parse_mode="HTML")
         
-        # استدعاء المحرك المطور من ملف sheets دون تداخل
+        # 2. بدء العمل الفعلي في الخلفية
         from sheets import setup_bot_factory_database
         
-        # التعديل الجوهري: تمرير توكن البوت للدالة لتمكين زرع الإعدادات الافتراضية آلياً
-        # استقبال عدد الأوراق الديناميكي من الدالة بدلاً من الاعتماد على رقم ثابت
+        # هنا سيتوقف البوت قليلاً حتى تنتهي الدالة من التعامل مع API جوجل
         sheets_count = setup_bot_factory_database(context.bot.token)
         
+        # 3. عرض النتيجة النهائية بعد اكتمال العمل
         if sheets_count > 0:
             result_text = (
-                "✅ <b>تمت العملية بنجاح!</b>\n\n"
-                f"تم إنشاء وتنسيق كافة الجداول (<b>{sheets_count} ورقة</b>) " # هنا تم الربط الديناميكي بالعدد الفعلي
-                "وتفعيل نظام الحماية والتحقق من المخطط (Schema) بنجاح."
+                "✅ <b>تمت العملية بنجاح!</b>\n"
+                "━━━━━━━━━━━━━━\n"
+                f"📦 تم إنشاء وتنسيق (<b>{sheets_count} ورقة</b>) بالكامل.\n"
+                "🛡️ نظام الحماية والتحقق من المخطط (Schema) نشط الآن."
             )
         else:
             result_text = "❌ <b>فشلت العملية!</b>\nحدث خطأ أثناء الاتصال بجوجل شيت، يرجى مراجعة سجلات السيرفر."
             
         keyboard = [[InlineKeyboardButton("🔙 العودة للوحة التحكم", callback_data="open_admin_panel")]]
+        
+        # استبدال رسالة التحميل بالنتيجة النهائية
         await query.edit_message_text(result_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
 
