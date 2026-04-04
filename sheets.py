@@ -259,13 +259,10 @@ def connect_to_google():
         coaches_sheet = safe_get_sheet("المدربين") 
         lectures_sheet = safe_get_sheet("جدول_المحاضرات")
 
-        structures = get_sheets_structure() 
-        ensure_all_sheets_schema(ss, structures) 
-        
-        print("✅ تم الاتصال بنجاح وتحديث كافة المخططات.")
+        print("✅ تم الاتصال بجوجل بنجاح. الجداول بانتظار التهيئة اليدوية ⚙️")
         return True
     except Exception as e:
-        print(f"❌ فشل الاتصال النهائي: {str(e)}")
+        print(f"❌ فشل الاتصال الأولي: {str(e)}")
         return False
 
 # تنفيذ محاولة الاتصال الفورية
@@ -512,6 +509,7 @@ def setup_bot_factory_database(bot_token=None):
     if verify_setup(structures):
         return total_sheets
     return 0
+    
     
 # --------------------------------------------------------------------------    
 # تجهيز وتعبئة ورقة الإعدادات (الدالة المدمجة والكاملة)
