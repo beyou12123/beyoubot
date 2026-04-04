@@ -505,23 +505,17 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # استبدال حالة الوميض بالنتيجة النهائية وأزرار التحكم
         await query.edit_message_text(result_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
-
-
-
- 
-
-   # تهيئة الورق والإعدادات - النسخة الاحترافية الكاملة (UX & Stability)
+# --------------------------------------------------------------------------
+    # تهيئة الورق والإعدادات - النسخة المستقرة والمضمونة
     elif data == "run_setup_db_now":
-        # 1. نظام الحماية: منع تشغيل العملية مرتين في نفس الوقت
+        # 1. نظام الحماية لمنع التشغيل المتعدد
         if context.user_data.get("setup_running"):
             await query.answer("⚠️ العملية قيد التنفيذ بالفعل، يرجى الانتظار...", show_alert=True)
             return
 
-        # تفعيل قفل الحماية وبدء تهيئة المتغيرات
         context.user_data["setup_running"] = True
-        context.user_data["cancel_setup"] = False
         
-        loading_colors = ["🔴", "🟠", "🟡", "🟢", "🔵", "🟣"]
+        # 2. إظهار رسالة البداية فوراً (بدون انتظار)
         base_loading_msg = (
             "⏳ <b>جاري تشغيل محركات المصنع...</b>\n"
             "━━━━━━━━━━━━━━\n"
@@ -530,88 +524,42 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "⚙️ جاري زرع الإعدادات الافتراضية للبوت...\n\n"
             "<i>يرجى الانتظار، لا تغلق هذه الصفحة...</i>"
         )
+        
+        # تغيير الرسالة فوراً لإخطار المستخدم
+        await query.edit_message_text(f"🔴 {base_loading_msg}", parse_mode="HTML")
 
+        # 3. استدعاء المحرك الفعلي (هنا سيحدث الانتظار الطبيعي)
         from sheets import setup_bot_factory_database
-        import time
-
-        # 2. بدء العمل الفعلي في مسار خلفي مستقل لضمان عدم تجمد البوت
-        # نستخدم asyncio.to_thread لتشغيل الدالة الثقيلة دون تعطيل الألوان
-        setup_task = asyncio.create_task(asyncio.to_thread(setup_bot_factory_database, context.bot.token))
         
         try:
-            color_index = 0
-            start_time = time.time()
+            # تحديث تكتيكي لإيهام المستخدم بالحركة قبل العملية الثقيلة
+            await query.edit_message_text(f"🟡 {base_loading_msg}", parse_mode="HTML")
             
-            # 3. حلقة الوميض والتقدم المستمر (تستمر طالما لم تنتهِ المهمة)
-            while not setup_task.done():
-                # التحقق من طلب الإلغاء
-                if context.user_data.get("cancel_setup"):
-                    setup_task.cancel()
-                    break
-
-                # حساب شريط التقدم الوهمي (يصل لـ 98% بانتظار رد الشيت الفعلي)
-                elapsed = time.time() - start_time
-                progress = min(98, int((elapsed / 60) * 100)) # تقديرياً دقيقة للانتهاء
-                
-                bar_length = 10
-                filled = int(progress / 10)
-                bar = "🟩" * filled + "⬜" * (bar_length - filled)
-                
-                # اختيار اللون الحالي للوميض
-                current_color = loading_colors[color_index % len(loading_colors)]
-                
-                status_text = (
-                    f"{current_color} {base_loading_msg}\n\n"
-                    f"📊 <b>التقدم:</b> [{bar}] {progress}%\n"
-                    f"⏱️ الوقت المنقضي: {int(elapsed)} ثانية"
+            # تنفيذ العملية (هذا الجزء هو الذي يستغرق وقتاً)
+            loop = asyncio.get_running_loop()
+sheets_count = await loop.run_in_executor(None, setup_bot_factory_database, context.bot.token)
+            
+            # 4. معالجة النتيجة وعرض رسالة النجاح
+            if sheets_count > 0:
+                result_text = (
+                    "✅ <b>تمت العملية بنجاح!</b>\n"
+                    "━━━━━━━━━━━━━━\n"
+                    f"📦 تم إنشاء وتنسيق (<b>{sheets_count} ورقة</b>) بالكامل.\n"
+                    "🛡️ نظام الحماية والتحقق من المخطط (Schema) نشط الآن."
                 )
-
-                try:
-                    # تحديث الرسالة كل 2.5 ثانية (التوقيت المثالي لتجنب Rate Limit)
-                    cancel_keyboard = [[InlineKeyboardButton("❌ إلغاء العملية", callback_data="cancel_setup")]]
-                    await query.edit_message_text(
-                        status_text, 
-                        reply_markup=InlineKeyboardMarkup(cancel_keyboard),
-                        parse_mode="HTML"
-                    )
-                except Exception:
-                    pass # تجاهل أخطاء التحديث البسيطة لضمان استمرار اللوب
-
-                color_index += 1
-                await asyncio.sleep(2.5) 
-
-            # 4. انتظار النتيجة النهائية (مع Timeout حماية لمدة 120 ثانية)
-            sheets_count = await asyncio.wait_for(setup_task, timeout=120)
-
-        except asyncio.TimeoutError:
-            sheets_count = -1
+            else:
+                result_text = "⚠️ <b>النظام مهيأ بالفعل!</b>\nلم يتم إجراء تغييرات لأن الجداول موجودة مسبقاً."
+                
         except Exception as e:
-            print(f"❌ خطأ أثناء التهيئة: {e}")
-            sheets_count = -1
+            print(f"❌ Error in setup: {e}")
+            result_text = "❌ <b>فشلت العملية!</b>\nحدث خطأ أثناء الاتصال بجوجل شيت."
         finally:
-            # تحرير القفل دائماً للسماح بإعادة المحاولة
+            # تحرير القفل لضمان استجابة الزر في المرة القادمة
             context.user_data["setup_running"] = False
 
-        # 5. عرض النتيجة النهائية الاحترافية (رسالة النجاح أو الفشل)
-        if sheets_count > 0:
-            result_text = (
-                "✅ <b>تمت العملية بنجاح!</b>\n"
-                "━━━━━━━━━━━━━━\n"
-                f"📦 تم إنشاء وتنسيق (<b>{sheets_count} ورقة</b>) بالكامل.\n"
-                "🛡️ نظام الحماية والتحقق من المخطط (Schema) نشط الآن."
-            )
-        elif sheets_count == 0:
-            result_text = "⚠️ <b>النظام مهيأ بالفعل!</b>\nلم يتم إجراء تغييرات لأن الجداول موجودة مسبقاً."
-        else:
-            result_text = "❌ <b>فشلت العملية!</b>\nحدث خطأ أثناء الاتصال بجوجل شيت، يرجى مراجعة سجلات السيرفر."
-            
+        # 5. عرض النتيجة النهائية مع زر العودة
         keyboard = [[InlineKeyboardButton("🔙 العودة للوحة التحكم", callback_data="open_admin_panel")]]
         await query.edit_message_text(result_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
-
-    # معالج زر الإلغاء
-    elif data == "cancel_setup":
-        context.user_data["cancel_setup"] = True
-        await query.answer("🛑 جاري إيقاف العملية...")
 
 
 

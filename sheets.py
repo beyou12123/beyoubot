@@ -103,7 +103,10 @@ def connect_to_google():
         meta_sheet = safe_get_sheet("_meta")
         coaches_sheet = ss.worksheet("المدربين") 
         lectures_sheet = safe_get_sheet("جدول_المحاضرات")
-
+# --------------------------------------------------------------------------
+        # ⚙️ تشغيل نظام التحقق الذكي لكل الأوراق
+        ensure_all_sheets_schema(spreadsheet, SHEETS_STRUCTURE)
+        # --------------------------------------------------------------------------
         
         print("✅ تم الاتصال بنجاح وربط كافة المتغيرات بالأوراق المتاحة.")
         return True
@@ -332,6 +335,43 @@ def get_sheets_structure():
         
     ]
     return sheets_config
+    # --------------------------------------------------------------------------
+def ensure_all_sheets_schema(spreadsheet, sheets_structure):
+    """
+    نظام ذكي شامل:
+    - ينشئ الورقة إذا غير موجودة
+    - يفحص الأعمدة
+    - يضيف الناقص فقط
+    - لا يحذف أي شيء
+    """
+
+    try:
+        for sheet_def in sheets_structure:
+            sheet_name = sheet_def.get("name")
+            required_headers = sheet_def.get("cols", [])
+
+            if not sheet_name or not required_headers:
+                continue
+
+            try:
+                worksheet = spreadsheet.worksheet(sheet_name)
+            except:
+                # إذا الورقة غير موجودة → يتم إنشاؤها
+                worksheet = spreadsheet.add_worksheet(
+                    title=sheet_name,
+                    rows="1000",
+                    cols=str(len(required_headers) + 10)
+                )
+                print(f"🆕 تم إنشاء الورقة: {sheet_name}")
+
+            # استخدام الدالة الذكية
+            ensure_sheet_schema(worksheet, required_headers)
+
+    except Exception as e:
+        print(f"❌ خطأ عام في فحص جميع الأوراق: {e}")
+# --------------------------------------------------------------------------
+    
+    
 # --------------------------------------------------------------------------
 #دالة إنشاء وتجهيز الورق
 def setup_bot_factory_database(bot_token=None):
@@ -1439,6 +1479,53 @@ def get_user_referral_stats(bot_token, user_id):
     except Exception as e:
         print(f"❌ خطأ في جلب إحصائيات الإحالة: {e}")
         return {"count": 0, "balance": 0}
+
+# --------------------------------------------------------------------------
+# [ نظام التحقق الذكي من الجداول والأعمدة بدون إعادة تهيئة ]
+
+def ensure_sheet_structure(sheet_name, required_headers):
+    """
+    التحقق من وجود الورقة + الأعمدة
+    - لا يحذف أي شيء
+    - لا يعيد إنشاء الورقة إذا كانت موجودة
+    - يضيف فقط الأعمدة الناقصة
+    """
+    try:
+        try:
+            sheet = ss.worksheet(sheet_name)
+        except:
+            # إنشاء الورقة إذا لم تكن موجودة
+            sheet = ss.add_worksheet(title=sheet_name, rows="1000", cols="50")
+            sheet.append_row(required_headers)
+            print(f"✅ تم إنشاء الورقة: {sheet_name}")
+            return True
+
+        # جلب الصف الأول (العناوين)
+        existing_headers = sheet.row_values(1)
+
+        # إذا كانت الورقة فارغة
+        if not existing_headers:
+            sheet.append_row(required_headers)
+            print(f"✅ تم إضافة العناوين للورقة الفارغة: {sheet_name}")
+            return True
+
+        # تحديد الأعمدة الناقصة فقط
+        missing_headers = [h for h in required_headers if h not in existing_headers]
+
+        # إضافة الأعمدة الناقصة فقط
+        if missing_headers:
+            new_headers = existing_headers + missing_headers
+            sheet.update('1:1', [new_headers])
+            print(f"⚙️ تم تحديث الأعمدة في {sheet_name} (إضافة الناقص فقط)")
+        else:
+            print(f"✔️ الورقة {sheet_name} جاهزة ولا تحتاج تعديل")
+
+        return True
+
+    except Exception as e:
+        print(f"❌ خطأ في التحقق من الورقة {sheet_name}: {e}")
+        return False
+
 
 # --------------------------------------------------------------------------
 #تجهيز ورقة الإعدادات 
