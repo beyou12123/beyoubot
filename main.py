@@ -445,68 +445,88 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 # --------------------------------------------------------------------------
 
-
-    # تهيئة الورق والإعدادات مع لودينج "وميض ألوان مستمر" في ملف main.py
+    # --- [ النسخة المعتمدة والمدمجة لتهيئة الجداول ] ---
     elif data == "run_setup_db_now":
-        # 1. قائمة الألوان للمحاكاة البصرية المستمرة
-        loading_colors = ["🔴", "🟠", "🟡", "🟢", "🔵", "🟣"]
+        # 1. منع تشغيل العملية مرتين (حماية الاستقرار)
+        if context.user_data.get("setup_running"):
+            await query.answer("⚠️ العملية قيد التنفيذ بالفعل، يرجى الانتظار...", show_alert=True)
+            return
+
+        context.user_data["setup_running"] = True
+        context.user_data["cancel_setup"] = False
         
+        loading_colors = ["🔴", "🟠", "🟡", "🟢", "🔵", "🟣"]
         base_loading_msg = (
-            "<b>جاري تشغيل محركات المصنع...</b>\n"
+            "⏳ <b>جاري تشغيل محركات المصنع...</b>\n"
             "━━━━━━━━━━━━━━\n"
             "🔄 جاري فحص وإنشاء جداول قاعدة البيانات...\n"
             "🎨 جاري تنسيق الصفوف والألوان تلقائياً...\n"
             "⚙️ جاري زرع الإعدادات الافتراضية للبوت...\n\n"
-            "<i>يرجى الانتظار، العملية مستمرة حتى اكتمال كافة الجداول...</i>"
+            "<i>يرجى الانتظار، لا تغلق هذه الصفحة...</i>"
         )
 
-        # 2. تشغيل عملية الشيت في "مهمة خلفية" لضمان عدم تجميد الألوان
         from sheets import setup_bot_factory_database
         
-        # إنشاء المهمة (Task) للعملية الثقيلة لتعمل في مسار منفصل
+        # 2. تشغيل العملية في Thread مستقل لضمان عدم تجمد البوت
         setup_task = asyncio.create_task(asyncio.to_thread(setup_bot_factory_database, context.bot.token))
         
-        # 3. حلقة التكرار للألوان (Loop) - تستمر طالما أن إنشاء الجداول لم ينتهِ
-        color_index = 0
-        while not setup_task.done():
-            try:
-                # اختيار اللون التالي من المصفوفة بشكل دوري
-                current_color = loading_colors[color_index % len(loading_colors)]
-                
-                # تحديث الرسالة باللون الجديد مع الحفاظ على النص كاملاً
-                await query.edit_message_text(
-                    f"{current_color} {base_loading_msg}", 
-                    parse_mode="HTML"
-                )
-                
-                color_index += 1
-                # سرعة الوميض: 0.8 ثانية لضمان سلاسة الحركة وعدم تجاوز قيود تليجرام
-                await asyncio.sleep(0.8) 
-            except Exception:
-                # لتجنب توقف البوت في حال حاول تحديث نفس الرسالة بسرعة
-                break
-        
-        # 4. انتظار الحصول على النتيجة النهائية (عدد الأوراق) بعد انتهاء المهمة
-        sheets_count = await setup_task
-        
-        # 5. عرض النتيجة النهائية بعد اكتمال العمل بالكامل
-        if sheets_count > 0:
-            result_text = (
-                "✅ <b>تمت العملية بنجاح!</b>\n"
-                "━━━━━━━━━━━━━━\n"
-                f"📦 تم إنشاء وتنسيق (<b>{sheets_count} ورقة</b>) بالكامل.\n"
-                "🛡️ نظام الحماية والتحقق من المخطط (Schema) نشط الآن."
-            )
-        else:
-            result_text = (
-                "❌ <b>فشلت العملية!</b>\n"
-                "حدث خطأ أثناء الاتصال بجوجل شيت، يرجى مراجعة سجلات السيرفر."
-            )
+        try:
+            color_index = 0
+            start_time = time.time()
             
+            # 3. حلقة الوميض والتقدم المستمر
+            while not setup_task.done():
+                if context.user_data.get("cancel_setup"):
+                    setup_task.cancel()
+                    break
+
+                # حساب شريط التقدم الوهمي
+                elapsed = time.time() - start_time
+                progress = min(98, int((elapsed / 60) * 100))
+                bar = "🟩" * (progress // 10) + "⬜" * (10 - (progress // 10))
+                
+                current_color = loading_colors[color_index % len(loading_colors)]
+                status_text = (
+                    f"{current_color} {base_loading_msg}\n\n"
+                    f"📊 <b>التقدم:</b> [{bar}] {progress}%\n"
+                    f"⏱️ الوقت المنقضي: {int(elapsed)} ثانية"
+                )
+
+                try:
+                    # التحديث كل 2.5 ثانية لتجنب حظر تليجرام (Rate Limit)
+                    await query.edit_message_text(
+                        status_text, 
+                        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ إلغاء", callback_data="cancel_setup")]]),
+                        parse_mode="HTML"
+                    )
+                except: pass
+
+                color_index += 1
+                await asyncio.sleep(2.5) 
+
+            # 4. انتظار النتيجة النهائية (السطر 540 المصحح)
+            sheets_count = await setup_task
+            
+            if sheets_count > 0:
+                result_text = (
+                    "✅ <b>تمت العملية بنجاح!</b>\n"
+                    "━━━━━━━━━━━━━━\n"
+                    f"📦 تم إنشاء وتنسيق (<b>{sheets_count} ورقة</b>) بالكامل.\n"
+                    "🛡️ نظام الحماية والتحقق من المخطط (Schema) نشط الآن."
+                )
+            else:
+                result_text = "⚠️ <b>النظام مهيأ بالفعل!</b>\nلم يتم إجراء تغييرات."
+                
+        except Exception as e:
+            print(f"❌ Error in setup: {e}")
+            result_text = "❌ <b>فشلت العملية!</b>\nحدث خطأ أثناء الاتصال بجوجل شيت."
+            
+        finally:
+            context.user_data["setup_running"] = False
+
         keyboard = [[InlineKeyboardButton("🔙 العودة للوحة التحكم", callback_data="open_admin_panel")]]
-        
-        # استبدال حالة الوميض بالنتيجة النهائية وأزرار التحكم
         await query.edit_message_text(result_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
 # --------------------------------------------------------------------------
 
 # --------------------------------------------------------------------------
