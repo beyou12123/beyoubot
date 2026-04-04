@@ -339,9 +339,45 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             await query.edit_message_text(f"✅ تم شراء الدورة بنجاح!\nرصيدك المتبقي: {new_balance} نقطة.\nيمكنك الآن البدء بالدراسة من القائمة الرئيسية.")
         else:
             await query.answer("❌ فشلت العملية، تأكد من رصيدك.", show_alert=True)
+# ربط الدورات بالنقاط
+    elif data == "my_profile":
+        await query.answer()
+        from sheets import ss
+        # جلب الدورات التي تسجل فيها الطالب من ورقة سجل_التسجيلات
+        reg_sheet = ss.worksheet("سجل_التسجيلات")
+        all_regs = reg_sheet.get_all_records()
+        
+        # تصفية الدورات الخاصة بهذا الطالب في هذا البوت
+        student_courses = [
+            r for r in all_regs 
+            if str(r.get("bot_id")) == str(bot_token) and str(r.get("ID_المستخدم_تيليجرام")) == str(user_id)
+        ]
+
+        if not student_courses:
+            text = "👤 <b>ملفك الدراسي</b>\n\nأنت غير مشترك في أي دورة حالياً. يمكنك استخدام نقاطك لفتح دورة جديدة!"
+            keyboard = [[InlineKeyboardButton("💰 اربح نقاط", callback_data="referral_system")]]
+        else:
+            text = "👤 <b>ملفك الدراسي</b>\n\nإليك الدورات التي تمتلك حق الوصول إليها:"
+            keyboard = []
+            for reg in student_courses:
+                c_name = reg.get('اسم_الدورة')
+                c_id = reg.get('معرف_الدورة')
+                keyboard.append([InlineKeyboardButton(f"📖 {c_name}", callback_data=f"open_content_{c_id}")])
+
+        keyboard.append([InlineKeyboardButton("🔙 العودة", callback_data="main_menu")])
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+    # معالج فتح محتوى الدورة
+    elif data.startswith("open_content_"):
+        course_id = data.replace("open_content_", "")
+        from educational_manager import show_course_content_ui
+        await show_course_content_ui(update, context, course_id)
+
+ 
+ 
  
 
-
+# --------------------------------------------------------------------------
 
 # --------------------------------------------------------------------------
     # --- 1. إدارة الإحصائيات ---
@@ -1410,6 +1446,29 @@ async def show_course_selector(update, context, employee_id):
     await update.callback_query.edit_message_text("🎯 اختر الدورات التي يمكن للموظف إدارتها:", 
                                                  reply_markup=InlineKeyboardMarkup(keyboard))
 # --------------------------------------------------------------------------
+#دالة فحص الطلاب وإرسال الرسائل 
+async def activation_monitor(context: ContextTypes.DEFAULT_TYPE):
+    """وظيفة خلفية تراقب تفعيلات الطلاب وترسل تنبيهات فورا"""
+    bot_token = context.bot.token
+    from sheets import get_newly_activated_students, ss
+    
+    new_activations = get_newly_activated_students(bot_token)
+    
+    for student in new_activations:
+        try:
+            msg = (
+                f"🎉 <b>تهانينا يا {student['name']}!</b>\n\n"
+                f"تم تفعيل اشتراكك في الدورة بنجاح. ✅\n"
+                f"يمكنك الآن الدخول إلى 👤 <b>(ملفي الدراسي)</b> لمشاهدة كافة الدروس والمحتوى المدفوع.\n\n"
+                f"نتمنى لك رحلة تعليمية ممتعة! 🚀"
+            )
+            await context.bot.send_message(chat_id=student['user_id'], text=msg, parse_mode="HTML")
+            
+            # تحديث الشيت لكي لا يرسل الرسالة مرة أخرى
+            sheet = ss.worksheet("قاعدة_بيانات_الطلاب")
+            sheet.update_cell(student['row'], 21, f"تم الإشعار: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+        except Exception as e:
+            print(f"⚠️ فشل إرسال إشعار للطالب {student['user_id']}: {e}")
 
 # --------------------------------------------------------------------------
 
@@ -2063,14 +2122,20 @@ async def run_bot(token, owner_id):
     """هذه الدالة هي التي يستدعيها ملف main.py لتشغيل البوت ديناميكياً"""
     application = ApplicationBuilder().token(token).build()
     
-    # إضافة المعالجات (Handlers)
+    # 1. إضافة المعالجات (Handlers)
     application.add_handler(CommandHandler("start", start_handler))
     application.add_handler(CallbackQueryHandler(contact_callback_handler))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_contact_message))
     
-    # بدء الاستماع للرسائل
+    # 2. إعداد مراقب التفعيل (يُوضع هنا بعد تعريف الـ application)
+    # سيقوم بفحص الشيت كل 60 ثانية وإرسال رسائل للطلاب المفعلين
+    job_queue = application.job_queue
+    job_queue.run_repeating(activation_monitor, interval=60, first=10)
+    
+    # 3. بدء تشغيل المحرك
     await application.initialize()
     await application.start()
     await application.updater.start_polling()
+
 
 # --------------------------------------------------------------------------

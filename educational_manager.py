@@ -679,7 +679,7 @@ async def list_all_discounts_ui(update, context):
     
     keyboard = []
     # تصفية الأكواد التابعة لهذا البوت فقط
-    bot_codes = [r for r in records if str(r.get('Bot_id')) == str(bot_token)]
+    bot_codes = [r for r in records if str(r.get('bot_id')) == str(bot_token)]
     
     if bot_codes:
         for r in bot_codes:
@@ -704,7 +704,7 @@ async def view_discount_details_ui(update, context, disc_id):
     from sheets import ss
     sheet = ss.worksheet("أكواد_الخصم")
     records = sheet.get_all_records()
-    d = next((r for r in records if str(r.get('Bot_id')) == str(bot_token) and str(r.get('معرف_الخصم')) == str(disc_id)), None)
+    d = next((r for r in records if str(r.get('bot_id')) == str(bot_token) and str(r.get('معرف_الخصم')) == str(disc_id)), None)
     
     if d:
         status = d.get('الحالة')
@@ -738,6 +738,7 @@ async def view_discount_details_ui(update, context, disc_id):
 
 
 # --------------------------------------------------------------------------
+# عرض الدروس للطالب 
 
 # --------------------------------------------------------------------------
 
