@@ -1387,8 +1387,13 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
             
            
 # --------------------------------------------------------------------------
-        # --- [ معالجة خطوات إضافة كود الخصم نصياً ] ---
-        elif action == 'awaiting_dsc_desc':
+     
+# --------------------------------------------------------------------------
+    # --- [ الجزء الخاص بالمسؤول - إدارة المحتوى والدورات ] ---
+    if user.id == bot_owner_id:
+    	
+    # --- [ معالجة خطوات إضافة كود الخصم نصياً ] ---
+        if action == 'awaiting_dsc_desc':
             from educational_manager import validate_dsc_desc
             await validate_dsc_desc(update, context)
             return
@@ -1408,10 +1413,9 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
             await validate_dsc_max(update, context)
             return
 
-
-# --------------------------------------------------------------------------
-    # --- [ الجزء الخاص بالمسؤول - إدارة المحتوى والدورات ] ---
-    if user.id == bot_owner_id:
+   
+    
+    
         # إضافة قسم جديد
         if action == 'awaiting_cat_name':
             import uuid
