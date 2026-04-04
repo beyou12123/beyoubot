@@ -1414,6 +1414,32 @@ def link_user_to_inviter(bot_token, student_id, inviter_id):
         return False
 
 
+def get_user_referral_stats(bot_token, user_id):
+    """حساب عدد المدعوين والرصيد المكتسب من ورقة المستخدمين"""
+    try:
+        # التأكد من الاتصال بالشيت
+        global users_sheet
+        if users_sheet is None: connect_to_google()
+        
+        # جلب كافة السجلات
+        all_users = users_sheet.get_all_records()
+        
+        # 1. حساب عدد الطلاب الذين سجلوا عبر هذا المستخدم (العمود رقم 10: معرف إحالة)
+        count = sum(1 for u in all_users if str(u.get('معرف إحالة', '')).strip() == str(user_id))
+        
+        # 2. جلب الرصيد الحالي للمستخدم من (العمود رقم 11: رصيد)
+        user_cell = users_sheet.find(str(user_id))
+        if user_cell:
+            # تم تصحيح الباراميتر هنا ليكون متوافقاً مع مكتبة gspread
+            balance = users_sheet.cell(user_cell.row, 11).value or 0
+        else:
+            balance = 0
+            
+        return {"count": count, "balance": balance}
+    except Exception as e:
+        print(f"❌ خطأ في جلب إحصائيات الإحالة: {e}")
+        return {"count": 0, "balance": 0}
+
 # --------------------------------------------------------------------------
 #تجهيز ورقة الإعدادات 
 def seed_default_settings(bot_token):
