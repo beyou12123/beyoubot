@@ -443,44 +443,45 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=get_main_menu_inline(user_id)
         )
 
-    # --- إضافة وظائف تهيئة الجداول الجديدة ---
-    elif data == "setup_db_menu":
-        await query.answer()
-        text = (
-            "⚠️ <b>عزيزي المطور:</b>\n\n"
-            "هذه الخدمة تُستخدم <b>فقط في بداية التهيئة</b> للمشروع.\n"
-            "ستقوم الدالة بفحص الجداول، إنشائها إذا نقصت، وتنسيق الهيدرز.\n\n"
-            "هل أنت متأكد من الاستمرار؟"
-        )
-        keyboard = [
-            [
-                InlineKeyboardButton("✅ أنشأ", callback_data="run_setup_db_now"),
-                InlineKeyboardButton("❌ رجوع", callback_data="open_admin_panel")
-            ]
-        ]
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
-
-    # تهيئة الورق والإعدادات في ملف main.py
+    # تهيئة الورق والإعدادات مع لودينج "وميض مستمر" في ملف main.py
     elif data == "run_setup_db_now":
-        # 1. إخفاء الرسالة السابقة وإظهار مؤشر الحركة فوراً
-        loading_text = (
-            "⏳ <b>جاري تشغيل محركات المصنع...</b>\n"
+        # 1. قائمة الألوان للمحاكاة
+        loading_colors = ["🔴", "🟠", "🟡", "🟢", "🔵", "🟣"]
+        
+        base_loading_msg = (
+            "<b>جاري تشغيل محركات المصنع...</b>\n"
             "━━━━━━━━━━━━━━\n"
             "🔄 جاري فحص وإنشاء جداول قاعدة البيانات...\n"
             "🎨 جاري تنسيق الصفوف والألوان تلقائياً...\n"
             "⚙️ جاري زرع الإعدادات الافتراضية للبوت...\n\n"
-            "<i>يرجى الانتظار، لا تغلق هذه الصفحة...</i>"
+            "<i>يرجى الانتظار، العملية مستمرة حتى اكتمال كافة الجداول...</i>"
         )
-        # تعديل الرسالة الحالية لإشعار المستخدم بالانتظار
-        await query.edit_message_text(loading_text, parse_mode="HTML")
-        
-        # 2. بدء العمل الفعلي في الخلفية
+
+        # 2. تشغيل عملية الشيت في "مهمة خلفية" لكي لا يتجمد البوت
         from sheets import setup_bot_factory_database
         
-        # هنا سيتوقف البوت قليلاً حتى تنتهي الدالة من التعامل مع API جوجل
-        sheets_count = setup_bot_factory_database(context.bot.token)
+        # إنشاء مهمة (Task) للعملية الثقيلة
+        setup_task = asyncio.create_task(asyncio.to_thread(setup_bot_factory_database, context.bot.token))
         
-        # 3. عرض النتيجة النهائية بعد اكتمال العمل
+        # 3. حلقة التكرار للألوان (Loop) - تستمر طالما المهمة لم تنتهِ
+        color_index = 0
+        while not setup_task.done():
+            try:
+                # تغيير اللون بناءً على العداد
+                current_color = loading_colors[color_index % len(loading_colors)]
+                await query.edit_message_text(f"{current_color} {base_loading_msg}", parse_mode="HTML")
+                
+                color_index += 1
+                # سرعة الوميض (نصف ثانية لكل لون لضمان عدم تجاوز قيود تليجرام)
+                await asyncio.sleep(0.8) 
+            except:
+                # في حال حاول البوت تحديث نفس النص لتجنب الخطأ
+                break
+        
+        # 4. الحصول على النتيجة النهائية بعد انتهاء الـ Task
+        sheets_count = await setup_task
+        
+        # 5. عرض النتيجة النهائية
         if sheets_count > 0:
             result_text = (
                 "✅ <b>تمت العملية بنجاح!</b>\n"
@@ -489,12 +490,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "🛡️ نظام الحماية والتحقق من المخطط (Schema) نشط الآن."
             )
         else:
-            result_text = "❌ <b>فشلت العملية!</b>\nحدث خطأ أثناء الاتصال بجوجل شيت، يرجى مراجعة سجلات السيرفر."
+            result_text = "❌ <b>فشلت العملية!</b>\nحدث خطأ أثناء الاتصال بجوجل شيت."
             
         keyboard = [[InlineKeyboardButton("🔙 العودة للوحة التحكم", callback_data="open_admin_panel")]]
-        
-        # استبدال رسالة التحميل بالنتيجة النهائية
         await query.edit_message_text(result_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+
 
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
