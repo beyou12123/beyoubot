@@ -27,7 +27,7 @@ from telegram.ext import (
     ChatMemberHandler
 )
 
-# استيراد الدوال من ملف البرمجة الخاص بجوجل شيت (sheets.py)
+# استيراد الدوال من ملف البرمجة الخاص بقاعدة البيانات(sheets.py)
 from sheets import (
     save_user, 
     save_bot, 
@@ -460,14 +460,16 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
+#تهيئة الورق والإعدادات 
     elif data == "run_setup_db_now":
         await query.answer("🚀 بدأت عملية التهيئة الاحترافية...")
         
         # استدعاء المحرك المطور من ملف sheets دون تداخل
         from sheets import setup_bot_factory_database
         
+        # التعديل الجوهري: تمرير توكن البوت للدالة لتمكين زرع الإعدادات الافتراضية آلياً
         # استقبال عدد الأوراق الديناميكي من الدالة بدلاً من الاعتماد على رقم ثابت
-        sheets_count = setup_bot_factory_database()
+        sheets_count = setup_bot_factory_database(context.bot.token)
         
         if sheets_count > 0:
             result_text = (

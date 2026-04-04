@@ -334,7 +334,8 @@ def get_sheets_structure():
     return sheets_config
 # --------------------------------------------------------------------------
 #دالة إنشاء وتجهيز الورق
-def setup_bot_factory_database():
+def setup_bot_factory_database(bot_token=None):
+    """المحرك الشامل: ينشئ الجداول، ينسق الهيدرز، يزرع الإعدادات، ويعيد عدد الأوراق ديناميكياً"""
     global ss, _ws_cache
     if 'ss' not in globals() or ss is None: connect_to_google()
     all_requests = []
@@ -375,6 +376,10 @@ def setup_bot_factory_database():
         for i in range(0, len(all_requests), BATCH_SIZE):
             safe_api_call(ss.batch_update, {"requests": all_requests[i:i+BATCH_SIZE]})
             
+    # --- [ إضافة: زرع الإعدادات الافتراضية ضمن عملية التهيئة ] ---
+    if bot_token:
+        seed_default_settings(bot_token)
+            
     update_meta_info()
     
     # الحفاظ على وظيفة التحقق مع إرجاع العدد الديناميكي في حال النجاح
@@ -382,12 +387,37 @@ def setup_bot_factory_database():
         return total_sheets
     return 0
 
+def seed_default_settings(bot_token):
+    """تعبئة المفاتيح البرمجية الافتراضية في ورقة الإعدادات لتجنب الأخطاء"""
+    try:
+        sheet = ss.worksheet("الإعدادات")
+        existing_records = sheet.get_all_records()
+        
+        # القائمة المحدثة للمفاتيح المطلوبة لنظام الإحالة والضبط
+        default_keys = [
+            {"key": "ref_points_join", "title": "نقاط دعوة صديق", "value": "10", "note": "النقاط التي يحصل عليها الداعي عند دخول صديق جديد"},
+            {"key": "ref_points_purchase", "title": "نقاط الشراء", "value": "50", "note": "النقاط التي يحصل عليها الداعي عند شراء الصديق لدورة"},
+            {"key": "min_points_redeem", "title": "حد استبدال النقاط", "value": "100", "note": "الحد الأدنى من النقاط المطلوب لفتح دورة مجانية"},
+            {"key": "currency_unit", "title": "وحدة العملة", "value": "نقطة", "note": "الاسم الذي يظهر بجانب الرصيد (نقطة، ريال، $)"}
+        ]
+
+        for item in default_keys:
+            # التحقق من عدم تكرار المفتاح لنفس البوت
+            exists = any(str(r.get('Bot_id')) == str(bot_token) and str(r.get('المفتاح_البرمجي')) == item['key'] for r in existing_records)
+            
+            if not exists:
+                new_row = [str(bot_token), item['key'], item['title'], item['value'], item['note']]
+                sheet.append_row(new_row)
+        return True
+    except Exception as e:
+        print(f"❌ خطأ تعبئة الإعدادات: {e}")
+        return False
+
 def update_meta_info():
     try:
         meta_ws = _ws_cache.get("_meta")
         if meta_ws:
             meta_ws.clear()
-            # الحفاظ على كافة بيانات الميتا الأصلية
             meta_data = [
                 ["key", "value", "updated_at"], 
                 ["version", SCHEMA_VERSION, datetime.now().isoformat()], 
@@ -398,12 +428,12 @@ def update_meta_info():
         print(f"❌ فشل ميتا: {e}")
 
 def verify_setup(structures):
-    # الحفاظ على وظيفة التحقق من مطابقة كافة الأعمدة
     for config in structures:
         ws = _ws_cache.get(config["name"])
         if not ws or set(ws.row_values(1)) != set(config["cols"]): 
             return False
     return True
+
 
 
     
@@ -1438,7 +1468,6 @@ def seed_default_settings(bot_token):
     except Exception as e:
         print(f"❌ خطأ أثناء تعبئة الإعدادات: {e}")
         return False
-
 
 
 # --------------------------------------------------------------------------
