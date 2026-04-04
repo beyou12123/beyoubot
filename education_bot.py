@@ -253,13 +253,15 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         )
         
         # تعديل أزرار قائمة الإحالة لتشمل المتجر
-keyboard = [
-    [InlineKeyboardButton("🛒 استبدال النقاط بالدورات", callback_data="redeem_store")],
-    [InlineKeyboardButton("🔄 تحديث الإحصائيات", callback_data="referral_system")],
-    [InlineKeyboardButton("🔙 العودة للقائمة", callback_data="main_menu")]
-]
+        # السطر 262 يبدأ من هنا تقريباً
+        keyboard = [
+            [InlineKeyboardButton("🛒 استبدال النقاط بالدورات", callback_data="redeem_store")],
+            [InlineKeyboardButton("🔄 تحديث الإحصائيات", callback_data="referral_system")],
+            [InlineKeyboardButton("🔙 العودة للقائمة", callback_data="main_menu")]
+        ]
 
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
 
     # معالج تعطيل/تفعيل الكود مؤقتاً
     elif data.startswith("dsc_tog_"):
