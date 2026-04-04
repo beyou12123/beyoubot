@@ -3,6 +3,7 @@ import re
 import asyncio
 import yt_dlp
 import uuid
+import traceback
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from sheets import add_log_entry, get_bot_config
@@ -16,23 +17,54 @@ if not os.path.exists(DOWNLOAD_DIR):
 
 async def get_video_info(url):
     """استخراج معلومات الفيديو بإعدادات متقدمة لتجنب الحظر"""
+
+    # 🔥 إصلاح YouTube Shorts تلقائياً
+    if "youtube.com/shorts/" in url:
+        try:
+            video_id = url.split("/shorts/")[1].split("?")[0]
+            url = f"https://www.youtube.com/watch?v={video_id}"
+        except:
+            pass
+
     ydl_opts = {
         'quiet': True,
         'no_warnings': True,
         'format': 'best',
+
         # --- [ إعدادات التخفي والوصول المتقدم ] ---
-        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
         'referer': 'https://www.google.com/',
         'nocheckcertificate': True,
+
+        # 🔥 تجاوز الحظر
         'geo_bypass': True,
-        'extract_flat': False, # تأكيد جلب البيانات الكاملة وليس الرابط فقط
+        'geo_bypass_country': 'US',
+
+        # 🔥 مهم جداً لليوتيوب 2026
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['android', 'web']
+            }
+        },
+
+        'socket_timeout': 30,
+        'extract_flat': False,
+        'noplaylist': True,
+
+        # 🔥 (اختياري) إذا عندك كوكيز
+        # 'cookiefile': 'cookies.txt',
     }
+
     try:
-        # استخدام asyncio.to_thread لعدم تجميد السيرفر
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            return await asyncio.to_thread(ydl.extract_info, url, download=False)
-    except Exception as e:
-        print(f"⚠️ خطأ في yt-dlp: {e}")
+        def extract():
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                return ydl.extract_info(url, download=False)
+
+        return await asyncio.to_thread(extract)
+
+    except Exception:
+        print("⚠️ خطأ كامل في yt-dlp:")
+        traceback.print_exc()
         return None
 
 
@@ -48,12 +80,14 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """المحرك الرئيسي للتعامل مع الروابط"""
     url = update.message.text.strip()
+
     if not re.match(r'http[s]?://', url):
         return
 
     msg = await update.message.reply_text("🔍 جاري فحص الرابط واستخراج الجودات المتاحة...")
-    
+
     info = await get_video_info(url)
+
     if not info:
         await msg.edit_text("❌ عذراً، تعذر الوصول لمحتوى هذا الرابط. تأكد أنه عام وليس خاصاً.")
         return
@@ -61,7 +95,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     title = info.get('title', 'فيديو بدون عنوان')
     duration = info.get('duration_string', 'غير محدد')
     uploader = info.get('uploader', 'غير معروف')
-    
+
     text = (
         f"✅ <b>تم العثور على الفيديو!</b>\n\n"
         f"📝 <b>العنوان:</b> {title}\n"
@@ -71,33 +105,56 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     keyboard = []
+
     # تخصيص الأزرار بناءً على المنصة
     if 'tiktok.com' in url:
         keyboard.append([InlineKeyboardButton("🎬 فيديو (بدون علامة مائية)", callback_data=f"dl_tt_no_wm|{url}")])
     else:
         keyboard.append([InlineKeyboardButton("🎬 فيديو (أعلى جودة)", callback_data=f"dl_best_v|{url}")])
-    
+
     keyboard.append([InlineKeyboardButton("🎵 صوت فقط (MP3)", callback_data=f"dl_audio|{url}")])
 
     await msg.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
+
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """تنفيذ عملية التحميل والإرسال"""
+
     query = update.callback_query
     data = query.data
     action, url = data.split('|', 1)
-    
+
     await query.answer("⏳ بدأت عملية المعالجة.. يرجى الانتظار")
     status_msg = await query.message.reply_text("📥 جاري التحميل من السيرفر الأصلي...")
+
+    # 🔥 إصلاح YouTube Shorts مرة أخرى (احتياط)
+    if "youtube.com/shorts/" in url:
+        try:
+            video_id = url.split("/shorts/")[1].split("?")[0]
+            url = f"https://www.youtube.com/watch?v={video_id}"
+        except:
+            pass
 
     # توليد اسم ملف فريد
     file_id = str(uuid.uuid4())[:8]
     output_template = os.path.join(DOWNLOAD_DIR, f"{file_id}.%(ext)s")
 
-    # إعدادات التحميل بناءً على الاختيار
     ydl_opts = {
         'outtmpl': output_template,
         'quiet': True,
+
+        # 🔥 نفس إعدادات bypass
+        'geo_bypass': True,
+        'geo_bypass_country': 'US',
+
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['android', 'web']
+            }
+        },
+
+        'socket_timeout': 30,
+        'noplaylist': True,
     }
 
     if action == "dl_audio":
@@ -109,36 +166,62 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 'preferredquality': '192',
             }],
         })
+
     elif action == "dl_tt_no_wm":
-        ydl_opts.update({'format': 'bestvideo+bestaudio/best'})
+        ydl_opts.update({
+            'format': 'bestvideo+bestaudio/best'
+        })
+
     else:
-        ydl_opts.update({'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'})
+        ydl_opts.update({
+            'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'
+        })
 
     try:
-        # عملية التحميل الفعلي
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = await asyncio.to_thread(ydl.extract_info, url, download=True)
+        def download():
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                return ydl.extract_info(url, download=True)
+
+        info = await asyncio.to_thread(download)
+
+        filename = None
+
+        # 🔥 تحديد الملف الحقيقي بعد الدمج
+        for ext in ['mp4', 'mkv', 'webm', 'mp3']:
+            test_file = os.path.join(DOWNLOAD_DIR, f"{file_id}.{ext}")
+            if os.path.exists(test_file):
+                filename = test_file
+                break
+
+        if not filename:
             filename = ydl.prepare_filename(info)
-            if action == "dl_audio":
-                filename = filename.rsplit('.', 1)[0] + ".mp3"
+
+        if action == "dl_audio":
+            filename = filename.rsplit('.', 1)[0] + ".mp3"
 
         await status_msg.edit_text("📤 جاري الرفع إلى تليجرام...")
-        
-        # إرسال الملف بناءً على نوعه
+
         with open(filename, 'rb') as f:
             if action == "dl_audio":
-                await context.bot.send_audio(chat_id=query.message.chat_id, audio=f, title=info.get('title'))
+                await context.bot.send_audio(
+                    chat_id=query.message.chat_id,
+                    audio=f,
+                    title=info.get('title')
+                )
             else:
-                await context.bot.send_video(chat_id=query.message.chat_id, video=f, caption=f"✅ {info.get('title')}\n\nتم التحميل بواسطة بوت المصنع.")
+                await context.bot.send_video(
+                    chat_id=query.message.chat_id,
+                    video=f,
+                    caption=f"✅ {info.get('title')}\n\nتم التحميل بواسطة بوت المصنع."
+                )
 
         await status_msg.delete()
         add_log_entry(context.bot.token, "DOWNLOAD_SUCCESS", f"Type: {action}")
 
-    except Exception as e:
-        await status_msg.edit_text(f"❌ فشلت العملية: {str(e)}")
-    
-    finally:
-        # الحذف الفوري للملف من السيرفر للحفاظ على المساحة
-        if 'filename' in locals() and os.path.exists(filename):
-            os.remove(filename)
+    except Exception:
+        traceback.print_exc()
+        await status_msg.edit_text("❌ فشلت العملية بسبب خطأ داخلي في التحميل")
 
+    finally:
+        if 'filename' in locals() and filename and os.path.exists(filename):
+            os.remove(filename)
