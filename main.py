@@ -443,9 +443,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=get_main_menu_inline(user_id)
         )
 
-    # تهيئة الورق والإعدادات مع لودينج "وميض مستمر" في ملف main.py
+    # تهيئة الورق والإعدادات مع لودينج "وميض ألوان مستمر" في ملف main.py
     elif data == "run_setup_db_now":
-        # 1. قائمة الألوان للمحاكاة
+        # 1. قائمة الألوان للمحاكاة البصرية المستمرة
         loading_colors = ["🔴", "🟠", "🟡", "🟢", "🔵", "🟣"]
         
         base_loading_msg = (
@@ -457,31 +457,36 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "<i>يرجى الانتظار، العملية مستمرة حتى اكتمال كافة الجداول...</i>"
         )
 
-        # 2. تشغيل عملية الشيت في "مهمة خلفية" لكي لا يتجمد البوت
+        # 2. تشغيل عملية الشيت في "مهمة خلفية" لضمان عدم تجميد الألوان
         from sheets import setup_bot_factory_database
         
-        # إنشاء مهمة (Task) للعملية الثقيلة
+        # إنشاء المهمة (Task) للعملية الثقيلة لتعمل في مسار منفصل
         setup_task = asyncio.create_task(asyncio.to_thread(setup_bot_factory_database, context.bot.token))
         
-        # 3. حلقة التكرار للألوان (Loop) - تستمر طالما المهمة لم تنتهِ
+        # 3. حلقة التكرار للألوان (Loop) - تستمر طالما أن إنشاء الجداول لم ينتهِ
         color_index = 0
         while not setup_task.done():
             try:
-                # تغيير اللون بناءً على العداد
+                # اختيار اللون التالي من المصفوفة بشكل دوري
                 current_color = loading_colors[color_index % len(loading_colors)]
-                await query.edit_message_text(f"{current_color} {base_loading_msg}", parse_mode="HTML")
+                
+                # تحديث الرسالة باللون الجديد مع الحفاظ على النص كاملاً
+                await query.edit_message_text(
+                    f"{current_color} {base_loading_msg}", 
+                    parse_mode="HTML"
+                )
                 
                 color_index += 1
-                # سرعة الوميض (نصف ثانية لكل لون لضمان عدم تجاوز قيود تليجرام)
+                # سرعة الوميض: 0.8 ثانية لضمان سلاسة الحركة وعدم تجاوز قيود تليجرام
                 await asyncio.sleep(0.8) 
-            except:
-                # في حال حاول البوت تحديث نفس النص لتجنب الخطأ
+            except Exception:
+                # لتجنب توقف البوت في حال حاول تحديث نفس الرسالة بسرعة
                 break
         
-        # 4. الحصول على النتيجة النهائية بعد انتهاء الـ Task
+        # 4. انتظار الحصول على النتيجة النهائية (عدد الأوراق) بعد انتهاء المهمة
         sheets_count = await setup_task
         
-        # 5. عرض النتيجة النهائية
+        # 5. عرض النتيجة النهائية بعد اكتمال العمل بالكامل
         if sheets_count > 0:
             result_text = (
                 "✅ <b>تمت العملية بنجاح!</b>\n"
@@ -490,10 +495,16 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "🛡️ نظام الحماية والتحقق من المخطط (Schema) نشط الآن."
             )
         else:
-            result_text = "❌ <b>فشلت العملية!</b>\nحدث خطأ أثناء الاتصال بجوجل شيت."
+            result_text = (
+                "❌ <b>فشلت العملية!</b>\n"
+                "حدث خطأ أثناء الاتصال بجوجل شيت، يرجى مراجعة سجلات السيرفر."
+            )
             
         keyboard = [[InlineKeyboardButton("🔙 العودة للوحة التحكم", callback_data="open_admin_panel")]]
+        
+        # استبدال حالة الوميض بالنتيجة النهائية وأزرار التحكم
         await query.edit_message_text(result_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
 
 
 
