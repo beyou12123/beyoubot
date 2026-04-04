@@ -697,6 +697,7 @@ async def list_all_discounts_ui(update, context):
 # --- [ د: عرض معلومات الكود التفصيلية للمالك ] ---
 
 async def view_discount_details_ui(update, context, disc_id):
+    """عرض بيانات الكود كاملة (بما فيها التاريخ) مع أزرار التحكم"""
     query = update.callback_query
     bot_token = context.bot.token
     
@@ -707,10 +708,11 @@ async def view_discount_details_ui(update, context, disc_id):
     
     if d:
         status = d.get('الحالة')
-        # تغيير نص وأمر الزر بناءً على الحالة الحالية
+        # إعداد زر التعطيل/التفعيل ديناميكياً
         toggle_label = "🔴 تعطيل الكود" if status == "نشط" else "🟢 تفعيل الكود"
         toggle_callback = f"dsc_tog_{disc_id}_{'off' if status == 'نشط' else 'on'}"
 
+        # إعادة كافة التواريخ والبيانات للنص
         text = (
             f"ℹ️ <b>تفاصيل كود الخصم:</b>\n"
             f"━━━━━━━━━━━━━━\n"
@@ -718,15 +720,19 @@ async def view_discount_details_ui(update, context, disc_id):
             f"📝 الوصف: {d.get('الوصف')}\n"
             f"💰 القيمة: {d.get('قيمة_الخصم')} ({d.get('نوع_الخصم')})\n"
             f"📊 الاستخدام: {d.get('عدد_الاستخدامات')} / {d.get('الحد_الأقصى_للاستخدام')}\n"
+            f"📅 الصلاحية: من <code>{d.get('تاريخ_البداية')}</code> إلى <code>{d.get('تاريخ_الانتهاء')}</code>\n" # تم استعادة التاريخ هنا
             f"🟢 الحالة: <b>{status}</b>\n"
             f"━━━━━━━━━━━━━━"
         )
+        
         keyboard = [
-            [InlineKeyboardButton(toggle_label, callback_data=toggle_callback)], # الزر الجديد
+            [InlineKeyboardButton(toggle_label, callback_data=toggle_callback)],
             [InlineKeyboardButton("🗑️ حذف نهائي", callback_data=f"confirm_del_disc_{disc_id}")],
             [InlineKeyboardButton("🔙 رجوع للقائمة", callback_data="list_all_discounts")]
         ]
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+    else:
+        await query.answer("❌ تعذر العثور على بيانات الكود.")
 
 
 

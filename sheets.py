@@ -287,7 +287,9 @@ def get_total_factory_users():
 
 def get_sheets_structure():
     sheets_config = [
-        {"name": "الإعدادات", "cols": ["العنوان", "القيمة", "ملاحظات"] },
+    
+
+        {"name": "الإعدادات","cols": ["Bot_id", "المفتاح_البرمجي", "العنوان", "القيمة", "ملاحظات"],"color": {"red": 0.8, "green": 0.9, "blue": 1}},
         {"name": "الهيكل_التنظيمي_والصلاحيات", "cols": ["Bot_id", "معرف_الفرع", "ID_الموظف_أو_المدرب", "صلاحية_الأقسام", "صلاحية_الدورات", "صلاحية_المدربين", "صلاحية_الموظفين", "صلاحية_الإحصائيات", "صلاحية_الإذاعة", "صلاحية_الرسائل_الخاصة", "صلاحية_الكوبونات", "صلاحية_أكواد_الخصم", "الدورات_المسموحة", "المجموعات_المسموحة", "تحديث_السيرفر"]}, 
         {"name": "المستخدمين", "cols": ["ID المستخدم","اسم المستخدم","تاريخ التسجيل","الحالة","نوع الاشتراك","عدد البوتات","آخر نشاط","اللغة","مصدر التسجيل","معرف إحالة","رصيد"], "color": {"red": 0.85, "green": 0.92, "blue": 0.83}},
         {"name": "البوتات_المصنوعة", "cols": ["ID المالك","نوع البوت","اسم البوت","التوكن","حالة التشغيل","bot_id","username_bot","تاريخ الإنشاء","آخر تشغيل","عدد المستخدمين","عدد الرسائل","الحالة التقنية","webhook_url","api_type","plan","expiration_date","is_active","errors_log"], "color": {"red": 0.81, "green": 0.88, "blue": 0.95}},
@@ -1331,9 +1333,111 @@ def save_discount_code_full(bot_token, data):
         print(f"❌ خطأ في مطابقة الأعمدة: {e}")
         return False
 
+ # --------------------------------------------------------------------------
+ # قسم روابط الاحالة
  
- 
+ def get_bot_setting(bot_token, key, default=0):
+    """جلب قيمة إعداد محدد لبوت معين باستخدام المفتاح البرمجي"""
+    try:
+        sheet = ss.worksheet("الإعدادات")
+        records = sheet.get_all_records()
+        # البحث عن السطر الذي يطابق توكن البوت والمفتاح
+        for r in records:
+            if str(r.get('Bot_id')) == str(bot_token) and str(r.get('المفتاح_البرمجي')) == key:
+                return r.get('القيمة')
+        return default
+    except Exception as e:
+        print(f"❌ خطأ في جلب الإعداد {key}: {e}")
+        return default
 
+ 
+def link_user_to_inviter(bot_token, student_id, inviter_id):
+    """ربط الطالب بالداعي ومنح النقاط ديناميكياً بناءً على إعدادات كل بوت"""
+    try:
+        # 1. جلب قيمة النقاط من ورقة 'الإعدادات' لهذا البوت تحديداً
+        sheet_settings = ss.worksheet("الإعدادات")
+        settings_records = sheet_settings.get_all_records()
+        
+        # البحث عن مفتاح 'ref_points_join' لهذا الـ Bot_id
+        points_to_add = 10  # قيمة افتراضية في حال لم يجد الإعداد
+        for reg in settings_records:
+            if str(reg.get('Bot_id')) == str(bot_token) and reg.get('المفتاح_البرمجي') == 'ref_points_join':
+                points_to_add = float(reg.get('القيمة') or 10)
+                break
+
+        # 2. إضافة النقاط لرصيد الداعي في ورقة 'المستخدمين' (العمود 11)
+        sheet_users = ss.worksheet("المستخدمين")
+        inviter_cell = sheet_users.find(str(inviter_id), in_column=1) # البحث في عمود معرف_التليجرام
+        if inviter_cell:
+            # جلب الرصيد الحالي وإضافة النقاط الجديدة
+            current_balance = float(sheet_users.cell(inviter_cell.row, 11).value or 0)
+            sheet_users.update_cell(inviter_cell.row, 11, current_balance + points_to_add)
+        
+        # 3. تسجيل 'معرف الإحالة' للطالب الجديد (العمود 10)
+        student_cell = sheet_users.find(str(student_id), in_column=1)
+        if student_cell:
+            sheet_users.update_cell(student_cell.row, 10, str(inviter_id))
+            
+        return True
+    except Exception as e:
+        print(f"❌ خطأ في نظام الإحالة الديناميكي: {e}")
+        return False
+
+
+# --------------------------------------------------------------------------
+#تجهيز ورقة الإعدادات 
+def seed_default_settings(bot_token):
+    """تعبئة المفاتيح البرمجية الافتراضية في ورقة الإعدادات لتجنب الأخطاء"""
+    try:
+        sheet = ss.worksheet("الإعدادات")
+        existing_records = sheet.get_all_records()
+        
+        # 1. تحديد المفاتيح الأساسية التي يحتاجها البوت للعمل
+        default_keys = [
+            {
+                "key": "ref_points_join",
+                "title": "نقاط دعوة صديق",
+                "value": "10",
+                "note": "النقاط التي يحصل عليها الشخص عند دخول صديق عبر رابطه"
+            },
+            {
+                "key": "ref_points_purchase",
+                "title": "نقاط الشراء",
+                "value": "50",
+                "note": "النقاط التي يحصل عليها الداعي عند قيام الصديق بشراء دورة"
+            },
+            {
+                "key": "min_points_redeem",
+                "title": "حد استبدال النقاط",
+                "value": "100",
+                "note": "الحد الأدنى من النقاط المطلوب لفتح دورة مجانية"
+            },
+            {
+                "key": "currency_unit",
+                "title": "وحدة العملة",
+                "value": "نقطة",
+                "note": "الاسم الذي يظهر بجانب الرصيد (مثلاً: نقطة أو ريال)"
+            }
+        ]
+
+        # 2. فحص كل مفتاح: إذا لم يكن موجوداً لهذا البوت، نقوم بإضافته
+        for item in default_keys:
+            exists = any(
+                str(r.get('Bot_id')) == str(bot_token) and 
+                str(r.get('المفتاح_البرمجي')) == item['key'] 
+                for r in existing_records
+            )
+            
+            if not exists:
+                # ترتيب الأعمدة: ["Bot_id", "المفتاح_البرمجي", "العنوان", "القيمة", "ملاحظات"]
+                new_row = [str(bot_token), item['key'], item['title'], item['value'], item['note']]
+                safe_api_call(sheet.append_row, new_row)
+                print(f"✅ تم زرع المفتاح: {item['key']}")
+                
+        return True
+    except Exception as e:
+        print(f"❌ خطأ أثناء تعبئة الإعدادات: {e}")
+        return False
 
 
 

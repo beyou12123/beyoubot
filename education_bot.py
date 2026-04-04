@@ -44,13 +44,18 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 # --- [ القوائم الرئيسية للمنصة - أزرار واجهة المستخدم ] ---
 
 def get_student_menu():
-    """قائمة الأزرار الرئيسية التي تظهر للطلاب"""
     keyboard = [
-        [InlineKeyboardButton("📚 استعراض الدورات", callback_data="view_courses")],
-        [InlineKeyboardButton("👤 ملفي الدراسي", callback_data="my_profile"), InlineKeyboardButton("🎟 تفعيل دورة", callback_data="redeem_code")],
-        [InlineKeyboardButton("❓ الأسئلة الشائعة", callback_data="edu_faq"), InlineKeyboardButton("💬 الدعم الفني", callback_data="edu_support")]
+        [InlineKeyboardButton("📚 استعراض الدورات", callback_data="view_categories")],
+        [InlineKeyboardButton("👤 ملفي الدراسي", callback_data="my_profile"), 
+         InlineKeyboardButton("🎟 تفعيل دورة", callback_data="activate_course")],
+        # --- الزر الجديد الذي طلبته ---
+        [InlineKeyboardButton("💰 اربح دورات مجانية", callback_data="referral_system")],
+        [InlineKeyboardButton("❓ الأسئلة الشائعة", callback_data="view_faq"),
+         InlineKeyboardButton("💬 الدعم الفني", callback_data="contact_admin")]
     ]
     return InlineKeyboardMarkup(keyboard)
+
+
 
 def get_admin_panel():
     """قائمة الأزرار الرئيسية للوحة تحكم الإدارة - النسخة المطورة بضبط الـ AI"""
@@ -65,21 +70,22 @@ def get_admin_panel():
 
 # --- [ المعالجات الأساسية - أمر البداية ] ---
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """معالجة أمر /start برسائل ترحيبية ذكية"""
+    """معالجة أمر /start برسائل ترحيبية ذكية ودعم نظام الإحالة"""
     from datetime import datetime
     user = update.effective_user
     bot_token = context.bot.token
     
-    # تحديد هل القادم ضغطة زر أم رسالة نصية
+    # تحديد هل القادم ضغطة زر أم رسالة نصية لضمان عدم حدوث Error
     query = update.callback_query
     
     # جلب كافة الإعدادات من قاعدة البيانات
     config = get_bot_config(bot_token)
     bot_owner_id = int(config.get("admin_ids", 0))
 
-    from sheets import get_ai_setup
+    from sheets import get_ai_setup, save_user, link_user_to_inviter
     ai_config = get_ai_setup(bot_token)
     
+    # --- [ فحص إعدادات المالك (التهيئة الأولى) ] ---
     if user.id == bot_owner_id:
         if not ai_config or not ai_config.get('اسم_المؤسسة'):
             context.user_data['action'] = 'awaiting_institution_name'
@@ -89,16 +95,21 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "قبل البدء، يرجى إرسال <b>اسم المنصة التعليمية</b> الخاصة بك:"
             )
 
-            # --- التعديل الجوهري هنا ---
-            if query: # إذا كان المستخدم ضغط على زر "عودة"
+            # التنسيق الصحيح للرد حسب نوع التحديث (زر أو رسالة) لضمان استمرار البوت
+            if query:
                 await query.answer()
                 await query.edit_message_text(text, parse_mode="HTML")
-            else: # إذا كان المستخدم أرسل /start
+            else:
                 await update.message.reply_text(text, parse_mode="HTML")
             return
 
-
-
+    # --- [ نظام الإحالة (Referral System) ] ---
+    # نضع نظام الإحالة قبل التسجيل لضمان ربط الداعي بالمدعو فوراً
+    if context.args and context.args[0].startswith("ref_"):
+        inviter_id = context.args[0].replace("ref_", "")
+        # التأكد أن الشخص لا يدعو نفسه
+        if str(inviter_id) != str(user.id):
+            link_user_to_inviter(bot_token, user.id, inviter_id)
 
     # تسجيل المستخدم في القاعدة
     save_user(user.id, user.username)
@@ -106,7 +117,6 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # --- [ محرك اختيار الكليشة الذكي ] ---
     hour = datetime.now().hour
     
-    # تحديد الفترة وجلب النص المخصص من الشيت (مع نص افتراضي في حال كان العمود فارغاً)
     if 5 <= hour < 12:
         msg = config.get("welcome_morning", "صباح العلم والهمة.. أي مهارة سنبني اليوم؟")
     elif 12 <= hour < 17:
@@ -116,24 +126,27 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         msg = config.get("welcome_night", "أهلاً بالمثابر.. العظماء يصنعون مستقبلهم في هدوء الليل.")
 
-    # --- [ إرسال الواجهة المناسبة ] ---
+    # --- [ إرسال الواجهة المناسبة (دعم الزر والرسالة) ] ---
     if user.id == bot_owner_id:
-        # واجهة الادارة (المسؤول)
-        await update.message.reply_text(
+        # واجهة الإدارة (المسؤول)
+        admin_text = (
             f"<b>مرحباً بك يا دكتور {user.first_name} في مركز قيادة منصتك</b> 🎓\n\n"
             f"{msg}\n\n"
-            f"يمكنك إدارة كافة تفاصيل المنصة من الأزرار أدناه:",
-            reply_markup=get_admin_panel(),
-            parse_mode="HTML"
+            f"يمكنك إدارة كافة تفاصيل المنصة من الأزرار أدناه:"
         )
+        if query:
+            await query.answer()
+            await query.edit_message_text(admin_text, reply_markup=get_admin_panel(), parse_mode="HTML")
+        else:
+            await update.message.reply_text(admin_text, reply_markup=get_admin_panel(), parse_mode="HTML")
     else:
         # واجهة الطالب
-        await update.message.reply_text(
-            f"<b>{msg}</b>",
-            reply_markup=get_student_menu(),
-            parse_mode="HTML"
-        )
-
+        student_text = f"<b>{msg}</b>"
+        if query:
+            await query.answer()
+            await query.edit_message_text(student_text, reply_markup=get_student_menu(), parse_mode="HTML")
+        else:
+            await update.message.reply_text(student_text, reply_markup=get_student_menu(), parse_mode="HTML")
 
 
 # --------------------------------------------------------------------------
@@ -228,6 +241,47 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
                 await view_discount_details_ui(update, context, disc_id)
         except Exception as e:
             await query.answer("❌ فشل تحديث الحالة.")
+
+
+#معالج اربح معنا
+    elif data == "referral_system":
+        await query.answer()
+        user_id = query.from_user.id
+        bot_token = context.bot.token
+        
+        # جلب يوزر البوت ديناميكياً لتوليد الرابط
+        bot_info = await context.bot.get_me()
+        bot_username = bot_info.username
+        referral_link = f"https://t.me/{bot_username}?start=ref_{user_id}"
+        
+        # جلب إحصائيات الإحالة والرصيد من ملف sheets
+        from sheets import get_user_referral_stats
+        stats = get_user_referral_stats(bot_token, user_id)
+        
+        text = (
+            f"💰 <b>نظام المكافآت والإحالة</b>\n"
+            f"━━━━━━━━━━━━━━\n"
+            f"مرحباً بك! يمكنك الآن الحصول على دوراتنا <b>مجاناً</b> عبر دعوة أصدقائك للمنصة.\n\n"
+            f"📢 <b>كيف يعمل النظام؟</b>\n"
+            f"1️⃣ انسخ رابطك الفريد أدناه.\n"
+            f"2️⃣ شاركه مع أصدقائك أو في مجموعات الدراسة.\n"
+            f"3️⃣ مقابل كل شخص يسجل عبرك، ستحصل على <b>نقاط رصيد</b>.\n\n"
+            f"🔗 <b>رابط الإحالة الخاص بك:</b>\n"
+            f"<code>{referral_link}</code>\n\n"
+            f"📊 <b>إحصائياتك الحالية:</b>\n"
+            f"👤 عدد الناجحين في دعوتهم: <b>{stats.get('count', 0)}</b> طالب\n"
+            f"💰 رصيدك المكتسب: <b>{stats.get('balance', 0)} نقطة</b>\n"
+            f"━━━━━━━━━━━━━━\n"
+            f"💡 <i>يمكنك استبدال النقاط بفتح الدورات المدفوعة فور وصولك للحد المطلوب.</i>"
+        )
+        
+        keyboard = [
+            [InlineKeyboardButton("🔄 تحديث الإحصائيات", callback_data="referral_system")],
+            [InlineKeyboardButton("🔙 العودة للقائمة", callback_data="main_menu")]
+        ]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+
 
 
 # --------------------------------------------------------------------------
