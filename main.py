@@ -465,13 +465,15 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # استدعاء المحرك المطور من ملف sheets دون تداخل
         from sheets import setup_bot_factory_database
-        success = setup_bot_factory_database()
         
-        if success:
+        # استقبال عدد الأوراق الديناميكي من الدالة بدلاً من الاعتماد على رقم ثابت
+        sheets_count = setup_bot_factory_database()
+        
+        if sheets_count > 0:
             result_text = (
                 "✅ <b>تمت العملية بنجاح!</b>\n\n"
-                "تم إنشاء وتنسيق كافة الجداول (14 ورقة) وتفعيل نظام الحماية "
-                "والتحقق من المخطط (Schema) بنجاح."
+                f"تم إنشاء وتنسيق كافة الجداول (<b>{sheets_count} ورقة</b>) " # هنا تم الربط الديناميكي بالعدد الفعلي
+                "وتفعيل نظام الحماية والتحقق من المخطط (Schema) بنجاح."
             )
         else:
             result_text = "❌ <b>فشلت العملية!</b>\nحدث خطأ أثناء الاتصال بجوجل شيت، يرجى مراجعة سجلات السيرفر."

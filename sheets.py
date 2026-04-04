@@ -331,11 +331,16 @@ def get_sheets_structure():
     ]
     return sheets_config
 # --------------------------------------------------------------------------
+#دالة إنشاء وتجهيز الورق
 def setup_bot_factory_database():
     global ss, _ws_cache
     if 'ss' not in globals() or ss is None: connect_to_google()
     all_requests = []
+    
+    # جلب الهيكل وحساب عدد الأوراق الكلي بشكل ديناميكي
     structures = get_sheets_structure()
+    total_sheets = len(structures) 
+    
     _ws_cache = {ws.title: ws for ws in ss.worksheets()}
     for config in structures:
         try:
@@ -346,38 +351,60 @@ def setup_bot_factory_database():
                 _ws_cache[sheet_name] = worksheet
             else:
                 worksheet = _ws_cache[sheet_name]
+            
             current_headers = worksheet.row_values(1)
             if set(current_headers) != set(headers):
                 if STRICT_SCHEMA:
                     safe_api_call(worksheet.update, '1:1', [headers])
+            
             sheet_id = worksheet.id
             all_requests.extend([
                 {"repeatCell": {"range": {"sheetId": sheet_id, "startRowIndex": 0, "endRowIndex": 1}, "cell": {"userEnteredFormat": {"backgroundColor": config.get("color", {"red": 1, "green": 1, "blue": 1}), "textFormat": {"bold": True}, "horizontalAlignment": "CENTER"}}, "fields": "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)"}},
                 {"updateSheetProperties": {"properties": {"sheetId": sheet_id, "gridProperties": {"frozenRowCount": 1}}, "fields": "gridProperties.frozenRowCount"}}
             ])
+            
             if AUTO_RESIZE and (not current_headers or set(current_headers) != set(headers)):
                 safe_api_call(worksheet.columns_auto_resize, 0, len(headers))
-        except Exception as e: print(f"❌ خطأ تهيئة {sheet_name}: {e}")
+                
+        except Exception as e: 
+            print(f"❌ خطأ تهيئة {sheet_name}: {e}")
+
     if all_requests:
         for i in range(0, len(all_requests), BATCH_SIZE):
             safe_api_call(ss.batch_update, {"requests": all_requests[i:i+BATCH_SIZE]})
+            
     update_meta_info()
-    return verify_setup(structures)
+    
+    # الحفاظ على وظيفة التحقق مع إرجاع العدد الديناميكي في حال النجاح
+    if verify_setup(structures):
+        return total_sheets
+    return 0
 
 def update_meta_info():
     try:
         meta_ws = _ws_cache.get("_meta")
         if meta_ws:
             meta_ws.clear()
-            meta_data = [["key", "value", "updated_at"], ["version", SCHEMA_VERSION, datetime.now().isoformat()], ["engine_status", "HEALTHY", datetime.now().isoformat()]]
+            # الحفاظ على كافة بيانات الميتا الأصلية
+            meta_data = [
+                ["key", "value", "updated_at"], 
+                ["version", SCHEMA_VERSION, datetime.now().isoformat()], 
+                ["engine_status", "HEALTHY", datetime.now().isoformat()]
+            ]
             safe_api_call(meta_ws.update, 'A1', meta_data)
-    except Exception as e: print(f"❌ فشل ميتا: {e}")
+    except Exception as e: 
+        print(f"❌ فشل ميتا: {e}")
 
 def verify_setup(structures):
+    # الحفاظ على وظيفة التحقق من مطابقة كافة الأعمدة
     for config in structures:
         ws = _ws_cache.get(config["name"])
-        if not ws or set(ws.row_values(1)) != set(config["cols"]): return False
+        if not ws or set(ws.row_values(1)) != set(config["cols"]): 
+            return False
     return True
+
+
+    
 # --------------------------------------------------------------------------
 def add_new_category(bot_token, cat_id, cat_name):
     """إضافة قسم جديد باستخدام المتغير departments_sheet"""
