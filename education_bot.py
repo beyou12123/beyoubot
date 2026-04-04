@@ -370,7 +370,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
     # معالج فتح محتوى الدورة
     elif data.startswith("open_content_"):
         course_id = data.replace("open_content_", "")
-        from educational_manager import show_course_content_ui
+        from course_engine import show_course_content_ui
         await show_course_content_ui(update, context, course_id)
 
  
