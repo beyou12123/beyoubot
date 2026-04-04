@@ -505,103 +505,100 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # استبدال حالة الوميض بالنتيجة النهائية وأزرار التحكم
         await query.edit_message_text(result_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 # --------------------------------------------------------------------------
-# تهيئة الورق والإعدادات - النسخة الاحترافية (UX & Stability)
+    # تهيئة الورق والإعدادات - النسخة الاحترافية الكاملة (UX & Stability)
     elif data == "run_setup_db_now":
-    # 1. منع تشغيل العملية مرتين (حماية الاستقرار)
-    if context.user_data.get("setup_running"):
-        return await query.answer("⚠️ العملية قيد التنفيذ بالفعل، يرجى الانتظار...", show_alert=True)
+        # 1. منع تشغيل العملية مرتين (حماية الاستقرار)
+        if context.user_data.get("setup_running"):
+            await query.answer("⚠️ العملية قيد التنفيذ بالفعل، يرجى الانتظار...", show_alert=True)
+            return
 
-    # 2. تفعيل قفل الحماية وبدء المهمة
-    context.user_data["setup_running"] = True
-    context.user_data["cancel_setup"] = False
-    
-    loading_colors = ["🔴", "🟠", "🟡", "🟢", "🔵", "🟣"]
-    base_loading_msg = (
-        "<b>⏳ جاري تهيئة النظام لأول مرة...</b>\n"
-        "━━━━━━━━━━━━━━\n"
-        "⚡ <i>يرجى عدم إغلاق البوت أو المقاطعة</i>\n"
-        "⚙️ يتم الآن بناء 40+ جدول وتنسيقها آلياً\n"
-    )
-
-    from sheets import setup_bot_factory_database
-    
-    # تشغيل العملية في Thread مستقل مع نظام Task
-    setup_task = asyncio.create_task(asyncio.to_thread(setup_bot_factory_database, context.bot.token))
-    
-    try:
-        color_index = 0
-        start_time = time.time()
+        # 2. تفعيل قفل الحماية وبدء المهمة
+        context.user_data["setup_running"] = True
+        context.user_data["cancel_setup"] = False
         
-        # 3. حلقة التحديث الذكي (Smart Update Loop)
-        while not setup_task.done():
-            # التحقق من طلب الإلغاء (UX)
-            if context.user_data.get("cancel_setup"):
-                setup_task.cancel()
-                break
-
-            # حساب التقدم الوهمي (Pseudo Progress Bar) لراحة المستخدم
-            # يزحف ببطء حتى 98% ولا يصل للنهاية إلا برد الشيت الفعلي
-            elapsed = time.time() - start_time
-            progress = min(98, int((elapsed / 60) * 100)) # يفترض أن العملية تستغرق دقيقة
-            bar_length = 10
-            filled = int(progress / 10)
-            bar = "🟩" * filled + "⬜" * (bar_length - filled)
-            
-            current_color = loading_colors[color_index % len(loading_colors)]
-            
-            status_text = (
-                f"{current_color} {base_loading_msg}\n"
-                f"📊 <b>التقدم:</b> [{bar}] {progress}%\n"
-                f"⏱️ الوقت المنقضي: {int(elapsed)} ثانية"
-            )
-
-            try:
-                # تقليل التحديث إلى 2.5 ثانية لتجنب Rate Limit (UX)
-                await query.edit_message_text(
-                    status_text, 
-                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ إلغاء العملية", callback_data="cancel_setup")]]),
-                    parse_mode="HTML"
-                )
-            except Exception as e:
-                import logging
-                logging.error(f"UI Update Skip: {e}") # تسجيل الخطأ بدل تجاهله
-
-            color_index += 1
-            await asyncio.sleep(2.5) # التحديث المتزن
-
-        # 4. حماية من التعليق الأبدي (Timeout 120s)
-        sheets_count = await asyncio.wait_for(setup_task, timeout=120)
-
-    except asyncio.TimeoutError:
-        sheets_count = -1
-        logging.error("Setup Database Timeout after 120s")
-    except Exception as e:
-        sheets_count = -1
-        logging.error(f"Critical Setup Error: {e}")
-    finally:
-        # تحرير القفل في كل الأحوال
-        context.user_data["setup_running"] = False
-
-    # 5. عرض النتيجة النهائية الاحترافية
-    if sheets_count > 0:
-        result_text = (
-            "✅ <b>اكتملت التهيئة بنجاح!</b>\n"
+        loading_colors = ["🔴", "🟠", "🟡", "🟢", "🔵", "🟣"]
+        base_loading_msg = (
+            "<b>⏳ جاري تهيئة النظام لأول مرة...</b>\n"
             "━━━━━━━━━━━━━━\n"
-            f"📦 تم تجهيز (<b>{sheets_count}</b>) ورقة عمل بدقة.\n"
-            "🛡️ قاعدة البيانات جاهزة لاستقبال الطلاب الآن."
+            "⚡ <i>يرجى عدم إغلاق البوت أو المقاطعة</i>\n"
+            "⚙️ يتم الآن بناء 40+ جدول وتنسيقها آلياً\n"
         )
-    elif sheets_count == 0:
-        result_text = "⚠️ <b>النظام مهيأ بالفعل!</b>\nلم يتم إجراء تغييرات لأن الجداول موجودة."
-    else:
-        result_text = "❌ <b>فشل في التهيئة!</b>\nحدث خطأ تقني أو انتهى الوقت المسموح (Timeout)."
 
-    keyboard = [[InlineKeyboardButton("🔙 العودة للوحة التحكم", callback_data="open_admin_panel")]]
-    await query.edit_message_text(result_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+        from sheets import setup_bot_factory_database
+        
+        # تشغيل العملية في Thread مستقل مع نظام Task لضمان عدم تجميد البوت
+        setup_task = asyncio.create_task(asyncio.to_thread(setup_bot_factory_database, context.bot.token))
+        
+        try:
+            color_index = 0
+            start_time = time.time()
+            
+            # 3. حلقة التحديث الذكي (Smart Update Loop)
+            while not setup_task.done():
+                # التحقق من طلب الإلغاء يدوياً
+                if context.user_data.get("cancel_setup"):
+                    setup_task.cancel()
+                    break
 
-# إضافة معالج الإلغاء
-elif data == "cancel_setup":
-    context.user_data["cancel_setup"] = True
-    await query.answer("🛑 جاري إيقاف المحركات...")
+                # حساب التقدم الوهمي (Pseudo Progress Bar) لراحة المستخدم
+                elapsed = time.time() - start_time
+                progress = min(98, int((elapsed / 60) * 100)) # يفترض أن العملية تستغرق دقيقة كحد أقصى
+                
+                bar_length = 10
+                filled = int(progress / 10)
+                bar = "🟩" * filled + "⬜" * (bar_length - filled)
+                
+                current_color = loading_colors[color_index % len(loading_colors)]
+                
+                status_text = (
+                    f"{current_color} {base_loading_msg}\n"
+                    f"📊 <b>التقدم:</b> [{bar}] {progress}%\n"
+                    f"⏱️ الوقت المنقضي: {int(elapsed)} ثانية"
+                )
+
+                try:
+                    # تحديث الرسالة كل 2.5 ثانية لتجنب Rate Limit الخاص بتليجرام
+                    keyboard = [[InlineKeyboardButton("❌ إلغاء العملية", callback_data="cancel_setup")]]
+                    await query.edit_message_text(
+                        status_text, 
+                        reply_markup=InlineKeyboardMarkup(keyboard),
+                        parse_mode="HTML"
+                    )
+                except Exception as ui_error:
+                    # تسجيل أخطاء الواجهة في السجلات بدل تجاهلها
+                    logging.error(f"UI Update Skip: {ui_error}")
+
+                color_index += 1
+                await asyncio.sleep(2.5) 
+
+            # 4. حماية من التعليق الأبدي (Timeout 120 ثانية)
+            sheets_count = await asyncio.wait_for(setup_task, timeout=120)
+
+        except asyncio.TimeoutError:
+            sheets_count = -1
+            logging.error("Setup Database Timeout after 120s")
+        except Exception as e:
+            sheets_count = -1
+            logging.error(f"Critical Setup Error: {e}")
+        finally:
+            # تحرير القفل في كل الأحوال للسماح بمحاولة أخرى لاحقاً
+            context.user_data["setup_running"] = False
+
+        # 5. عرض النتيجة النهائية الاحترافية
+        if sheets_count > 0:
+            result_text = (
+                "✅ <b>اكتملت التهيئة بنجاح!</b>\n"
+                "━━━━━━━━━━━━━━\n"
+                f"📦 تم تجهيز (<b>{sheets_count}</b>) ورقة عمل بدقة.\n"
+                "🛡️ قاعدة البيانات جاهزة لاستقبال الطلاب الآن."
+            )
+        elif sheets_count == 0:
+            result_text = "⚠️ <b>النظام مهيأ بالفعل!</b>\nلم يتم إجراء تغييرات لأن الجداول موجودة مسبقاً."
+        else:
+            result_text = "❌ <b>فشل في التهيئة!</b>\nحدث خطأ تقني أو انتهى الوقت المسموح (Timeout)."
+
+        back_keyboard = [[InlineKeyboardButton("🔙 العودة للوحة التحكم", callback_data="open_admin_panel")]]
+        await query.edit_message_text(result_text, reply_markup=InlineKeyboardMarkup(back_keyboard), parse_mode="HTML")
 
 
 
