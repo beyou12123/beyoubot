@@ -152,7 +152,6 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # --------------------------------------------------------------------------
 # --- [ معالج ضغطات الأزرار (Callback Query Handler) ] ---
 # --------------------------------------------------------------------------
-
 async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """التحكم في كافة عمليات الضغط على الأزرار الشفافة Inline Buttons"""
     query = update.callback_query
@@ -217,35 +216,13 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         except:
             await query.answer("❌ فشل الحذف.", show_alert=True)
 
-    # 8. زر العودة للقائمة الرئيسية (كان مفقوداً أيضاً)
+    # 8. زر العودة للقائمة الرئيسية (تم تصحيح الشرط هنا لضمان تسلسل elif)
     elif data == "main_menu":
         await start_handler(update, context)
-        
-            # معالج تعطيل/تفعيل الكود مؤقتاً
-    elif data.startswith("dsc_tog_"):
-        parts = data.split("_")
-        disc_id = parts[2]
-        new_action = parts[3] # on أو off
-        
-        from sheets import ss
-        sheet = ss.worksheet("أكواد_الخصم")
-        try:
-            cell = sheet.find(disc_id, in_column=3) # البحث في عمود معرف_الخصم
-            if cell:
-                new_status = "نشط" if new_action == "on" else "معطل"
-                sheet.update_cell(cell.row, 11, new_status) # تحديث العمود 11 (الحالة)
-                await query.answer(f"✅ تم تغيير حالة الكود إلى: {new_status}", show_alert=True)
-                
-                # إعادة تحديث الواجهة لإظهار الحالة الجديدة
-                from educational_manager import view_discount_details_ui
-                await view_discount_details_ui(update, context, disc_id)
-        except Exception as e:
-            await query.answer("❌ فشل تحديث الحالة.")
 
-
-#معالج اربح معنا
+    # معالج اربح معنا (تم ربطه بـ elif لضمان الاستجابة)
     elif data == "referral_system":
-        await query.answer()
+        # ملاحظة: تم إزالة query.answer() المكررة هنا لأنها تم استدعاؤها في بداية الدالة
         user_id = query.from_user.id
         bot_token = context.bot.token
         
@@ -281,7 +258,26 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         ]
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
-
+    # معالج تعطيل/تفعيل الكود مؤقتاً
+    elif data.startswith("dsc_tog_"):
+        parts = data.split("_")
+        disc_id = parts[2]
+        new_action = parts[3] # on أو off
+        
+        from sheets import ss
+        sheet = ss.worksheet("أكواد_الخصم")
+        try:
+            cell = sheet.find(disc_id, in_column=3) # البحث في عمود معرف_الخصم
+            if cell:
+                new_status = "نشط" if new_action == "on" else "معطل"
+                sheet.update_cell(cell.row, 11, new_status) # تحديث العمود 11 (الحالة)
+                await query.answer(f"✅ تم تغيير حالة الكود إلى: {new_status}", show_alert=True)
+                
+                # إعادة تحديث الواجهة لإظهار الحالة الجديدة
+                from educational_manager import view_discount_details_ui
+                await view_discount_details_ui(update, context, disc_id)
+        except Exception as e:
+            await query.answer("❌ فشل تحديث الحالة.")
 
 
 # --------------------------------------------------------------------------
