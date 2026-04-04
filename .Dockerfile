@@ -4,9 +4,10 @@ FROM python:3.11-slim
 # ضبط مجلد العمل داخل الحاوية
 WORKDIR /app
 
-# تثبيت أدوات النظام الضرورية
+# تثبيت أدوات النظام الضرورية (تم إضافة ffmpeg لدعم بوت التحميل)
 RUN apt-get update && apt-get install -y \
     build-essential \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # نسخ ملف المتطلبات أولاً لتسريع البناء (Caching)
