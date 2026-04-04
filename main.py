@@ -506,7 +506,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(result_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 # --------------------------------------------------------------------------
 # تهيئة الورق والإعدادات - النسخة الاحترافية (UX & Stability)
-elif data == "run_setup_db_now":
+    elif data == "run_setup_db_now":
     # 1. منع تشغيل العملية مرتين (حماية الاستقرار)
     if context.user_data.get("setup_running"):
         return await query.answer("⚠️ العملية قيد التنفيذ بالفعل، يرجى الانتظار...", show_alert=True)
