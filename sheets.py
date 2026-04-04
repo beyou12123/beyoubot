@@ -160,10 +160,10 @@ def ensure_all_sheets_schema(spreadsheet, sheets_structure):
     نظام مزامنة ذكي (النسخة المطورة):
     - يجلب قائمة الأوراق بالكامل مرة واحدة لتوفير طلبات API.
     - يتفادى خطأ "A sheet with the name ... already exists".
-    - [span_1](start_span)يضيف الأعمدة الناقصة فقط ولا يلمس البيانات الموجودة.[span_1](end_span)
+    - يضيف الأعمدة الناقصة فقط ولا يلمس البيانات الموجودة.
     """
     try:
-        # خطوة ذكية: جلب أسماء كل الأوراق الموجودة حالياً في ملف جوجل شيت دفعة واحدة
+        # جلب أسماء كل الأوراق الموجودة حالياً دفعة واحدة
         existing_sheet_names = [ws.title for ws in spreadsheet.worksheets()]
         
         for sheet_def in sheets_structure:
@@ -173,9 +173,9 @@ def ensure_all_sheets_schema(spreadsheet, sheets_structure):
             if not sheet_name or not required_headers:
                 continue
 
-            # التحقق محلياً من القائمة بدلاً من سؤال جوجل في كل مرة
+            # التحقق محلياً من القائمة
             if sheet_name not in existing_sheet_names:
-                # إنشاء الورقة فقط إذا لم تكن موجودة فعلياً في القائمة
+                # إنشاء الورقة فقط إذا لم تكن موجودة
                 worksheet = spreadsheet.add_worksheet(
                     title=sheet_name,
                     rows="1000",
@@ -186,8 +186,8 @@ def ensure_all_sheets_schema(spreadsheet, sheets_structure):
                 # إذا كانت موجودة، نفتحها لنفحص أعمدتها
                 worksheet = spreadsheet.worksheet(sheet_name)
 
-            # فحص وتحديث الأعمدة الناقصة (الدالة المساعدة الموجودة لديك مسبقاً)
-            [span_2](start_span)ensure_sheet_schema(worksheet, required_headers)[span_2](end_span)
+            # فحص وتحديث الأعمدة الناقصة
+            ensure_sheet_schema(worksheet, required_headers)
 
     except Exception as e:
         print(f"❌ خطأ في مزامنة الأوراق: {e}")
