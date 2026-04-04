@@ -29,7 +29,6 @@ from telegram.ext import (
 )
 
 # استيراد الدوال من ملف البرمجة الخاص بقاعدة البيانات(sheets.py)
-
 from sheets import (
     save_user, 
     save_bot, 
