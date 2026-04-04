@@ -370,7 +370,34 @@ def ensure_all_sheets_schema(spreadsheet, sheets_structure):
     except Exception as e:
         print(f"❌ خطأ عام في فحص جميع الأوراق: {e}")
 # --------------------------------------------------------------------------
-    
+def ensure_sheet_schema(worksheet, required_headers):
+    """تحديث أعمدة ورقة واحدة دون حذف البيانات"""
+    try:
+        existing_headers = worksheet.row_values(1)
+        new_headers = [h for h in required_headers if h not in existing_headers]
+        if new_headers:
+            next_col = len(existing_headers) + 1
+            worksheet.update_cell(1, next_col, new_headers)
+            print(f"✅ تمت إضافة أعمدة جديدة لـ {worksheet.title}")
+    except Exception as e:
+        print(f"❌ خطأ في تحديث أعمدة {worksheet.title}: {e}")
+
+def ensure_all_sheets_schema(spreadsheet, sheets_structure):
+    """النظام الذكي الشامل لإنشاء وفحص كافة الجداول"""
+    try:
+        for sheet_def in sheets_structure:
+            sheet_name = sheet_def.get("name")
+            required_headers = sheet_def.get("cols", [])
+            if not sheet_name or not required_headers: continue
+            try:
+                worksheet = spreadsheet.worksheet(sheet_name)
+            except:
+                worksheet = spreadsheet.add_worksheet(title=sheet_name, rows="1000", cols=str(len(required_headers) + 10))
+                print(f"🆕 تم إنشاء الورقة: {sheet_name}")
+            ensure_sheet_schema(worksheet, required_headers)
+    except Exception as e:
+        print(f"❌ خطأ عام في فحص جميع الأوراق: {e}")
+ 
     
 # --------------------------------------------------------------------------
 #دالة إنشاء وتجهيز الورق

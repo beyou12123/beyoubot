@@ -445,11 +445,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 # --------------------------------------------------------------------------
 
-    # --- [ النسخة المعتمدة والمدمجة لتهيئة الجداول ] ---
+    # تهيئة الورق والإعدادات - النسخة الاحترافية النهائية
     elif data == "run_setup_db_now":
-        # 1. منع تشغيل العملية مرتين (حماية الاستقرار)
+        # 1. نظام الحماية من التشغيل المزدوج
         if context.user_data.get("setup_running"):
-            await query.answer("⚠️ العملية قيد التنفيذ بالفعل، يرجى الانتظار...", show_alert=True)
+            await query.answer("⚠️ العملية قيد التنفيذ بالفعل...", show_alert=True)
             return
 
         context.user_data["setup_running"] = True
@@ -466,21 +466,22 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
         from sheets import setup_bot_factory_database
-        
-        # 2. تشغيل العملية في Thread مستقل لضمان عدم تجمد البوت
+        import time
+
+        # 2. تشغيل المهمة في مسار خلفي لضمان استجابة البوت
         setup_task = asyncio.create_task(asyncio.to_thread(setup_bot_factory_database, context.bot.token))
         
         try:
             color_index = 0
             start_time = time.time()
             
-            # 3. حلقة الوميض والتقدم المستمر
+            # 3. حلقة الوميض وشريط التقدم (Loop)
             while not setup_task.done():
                 if context.user_data.get("cancel_setup"):
                     setup_task.cancel()
                     break
 
-                # حساب شريط التقدم الوهمي
+                # حساب التقدم (Progress Bar)
                 elapsed = time.time() - start_time
                 progress = min(98, int((elapsed / 60) * 100))
                 bar = "🟩" * (progress // 10) + "⬜" * (10 - (progress // 10))
@@ -493,7 +494,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
 
                 try:
-                    # التحديث كل 2.5 ثانية لتجنب حظر تليجرام (Rate Limit)
+                    # تحديث الرسالة كل 2.5 ثانية (التوقيت الذهبي)
                     await query.edit_message_text(
                         status_text, 
                         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ إلغاء", callback_data="cancel_setup")]]),
@@ -504,7 +505,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 color_index += 1
                 await asyncio.sleep(2.5) 
 
-            # 4. انتظار النتيجة النهائية (السطر 540 المصحح)
+            # 4. انتظار النتيجة النهائية
             sheets_count = await setup_task
             
             if sheets_count > 0:
@@ -515,10 +516,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "🛡️ نظام الحماية والتحقق من المخطط (Schema) نشط الآن."
                 )
             else:
-                result_text = "⚠️ <b>النظام مهيأ بالفعل!</b>\nلم يتم إجراء تغييرات."
+                result_text = "⚠️ <b>النظام مهيأ بالفعل!</b>\nالجداول موجودة ومحدثة."
                 
         except Exception as e:
-            print(f"❌ Error in setup: {e}")
+            print(f"❌ خطأ في التهيئة: {e}")
             result_text = "❌ <b>فشلت العملية!</b>\nحدث خطأ أثناء الاتصال بجوجل شيت."
             
         finally:
@@ -526,6 +527,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         keyboard = [[InlineKeyboardButton("🔙 العودة للوحة التحكم", callback_data="open_admin_panel")]]
         await query.edit_message_text(result_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
 
 # --------------------------------------------------------------------------
 
