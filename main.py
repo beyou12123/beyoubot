@@ -443,6 +443,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "✨ أهلاً بك في مصنع البوتات المتطور 🤖\n\nاختر ما تريد القيام به:",
             reply_markup=get_main_menu_inline(user_id)
         )
+# --------------------------------------------------------------------------
+
 
     # تهيئة الورق والإعدادات مع لودينج "وميض ألوان مستمر" في ملف main.py
     elif data == "run_setup_db_now":
@@ -506,64 +508,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # استبدال حالة الوميض بالنتيجة النهائية وأزرار التحكم
         await query.edit_message_text(result_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 # --------------------------------------------------------------------------
-    # تهيئة الورق والإعدادات - النسخة الاحترافية المعتمدة
-    elif data == "run_setup_db_now":
-        # 1. منع تشغيل العملية مرتين (حماية الاستقرار)
-        if context.user_data.get("setup_running"):
-            await query.answer("⚠️ العملية قيد التنفيذ بالفعل، يرجى الانتظار...", show_alert=True)
-            return
-
-        context.user_data["setup_running"] = True
-        
-        # 2. رسالة البدء النفسية والتقنية
-        base_loading_msg = (
-            "⏳ <b>جاري تشغيل محركات المصنع...</b>\n"
-            "━━━━━━━━━━━━━━\n"
-            "🔄 جاري فحص وإنشاء جداول قاعدة البيانات...\n"
-            "🎨 جاري تنسيق الصفوف والألوان تلقائياً...\n"
-            "⚙️ جاري زرع الإعدادات الافتراضية للبوت...\n\n"
-            "<i>يرجى الانتظار، لا تغلق هذه الصفحة...</i>"
-        )
-        
-        # إشعار بصري فوري باللون الأحمر
-        await query.edit_message_text(f"🔴 {base_loading_msg}", parse_mode="HTML")
-
-        # 3. محرك الاتصال بملف sheets
-        from sheets import setup_bot_factory_database
-        
-        try:
-            # تحديث تكتيكي للون الأصفر قبل بدء المهمة الثقيلة
-            await query.edit_message_text(f"🟡 {base_loading_msg}", parse_mode="HTML")
-            
-            # تنفيذ العملية داخل Executor لضمان عدم تجمد البوت (السطر 540 المصحح)
-            loop = asyncio.get_running_loop()
-            sheets_count = await loop.run_in_executor(None, setup_bot_factory_database, context.bot.token)
-            
-            # 4. معالجة النتائج النهائية
-            if sheets_count > 0:
-                result_text = (
-                    "✅ <b>تمت العملية بنجاح!</b>\n"
-                    "━━━━━━━━━━━━━━\n"
-                    f"📦 تم إنشاء وتنسيق (<b>{sheets_count} ورقة</b>) بالكامل.\n"
-                    "🛡️ نظام الحماية والتحقق من المخطط (Schema) نشط الآن."
-                )
-            else:
-                result_text = "⚠️ <b>النظام مهيأ بالفعل!</b>\nلم يتم إجراء تغييرات لأن الجداول موجودة مسبقاً."
-                
-        except Exception as e:
-            # توثيق الخطأ في السجل التقني
-            print(f"❌ Error in setup process: {e}")
-            result_text = "❌ <b>فشلت العملية!</b>\nحدث خطأ تقني أثناء الاتصال بجوجل شيت."
-            
-        finally:
-            # تحرير القفل لضمان عمل الزر في المرة القادمة
-            context.user_data["setup_running"] = False
-
-        # 5. عرض النتيجة النهائية وزر العودة
-        keyboard = [[InlineKeyboardButton("🔙 العودة للوحة التحكم", callback_data="open_admin_panel")]]
-        await query.edit_message_text(result_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
-
-
 
 # --------------------------------------------------------------------------
 
