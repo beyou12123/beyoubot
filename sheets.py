@@ -1272,32 +1272,38 @@ def check_course_has_discount(bot_token, course_id):
 
 
 #حفظ كود الخصم 
+# التعديل الذهبي والمطابق لهيكل ورقتك (15 عموداً)
 def save_discount_code_full(bot_token, data):
-    """حفظ البيانات الـ 15 عموداً بدقة"""
+    """حفظ البيانات بمطابقة تامة لهيكل ورقة 'أكواد_الخصم' المكونة من 15 عموداً"""
     try:
         sheet = ss.worksheet("أكواد_الخصم")
-        now = datetime.now().strftime("%Y-%m-%d")
+        now_date = datetime.now().strftime("%Y-%m-%d") # تاريخ اليوم
+        
+        # الترتيب الذي تطلبه ورقتك حرفياً:
         row = [
             str(bot_token),             # 1. Bot_id
             "001",                      # 2. معرف_الفرع
-            data['final_code'],         # 3. معرف_الخصم (المولد آلياً)
+            data['final_code'],         # 3. معرف_الخصم (الكود)
             "نسبة مئوية",               # 4. نوع_الخصم
-            data['desc'],               # 5. الوصف
-            data['value'],              # 6. قيمة_الخصم
-            data['max_use'],            # 7. الحد_الأقصى
-            "0",                        # 8. عدد_الاستخدامات
-            now,                        # 9. تاريخ_البداية
+            data['desc'],               # 5. الوصف (مثل: خصم عيد)
+            data['value'],              # 6. قيمة_الخصم (الرقم)
+            data['max_use'],            # 7. الحد_الأقصى_للاستخدام
+            "0",                        # 8. عدد_الاستخدامات (يبدأ بـ 0)
+            now_date,                   # 9. تاريخ_البداية
             data['expiry'],             # 10. تاريخ_الانتهاء
             "نشط",                      # 11. الحالة
             data['course_id'],          # 12. معرف_الدورة
             "المالك",                   # 13. اسم_الموظف
-            "Direct",                   # 14. معرف_الحملة
+            "Direct",                   # 14. معرف_الحملة_التسويقية
             "إضافة آلية"                # 15. ملاحظات
         ]
+        
         sheet.append_row(row)
         return True
-    except: return False
- 
+    except Exception as e:
+        print(f"❌ خطأ في مطابقة الأعمدة: {e}")
+        return False
+
  
  
 
