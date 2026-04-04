@@ -1366,7 +1366,7 @@ def save_discount_code_full(bot_token, data):
  # --------------------------------------------------------------------------
  # قسم روابط الاحالة
  
- def get_bot_setting(bot_token, key, default=0):
+def get_bot_setting(bot_token, key, default=0):
     """جلب قيمة إعداد محدد لبوت معين باستخدام المفتاح البرمجي"""
     try:
         sheet = ss.worksheet("الإعدادات")
