@@ -1,40 +1,25 @@
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import ContextTypes
+from datetime import datetime
 import uuid
 import time
 import random
 import string
 import re
-from datetime import datetime
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.ext import ContextTypes
 
-# استيراد من sheets
-# --- [ بوابة ملف الشيتات - استيراد مدمج ومنظم ] ---
+# استيراد الدوال من ملف sheets (تأكد من مطابقة أسماء الدوال لما هو موجود في ملف sheets.py)
 from sheets import (
-    ss, 
-    courses_sheet, 
-    get_bot_config, 
-    get_bot_setting,
     get_groups_by_course, 
     add_new_group, 
-    delete_group_by_id,
     get_all_coaches, 
-    get_all_personnel_list,
-    get_employee_permissions, 
-    check_user_permission, 
-    get_employee_allowed_courses, 
+    get_employee_allowed_courses,
     get_employee_allowed_groups,
-    get_student_enrollment_data, 
+    get_student_enrollment_data,
     get_lectures_by_group,
-    get_active_discount_codes, 
-    check_course_has_discount, 
-    save_discount_code_full,
-    get_all_questions_from_bank,
-    get_system_time, 
-    get_all_categories
+    get_active_discount_codes,
+    check_user_permission, # للتأكد من هوية الموظف
+    delete_group_by_id  # تم تصحيح الاسم هنا ليتطابق مع المحرك
 )
-
-# --------------------------------------------------------------------------
-
 
 async def manage_groups_main(update, context, course_id):
     """الواجهة الرئيسية لإدارة مجموعات دورة محددة"""
@@ -261,7 +246,7 @@ async def quiz_options_ui(update, context, quiz_id):
     bot_token = context.bot.token
     
     # جلب بيانات الاختبار لمعرفة حالته الحالية
-    
+    from sheets import ss
     sheet = ss.worksheet("الاختبارات_الآلية")
     all_q = sheet.get_all_records()
     quiz = next((q for q in all_q if str(q['معرف_الاختبار']) == str(quiz_id)), {})
@@ -287,7 +272,7 @@ async def manage_personnel_ui(update, context):
     bot_token = context.bot.token
     
     # استخدام دالتك الموحدة
-
+    from sheets import get_all_personnel_list
     people = get_all_personnel_list(bot_token)
     
     if not people:
@@ -312,7 +297,7 @@ async def start_add_question_ui(update, context):
     bot_token = context.bot.token
     
     # جلب الدورات الخاصة بهذا البوت فقط
-
+    from sheets import courses_sheet
     all_courses = courses_sheet.get_all_records()
     bot_courses = [c for c in all_courses if str(c.get('bot_id')) == str(bot_token)]
     
@@ -336,7 +321,7 @@ async def browse_q_bank_ui(update, context):
     query = update.callback_query
     bot_token = context.bot.token
     
-
+    from sheets import get_all_questions_from_bank
     questions = get_all_questions_from_bank(bot_token)
     
     if not questions:
@@ -360,7 +345,7 @@ async def view_question_details_ui(update, context, q_id):
     query = update.callback_query
     bot_token = context.bot.token
     
-
+    from sheets import get_all_questions_from_bank
     all_q = get_all_questions_from_bank(bot_token)
     q = next((item for item in all_q if str(item['معرف_السؤال']) == str(q_id)), None)
     
@@ -396,7 +381,7 @@ async def quiz_create_start_ui(update, context):
     query = update.callback_query
     bot_token = context.bot.token
     
-
+    from sheets import courses_sheet
     all_courses = courses_sheet.get_all_records()
     bot_courses = [c for c in all_courses if str(c.get('bot_id')) == str(bot_token)]
     
@@ -415,7 +400,7 @@ async def quiz_gen_select_groups_ui(update, context, course_id):
     query = update.callback_query
     bot_token = context.bot.token
     
-
+    from sheets import get_groups_by_course
     groups = get_groups_by_course(bot_token, course_id)
     
     if 'temp_quiz' not in context.user_data:
@@ -450,7 +435,7 @@ async def show_lectures_logic(update, context):
     bot_token = context.bot.token
     
     # 1. جلب معرف المالك من الإعدادات لضمان الصلاحية المطلقة
-
+    from sheets import get_bot_config, courses_sheet
     config = get_bot_config(bot_token)
     bot_owner_id = int(config.get("admin_ids", 0))
 
@@ -527,7 +512,7 @@ async def show_lectures_logic(update, context):
 # --- [ النسخة المصححة لضمان عمل الأزرار ] ---
 async def add_discount_start(update, context):
     query = update.callback_query
-
+    from sheets import courses_sheet
     all_courses = courses_sheet.get_all_records()
     bot_token = str(context.bot.token)
     bot_courses = [c for c in all_courses if str(c.get('bot_id')) == bot_token]
@@ -550,7 +535,7 @@ async def add_discount_start(update, context):
 # 2. التحقق من وجود كود سابق
 async def process_dsc_check(update, context, course_id):
     query = update.callback_query
-
+    from sheets import check_course_has_discount
     existing_code = check_course_has_discount(context.bot.token, course_id)
     
     context.user_data['temp_disc'] = {'course_id': course_id}
@@ -618,7 +603,7 @@ async def validate_dsc_max(update, context):
     nums = ''.join(random.choices(string.digits, k=2))
     d['final_code'] = chars + nums
     
-
+    from sheets import save_discount_code_full
     if save_discount_code_full(context.bot.token, d):
         summary = (
             f"✅ <b>تم إنشاء كود الخصم بنجاح!</b>\n\n"
@@ -644,7 +629,7 @@ async def show_discount_codes_logic(update, context):
     bot_token = context.bot.token
     
     # 1. جلب معرف المالك للتحقق من الصلاحية المطلقة
-
+    from sheets import get_bot_config, ss
     config = get_bot_config(bot_token)
     bot_owner_id = int(config.get("admin_ids", 0))
 
@@ -688,7 +673,7 @@ async def list_all_discounts_ui(update, context):
     bot_token = context.bot.token
     
     # جلب البيانات مباشرة من ورقة أكواد_الخصم
-
+    from sheets import ss
     sheet = ss.worksheet("أكواد_الخصم")
     records = sheet.get_all_records()
     
@@ -716,7 +701,7 @@ async def view_discount_details_ui(update, context, disc_id):
     query = update.callback_query
     bot_token = context.bot.token
     
-
+    from sheets import ss
     sheet = ss.worksheet("أكواد_الخصم")
     records = sheet.get_all_records()
     d = next((r for r in records if str(r.get('bot_id')) == str(bot_token) and str(r.get('معرف_الخصم')) == str(disc_id)), None)
@@ -753,188 +738,7 @@ async def view_discount_details_ui(update, context, disc_id):
 
 
 # --------------------------------------------------------------------------
-# --------------------------------------------------------------------------
-# --- [ نظام إدارة الواجبات التعليمية - الإدارة ] ---
-
-async def manage_homeworks_main_ui(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """الواجهة الرئيسية لإدارة الواجبات (لوحة تحكم الأدمن)"""
-    query = update.callback_query
-    keyboard = [
-        [InlineKeyboardButton("➕ إسناد واجب جديد", callback_data="hw_add_start")],
-        [InlineKeyboardButton("📥 استلام وتصحيح الواجبات", callback_data="hw_view_submissions")],
-        [InlineKeyboardButton("🗄 أرشيف الواجبات", callback_data="hw_archive")],
-        [InlineKeyboardButton("🔙 عودة للكنترول", callback_data="manage_control")]
-    ]
-    
-    text = (
-        "📑 <b>نظام إدارة الواجبات التعليمية:</b>\n"
-        "━━━━━━━━━━━━━━\n"
-        "يمكنك من هنا إسناد المهام الدراسية للمجموعات، ومتابعة تسليمات الطلاب وتقييمها."
-    )
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
-
-async def homework_add_select_course(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """الخطوة 1: اختيار الدورة (مع فلترة هرمية صارمة بناءً على الصلاحيات)"""
-    query = update.callback_query
-    user_id = query.from_user.id
-    bot_token = context.bot.token
-    
-    # 1. نظام التحقق من الهوية (آدمن أو موظف نشط)
-    config = get_bot_config(bot_token)
-    bot_owner_id = str(config.get("owner_id", "0"))
-    admin_list = str(config.get("admin_ids", "0")).split(",")
-
-    # تصحيح دمج المسافات البادئة وربط الشروط
-    if str(user_id) == bot_owner_id or str(user_id) in admin_list:
-        auth_access = "full"
-        branch_id = "001"
-    else:
-        # ضبط الإعدادات الافتراضية للموظف قبل الفحص
-        auth_access = "restricted"
-        branch_id = "001"
-
-        # فحص الموظف في ورقة إدارة_الموظفين
-        emp_sheet = ss.worksheet("إدارة_الموظفين")
-        emp_records = emp_sheet.get_all_records()
-        employee = next((r for r in emp_records if str(r.get("ID_المستخدم_تيليجرام")) == str(user_id) and str(r.get("حالة_الحساب")) == "نشط"), None)
-        
-        if not employee:
-            await query.answer("⚠️ عذراً، ليس لديك صلاحية الوصول لهذا القسم.", show_alert=True)
-            return
-        branch_id = employee.get("معرف_الفرع", "001")
-
-    # 2. فلترة البيانات الهرمية
-    all_courses = courses_sheet.get_all_records()
-    bot_courses = [c for c in all_courses if str(c.get('bot_id')) == str(bot_token)]
-    
-    allowed_courses = []
-    if auth_access == "full":
-        allowed_courses = bot_courses
-    else:
-        # جلب الأذونات من الهيكل التنظيمي
-        perms = get_employee_permissions(bot_token, user_id)
-        allowed_ids = str(perms.get("الدورات_المسموحة", "")).split(",")
-        allowed_ids = [i.strip() for i in allowed_ids if i.strip()]
-        allowed_courses = [c for c in bot_courses if str(c.get("معرف_الدورة")) in allowed_ids]
-
-    if not allowed_courses:
-        await query.edit_message_text("⚠️ لا توجد دورات مسموحة لك حالياً لإسناد واجبات.", 
-                                     reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 عودة", callback_data="manage_homeworks")]]))
-        return
-
-    keyboard = [[InlineKeyboardButton(f"📘 {c['اسم_الدورة']}", callback_data=f"hw_sel_crs_{c['معرف_الدورة']}")] for c in allowed_courses]
-    keyboard.append([InlineKeyboardButton("🔙 تراجع", callback_data="manage_homeworks")])
-    
-    context.user_data['temp_hw'] = {'branch_id': branch_id, 'auth_access': auth_access}
-    await query.edit_message_text("🎯 <b>إضافة واجب:</b> اختر الدورة التعليمية المستهدفة:", 
-                                 reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
-
-
-# --------------------------------------------------------------------------
-async def hw_add_select_groups_ui(update, context, course_id):
-    """الخطوة 2: اختيار المجموعات (مع الفلترة الهرمية ودعم التعيين المتعدد)"""
-    query = update.callback_query
-    user_id = query.from_user.id
-    bot_token = context.bot.token
-    
-
-    all_groups = get_groups_by_course(bot_token, course_id)
-    auth = context.user_data.get('temp_hw', {})
-    auth['course_id'] = course_id
-    
-    if auth.get('auth_access') == "restricted":
-
-        perms = get_employee_permissions(bot_token, user_id)
-        allowed_grp_ids = str(perms.get("المجموعات_المسموحة", "")).split(",")
-        allowed_grp_ids = [i.strip() for i in allowed_grp_ids if i.strip()]
-        filtered_groups = [g for g in all_groups if str(g.get("معرف_المجموعة")) in allowed_grp_ids]
-    else:
-        filtered_groups = all_groups
-
-    if 'target_groups' not in auth: auth['target_groups'] = []
-
-    keyboard = []
-    all_ids = [str(g['معرف_المجموعة']) for g in filtered_groups]
-    is_all_selected = set(all_ids).issubset(set(auth['target_groups'])) if all_ids else False
-    all_icon = "✅" if is_all_selected else "⬜"
-    keyboard.append([InlineKeyboardButton(f"{all_icon} تحديد كافة المجموعات المتاحة", callback_data=f"hw_grp_sel_ALL_{course_id}")])
-    
-    for g in filtered_groups:
-        g_id = str(g['معرف_المجموعة'])
-        icon = "✅" if g_id in auth['target_groups'] else "⬜"
-        keyboard.append([InlineKeyboardButton(f"{icon} {g['اسم_المجموعة']}", callback_data=f"hw_grp_sel_{g_id}_{course_id}")])
-    
-    keyboard.append([InlineKeyboardButton("➡️ الخطوة التالية (العنوان)", callback_data="hw_gen_next_title")])
-    keyboard.append([InlineKeyboardButton("🔙 تراجع", callback_data="hw_add_start")])
-    
-    context.user_data['temp_hw'] = auth
-    await query.edit_message_text(f"👥 <b>تحديد المجموعات:</b>\nاختر المجموعات المسند إليها الواجب:", 
-                                 reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
-
-async def save_homework_to_db(bot_token, data):
-    """حفظ الواجب (صف لكل مجموعة) مع جلب الدرجة ديناميكياً من الإعدادات"""
-    try:
-
-
-        sheet = ss.worksheet("الواجبات")
-        now = get_system_time("full")
-
-        
-        # جلب درجة الواجب من ورقة الإعدادات بناءً على طلبك
-        hw_grade = get_bot_setting(bot_token, "homework_grade", default="10")
-        
-        rows_to_append = []
-        for group_id in data['target_groups']:
-            hw_id = f"HW{str(uuid.uuid4().int)[:5]}"
-            row = [
-                str(bot_token),             # bot_id
-                data.get('branch_id', '001'),   # معرف_الفرع
-                hw_id,                      # معرف_الواجب
-                data['course_id'],          # معرف_الدورة
-                group_id,                   # معرف_المجموعة
-                data['title'],              # عنوان_الواجب
-                data['desc'],               # وصف_الواجب
-                now,                        # تاريخ_الإسناد
-                data['deadline'],           # تاريخ_التسليم
-                "عبر البوت",                # طريقة_التسليم
-                "TRUE",                      # الحالة
-                str(hw_grade),              # درجة_كاملة (مجلوية من الإعدادات)
-                "",                         # ملاحظات_المعلم
-                "",                         # مرفقات
-                now                         # آخر_تحديث
-            ]
-            rows_to_append.append(row)
-        
-        if rows_to_append:
-            sheet.append_rows(rows_to_append)
-            return True
-        return False
-    except Exception as e:
-        print(f"❌ Error in Homework Persistence: {e}")
-        return False
-# --------------------------------------------------------------------------
-# --------------------------------------------------------------------------
-# --- [ نظام استلام وتصحيح الواجبات - للمدرب ] ---
-
-
-async def hw_view_submissions_course_select(update, context):
-    """عرض الدورات التي تحتوي على تسليمات واجبات للمدرب"""
-    query = update.callback_query
-    bot_token = context.bot.token
-    
-    
-    all_courses = courses_sheet.get_all_records()
-    bot_courses = [c for c in all_courses if str(c.get('bot_id')) == str(bot_token)]
-    
-    keyboard = [[InlineKeyboardButton(f"📘 {c['اسم_الدورة']}", callback_data=f"hw_view_subs_crs_{c['معرف_الدورة']}")] for c in bot_courses]
-    keyboard.append([InlineKeyboardButton("🔙 تراجع", callback_data="manage_homeworks")])
-    
-    await query.edit_message_text("📥 <b>تصحيح الواجبات:</b> اختر الدورة لمشاهدة تسليمات الطلاب:", 
-                                 reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
-# --------------------------------------------------------------------------
-
-# --------------------------------------------------------------------------
-
+# عرض الدروس للطالب 
 
 # --------------------------------------------------------------------------
 
