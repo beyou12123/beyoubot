@@ -216,6 +216,8 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         except:
             await query.answer("❌ فشل الحذف.", show_alert=True)
 
+
+
     # 8. زر العودة للقائمة الرئيسية (تم تصحيح الشرط هنا لضمان تسلسل elif)
     elif data == "main_menu":
         await start_handler(update, context)
@@ -434,6 +436,76 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         course_id = data.replace("sel_course_groups_", "")
         from educational_manager import manage_groups_main
         await manage_groups_main(update, context, course_id)
+
+# --- [ قسم إدارة الكنترول والاختبارات ] ---
+    
+    # 1. الدخول لغرفة الكنترول الرئيسية
+    elif data == "manage_control":
+        from educational_manager import manage_control_ui
+        await manage_control_ui(update, context)
+#إنشاء الاختبارات الآلية 
+    elif data == "manage_quizzes":
+        from educational_manager import quiz_create_start_ui
+        await quiz_create_start_ui(update, context)
+
+
+    # --------------------------------------------------------------------------
+    
+    
+    # ربط نظام إدارة الواجبات (أدمن)
+    elif data == "manage_homeworks":
+
+        await manage_homeworks_main_ui(update, context)
+        
+    elif data == "hw_view_submissions":
+
+        await hw_view_submissions_course_select(update, context)
+
+        
+    # --- [ نظام الواجبات - معالجة الأزرار والخطوات ] ---
+    elif data == "hw_add_start":
+
+        await homework_add_select_course(update, context)
+
+    elif data.startswith("hw_sel_crs_"):
+        course_id = data.replace("hw_sel_crs_", "")
+
+        await hw_add_select_groups_ui(update, context, course_id)
+
+    elif data.startswith("hw_grp_sel_"):
+        parts = data.split("_")
+        g_id, course_id = parts[3], parts[4]
+        auth = context.user_data.get('temp_hw', {'target_groups': []})
+        
+        if g_id == "ALL":
+
+            all_ids = [str(g['معرف_المجموعة']) for g in get_groups_by_course(bot_token, course_id)]
+            if set(all_ids).issubset(set(auth['target_groups'])):
+                auth['target_groups'] = [gid for gid in auth['target_groups'] if gid not in all_ids]
+            else:
+                auth['target_groups'] = list(set(auth['target_groups'] + all_ids))
+        else:
+            if g_id in auth['target_groups']: auth['target_groups'].remove(g_id)
+            else: auth['target_groups'].append(g_id)
+        
+        context.user_data['temp_hw'] = auth
+
+        await hw_add_select_groups_ui(update, context, course_id)
+
+    elif data == "hw_gen_next_title":
+        if not context.user_data.get('temp_hw', {}).get('target_groups'):
+            await query.answer("⚠️ يرجى اختيار مجموعة واحدة على الأقل!", show_alert=True)
+            return
+        context.user_data['action'] = 'awaiting_hw_title'
+        await query.edit_message_text("📝 <b>إسناد واجب:</b> أرسل الآن <b>عنوان الواجب</b>:", parse_mode="HTML")
+
+    elif data == "exec_save_hw_final":
+
+        if await save_homework_to_db(bot_token, context.user_data.get('temp_hw')):
+            await query.answer("✅ تم إسناد الواجب بنجاح للمجموعات المختارة", show_alert=True)
+
+            await manage_homeworks_main_ui(update, context)
+            context.user_data.pop('temp_hw', None)
 
 
 
@@ -904,76 +976,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 # --------------------------------------------------------------------------
 
 # --------------------------------------------------------------------------
-    # --- [ قسم إدارة الكنترول والاختبارات ] ---
     
-    # 1. الدخول لغرفة الكنترول الرئيسية
-    elif data == "manage_control":
-        from educational_manager import manage_control_ui
-        await manage_control_ui(update, context)
-#إنشاء الاختبارات الآلية 
-    elif data == "manage_quizzes":
-        from educational_manager import quiz_create_start_ui
-        await quiz_create_start_ui(update, context)
-
-
-    # --------------------------------------------------------------------------
-    
-    
-    # ربط نظام إدارة الواجبات (أدمن)
-    elif data == "manage_homeworks":
-
-        await manage_homeworks_main_ui(update, context)
-        
-    elif data == "hw_view_submissions":
-
-        await hw_view_submissions_course_select(update, context)
-
-        
-    # --- [ نظام الواجبات - معالجة الأزرار والخطوات ] ---
-    elif data == "hw_add_start":
-
-        await homework_add_select_course(update, context)
-
-    elif data.startswith("hw_sel_crs_"):
-        course_id = data.replace("hw_sel_crs_", "")
-
-        await hw_add_select_groups_ui(update, context, course_id)
-
-    elif data.startswith("hw_grp_sel_"):
-        parts = data.split("_")
-        g_id, course_id = parts[3], parts[4]
-        auth = context.user_data.get('temp_hw', {'target_groups': []})
-        
-        if g_id == "ALL":
-
-            all_ids = [str(g['معرف_المجموعة']) for g in get_groups_by_course(bot_token, course_id)]
-            if set(all_ids).issubset(set(auth['target_groups'])):
-                auth['target_groups'] = [gid for gid in auth['target_groups'] if gid not in all_ids]
-            else:
-                auth['target_groups'] = list(set(auth['target_groups'] + all_ids))
-        else:
-            if g_id in auth['target_groups']: auth['target_groups'].remove(g_id)
-            else: auth['target_groups'].append(g_id)
-        
-        context.user_data['temp_hw'] = auth
-
-        await hw_add_select_groups_ui(update, context, course_id)
-
-    elif data == "hw_gen_next_title":
-        if not context.user_data.get('temp_hw', {}).get('target_groups'):
-            await query.answer("⚠️ يرجى اختيار مجموعة واحدة على الأقل!", show_alert=True)
-            return
-        context.user_data['action'] = 'awaiting_hw_title'
-        await query.edit_message_text("📝 <b>إسناد واجب:</b> أرسل الآن <b>عنوان الواجب</b>:", parse_mode="HTML")
-
-    elif data == "exec_save_hw_final":
-
-        if await save_homework_to_db(bot_token, context.user_data.get('temp_hw')):
-            await query.answer("✅ تم إسناد الواجب بنجاح للمجموعات المختارة", show_alert=True)
-
-            await manage_homeworks_main_ui(update, context)
-            context.user_data.pop('temp_hw', None)
-
         
     # --------------------------------------------------------------------------
 
