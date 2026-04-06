@@ -796,6 +796,10 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         keyboard.append([InlineKeyboardButton("➕ إضافة قسم جديد", callback_data="add_cat_start")])
         keyboard.append([InlineKeyboardButton("🔙 عودة", callback_data="manage_educational")])
         
+    # --- 6. إضافة دورة فردية (تحديد القسم أولاً) ---
+    elif data == "start_add_course":
+        from sheets import get_all_categories
+        categories = get_all_categories(bot_token)
         # 4. تحديث الرسالة
         await query.edit_message_text(
             "📁 <b>إدارة الأقسام التعليمية</b>\n\nاختر قسماً لإدارته أو أضف قسماً جديداً:",
