@@ -450,7 +450,6 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 
 
     # --------------------------------------------------------------------------
-    
 # --- [ قسم إدارة الواجبات والحلول ] ---
     
     # 1. الدخول للوحة إدارة الواجبات الرئيسية (أدمن/موظف)
@@ -778,7 +777,16 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
     # --- 5. إدارة الأقسام (عرض القائمة) ---
     elif data == "manage_cats":
         from sheets import check_user_permission, get_all_categories
-        
+        if not check_user_permission(bot_token, user_id, "صلاحية_الأقسام"):
+            await query.answer("🚫 ليس لديك صلاحية لإدارة الأقسام.", show_alert=True)
+            return
+        categories = get_all_categories(bot_token)
+        keyboard = [[InlineKeyboardButton(f"📁 {cat.get('اسم_القسم')}", callback_data=f"edit_cat_{cat.get('معرف_القسم')}")] for cat in categories]
+        keyboard.append([InlineKeyboardButton("➕ إضافة قسم جديد", callback_data="add_cat_start")])
+        keyboard.append([InlineKeyboardButton("🔙 عودة", callback_data="manage_educational")])
+        await query.edit_message_text("📁 <b>إدارة الأقسام التعليمية</b>", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+        return
+
         # 1. التحقق من الصلاحية
         if not check_user_permission(bot_token, user_id, "صلاحية_الأقسام"):
             await query.answer("🚫 ليس لديك صلاحية لإدارة الأقسام.", show_alert=True)
@@ -810,7 +818,8 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 
             
         # اختيار القسم قبل البدء
-        keyboard = [[InlineKeyboardButton(f"📁 {cat['name']}", callback_data=f"set_crs_cat_{cat['id']}")] for cat in categories]
+        # بدلاً من cat['name'] و cat['id']، استخدم:
+        keyboard = [[InlineKeyboardButton(f"📁 {cat.get('اسم_القسم')}", callback_data=f"set_crs_cat_{cat.get('معرف_القسم')}")] for cat in categories]
         keyboard.append([InlineKeyboardButton("❌ إلغاء", callback_data="manage_courses")])
         await query.edit_message_text("🎯 **الخطوة 1:** اختر القسم المخصص للدورة:", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 

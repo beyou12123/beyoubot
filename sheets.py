@@ -705,14 +705,14 @@ def update_category_name(bot_token, cat_id, new_name):
 # --------------------------------------------------------------------------
 #إضافة الدورات 
 def add_new_course(bot_token, course_id, name, hours, start_date, end_date, c_type, price, limit, reqs, rep_name, rep_code, campaign, coach_user, coach_id, coach_name, cat_id, **kwargs):
-    """إضافة دورة كاملة مع ربطها بالقسم (العمود 18)"""
+    """إضافة دورة كاملة مع ربطها بالقسم (العمود 18) بالترتيب البرمجي الصحيح"""
     try:
         if courses_sheet is None: return False
         
-        # معرف الفرع نجلب من kwargs لأنه لم يتم تعريفه في الـ Parameters
+        # 1. يجب تعريف branch_id أولاً قبل استخدامه في المصفوفة
         branch_id = kwargs.get('branch_id', '001') 
         
-        # الترتيب مطابق للهيكل المكون من 18 عموداً
+        # 2. بناء مصفوفة البيانات بالترتيب المطابق لهيكل جوجل شيت (18 عموداً)
         row = [
             bot_token,          # 1. bot_id
             branch_id,          # 2. معرف_الفرع
@@ -734,6 +734,7 @@ def add_new_course(bot_token, course_id, name, hours, start_date, end_date, c_ty
             cat_id              # 18. معرف_القسم (للربط الهرمي)
         ]
         
+        # 3. تنفيذ عملية الحفظ الفعلية
         courses_sheet.append_row(row)
         return True
     except Exception as e:
