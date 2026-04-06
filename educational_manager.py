@@ -780,32 +780,18 @@ async def homework_add_select_course(update: Update, context: ContextTypes.DEFAU
     bot_token = context.bot.token
     
     # 1. نظام التحقق من الهوية (آدمن أو موظف نشط)
-
     config = get_bot_config(bot_token)
     bot_owner_id = str(config.get("owner_id", "0"))
     admin_list = str(config.get("admin_ids", "0")).split(",")
 
+    # تصحيح دمج المسافات البادئة وربط الشروط
     if str(user_id) == bot_owner_id or str(user_id) in admin_list:
         auth_access = "full"
         branch_id = "001"
     else:
-        auth_access = "restricted"
-
-
-
-    # تصحيح: دمج المسافات البادئة وربط الشرط بالمتغيرات الصحيحة لمنع توقف البوت
-    if str(user_id) == str(config.get("owner_id")) or str(user_id) in admin_ids:
-        auth_access = "full"
-    else:
         # ضبط الإعدادات الافتراضية للموظف قبل الفحص
         auth_access = "restricted"
         branch_id = "001"
-
-        # استبدال المتغير غير المعرف bot_owner_id بـ config.get("owner_id")
-        if str(user_id) == str(config.get("owner_id")):
-            auth_access = "full"
-        else:
-            # يكمل الكود هنا فحص ورقة إدارة_الموظفين كما هو مذكور في الملف الأصلي
 
         # فحص الموظف في ورقة إدارة_الموظفين
         emp_sheet = ss.worksheet("إدارة_الموظفين")
@@ -826,7 +812,6 @@ async def homework_add_select_course(update: Update, context: ContextTypes.DEFAU
         allowed_courses = bot_courses
     else:
         # جلب الأذونات من الهيكل التنظيمي
-
         perms = get_employee_permissions(bot_token, user_id)
         allowed_ids = str(perms.get("الدورات_المسموحة", "")).split(",")
         allowed_ids = [i.strip() for i in allowed_ids if i.strip()]
@@ -843,7 +828,6 @@ async def homework_add_select_course(update: Update, context: ContextTypes.DEFAU
     context.user_data['temp_hw'] = {'branch_id': branch_id, 'auth_access': auth_access}
     await query.edit_message_text("🎯 <b>إضافة واجب:</b> اختر الدورة التعليمية المستهدفة:", 
                                  reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
-
 
 
 # --------------------------------------------------------------------------
