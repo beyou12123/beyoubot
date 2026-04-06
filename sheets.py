@@ -1005,7 +1005,7 @@ def check_user_permission(bot_token, user_id, permission_col):
     try:
         # 1. جلب إعدادات البوت لمعرفة المالك
         config = get_bot_config(bot_token)
-        if str(user_id) == str(config.get("admin_ids")):
+        if str(user_id) in str(config.get("admin_ids", "")).split(','):
             return True  # المالك لديه كافة الصلاحيات دائماً
 
         # 2. البحث في ورقة الصلاحيات للموظف
