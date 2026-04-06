@@ -704,43 +704,42 @@ def update_category_name(bot_token, cat_id, new_name):
 
 # --------------------------------------------------------------------------
 #إضافة الدورات 
-
 def add_new_course(bot_token, course_id, name, hours, start_date, end_date, c_type, price, limit, reqs, rep_name, rep_code, campaign, coach_user, coach_id, coach_name, cat_id, **kwargs):
-    """إضافة دورة كاملة مع إضافة 'معرف القسم' في العمود رقم 17 لضمان الربط"""
+    """إضافة دورة كاملة مع ربطها بالقسم (العمود 18)"""
     try:
         if courses_sheet is None: return False
         
-        # الحل: تعريف المتغير المفقود هنا
+        # معرف الفرع نجلب من kwargs لأنه لم يتم تعريفه في الـ Parameters
         branch_id = kwargs.get('branch_id', '001') 
         
-        # الترتيب مطابق 100% لـ ["bot_id", "معرف_الفرع", ..., "معرف_القسم"]
+        # الترتيب مطابق للهيكل المكون من 18 عموداً
         row = [
-            bot_token,                          # 1. bot_id
-            kwargs.get('branch_id', "001"),     # 2. معرف_الفرع
-            course_id,                          # 3. معرف_الدورة
-            name,                               # 4. اسم_الدورة
-            kwargs.get('hours', '0'),           # 5. عدد_الساعات
-            kwargs.get('start_date', '-'),      # 6. تاريخ_البداية
-            kwargs.get('end_date', '-'),        # 7. تاريخ_النهاية
-            kwargs.get('c_type', 'حضوري'),      # 8. نوع_الدورة
-            price,                              # 9. سعر_الدورة
-            kwargs.get('limit', '50'),          # 10. الحد_الأقصى
-            kwargs.get('reqs', 'لا يوجد'),      # 11. المتطلبات
-            kwargs.get('rep_name', 'المدير'),   # 12. اسم_الموظف
-            kwargs.get('rep_code', '0'),        # 13. معرف_الموظف
-            kwargs.get('campaign', 'Direct'),   # 14. معرف_الحملة_التسويقية
-            kwargs.get('coach_user', '-'),      # 15. معرف_المدرب
-            kwargs.get('coach_id', '-'),        # 16. ID_المدرب
-            kwargs.get('coach_name', '-'),      # 17. اسم_المدرب
-            cat_id                              # 18. معرف_القسم (في النهاية تماماً)
+            bot_token,          # 1. bot_id
+            branch_id,          # 2. معرف_الفرع
+            course_id,          # 3. معرف_الدورة
+            name,               # 4. اسم_الدورة
+            hours,              # 5. عدد_الساعات
+            start_date,         # 6. تاريخ_البداية
+            end_date,           # 7. تاريخ_النهاية
+            c_type,             # 8. نوع_الدورة
+            price,              # 9. سعر_الدورة
+            limit,              # 10. الحد_الأقصى
+            reqs,               # 11. المتطلبات
+            rep_name,           # 12. اسم_الموظف
+            rep_code,           # 13. معرف_الموظف
+            campaign,           # 14. معرف_الحملة_التسويقية
+            coach_user,         # 15. معرف_المدرب (يوزر)
+            coach_id,           # 16. ID_المدرب (رقمي)
+            coach_name,         # 17. اسم_المدرب
+            cat_id              # 18. معرف_القسم (للربط الهرمي)
         ]
-
         
         courses_sheet.append_row(row)
         return True
     except Exception as e:
         print(f"❌ Error in add_new_course: {e}")
         return False
+
 # --------------------------------------------------------------------------
 # دالة جلب الدورات بقسم محدد
 def get_courses_by_category(bot_token, cat_id):
