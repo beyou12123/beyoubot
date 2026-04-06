@@ -36,12 +36,6 @@ from course_engine import (
     show_course_content_ui, show_student_homeworks_list, show_homework_details
 )
 from education_bot import start_handler
-
-
-
-
-
-
 # --------------------------------------------------------------------------
 async def handle_permission_toggle(query, bot_token, employee_id, col_name):
     """تحديث صلاحية الموظف في الشيت وإعادة رسم لوحة التحكم للمالك فوراً"""
@@ -87,7 +81,7 @@ async def show_course_selector(update, context, employee_id):
                                                  reply_markup=InlineKeyboardMarkup(keyboard))
 # --------------------------------------------------------------------------
  # --- [ دوال الواجهات المساعدة - نقلت هنا لتوحيد المرجع ] --- 
- def get_admin_panel():
+def get_admin_panel():
     """قائمة الأزرار الرئيسية للوحة تحكم الإدارة"""
     keyboard = [
         [InlineKeyboardButton("📊 الإحصائيات الذكية", callback_data="admin_stats")],
