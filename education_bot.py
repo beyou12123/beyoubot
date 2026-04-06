@@ -16,6 +16,9 @@ from telegram.ext import (
     filters
 )
 
+# تصريح التصدير لضمان رؤية المصنع للدوال بشكل صريح ومنع ImportError
+__all__ = ['start_handler', 'run_bot', 'activation_monitor', 'get_student_menu']
+
 # الكتلة المدمجة لملف sheets.py 
 from sheets import (
     get_bot_config, 
@@ -41,9 +44,6 @@ from sheets import (
 from educational_manager import manage_groups_main
 from bot_callbacks import contact_callback_handler, get_admin_panel
 from bot_messages import handle_contact_message
-
-# تصريح التصدير لضمان رؤية المصنع للدوال بشكل صريح ومنع ImportError
-__all__ = ['start_handler', 'run_bot', 'activation_monitor', 'get_student_menu']
 
 # --- [ ذاكرة المحادثات المؤقتة للطلاب ] ---
 user_messages = {} 
@@ -144,7 +144,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # واجهة الطالب
         student_text = f"<b>{msg}</b>"
         
-        # تصحيح توجيه الواجهة للطالب باستخدام المتغيرات والمفاتيح الصحيحة
+        # تصحيح توجيه الواجهة للطالب باستخدام المتغيرات والمفاتيح الصحيحة لضمان الخصوصية والعمل البرمجي
         if query:
             await query.answer()
             await query.edit_message_text(student_text, reply_markup=get_student_menu(), parse_mode="HTML")
@@ -169,7 +169,7 @@ async def activation_monitor(context: ContextTypes.DEFAULT_TYPE):
             )
             await context.bot.send_message(chat_id=student['user_id'], text=msg, parse_mode="HTML")
             
-            # تحديث الشيت لكي لا يرسل الرسالة مرة أخرى باستخدام المحرك الموحد
+            # تحديث الشيت لكي لا يرسل الرسالة مرة أخرى باستخدام المحرك الموحد لضمان تنسيق التاريخ
             sheet = ss.worksheet("قاعدة_بيانات_الطلاب")
             sheet.update_cell(student['row'], 21, f"تم الإشعار: {get_system_time('full')}")
 
