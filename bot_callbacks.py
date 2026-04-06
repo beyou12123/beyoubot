@@ -30,7 +30,8 @@ from educational_manager import (
     q_bank_manager_ui, browse_q_bank_ui, view_question_details_ui, 
     start_add_question_ui, #quiz_activation_start,
     #quiz_activation_groups, 
-    employee_quiz_view, quiz_options_ui
+    #employee_quiz_view,
+    quiz_options_ui
 )
 # كتلة استيراد ملفات المحرك وواجهة المستخدم 
 from course_engine import (
