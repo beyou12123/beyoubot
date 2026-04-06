@@ -24,7 +24,7 @@ from sheets import (
     get_student_enrollment_data, 
     get_courses_knowledge_base, 
     client, 
-    get_now_date, 
+    get_system_time, 
     add_new_coach_advanced,
     update_content_setting # أضفتها لك هنا لدمجها
 )
