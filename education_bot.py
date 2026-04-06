@@ -125,26 +125,27 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"يمكنك إدارة كافة تفاصيل المنصة من الأزرار أدناه:"
         )
         
-        # تصحيح: دمج السطر العائم المكرر داخل شرط التحقق لضمان عدم توقف البوت
-
-        if query:
-            await query.answer()
-            await query.edit_message_text(admin_text, reply_markup=get_admin_panel(), parse_mode="HTML")
-    else:
-        # واجهة الطالب
-        student_text = f"<b>{msg}</b>"
+        # تصحيح: إضافة معالجة الرسالة النصية للمسؤول لضمان الرد في كافة الحالات
         if query:
             await query.answer()
             await query.edit_message_text(admin_text, reply_markup=get_admin_panel(), parse_mode="HTML")
         else:
             await update.message.reply_text(admin_text, reply_markup=get_admin_panel(), parse_mode="HTML")
+    else:
+        # واجهة الطالب
+        student_text = f"<b>{msg}</b>"
+        # تصحيح: استخدام student_text و get_student_menu بدلاً من واجهة الإدارة لضمان خصوصية لوحة التحكم
+        if query:
+            await query.answer()
+            await query.edit_message_text(student_text, reply_markup=get_student_menu(), parse_mode="HTML")
+        else:
+            await update.message.reply_text(student_text, reply_markup=get_student_menu(), parse_mode="HTML")
 
 # --------------------------------------------------------------------------
-#دالة فحص الطلاب وإرسال الرسائل 
+# دالة فحص الطلاب وإرسال الرسائل (مصححة لتعمل مع النظام الموحد)
 async def activation_monitor(context: ContextTypes.DEFAULT_TYPE):
     """وظيفة خلفية تراقب تفعيلات الطلاب وترسل تنبيهات فورا"""
     bot_token = context.bot.token
-
     
     new_activations = get_newly_activated_students(bot_token)
     
@@ -158,7 +159,7 @@ async def activation_monitor(context: ContextTypes.DEFAULT_TYPE):
             )
             await context.bot.send_message(chat_id=student['user_id'], text=msg, parse_mode="HTML")
             
-            # تحديث الشيت لكي لا يرسل الرسالة مرة أخرى
+            # تحديث الشيت لكي لا يرسل الرسالة مرة أخرى باستخدام المحرك الموحد get_system_time
             sheet = ss.worksheet("قاعدة_بيانات_الطلاب")
             sheet.update_cell(student['row'], 21, f"تم الإشعار: {get_system_time('full')}")
 
