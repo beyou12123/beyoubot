@@ -4,6 +4,24 @@ from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
 import time
 import logging
+import uuid 
+
+
+def get_system_time(mode="full"):
+    """
+    المحرك الموحد للوقت في المنصة:
+    mode="date"   -> يعيد التاريخ فقط (2026-04-06)
+    mode="time"   -> يعيد الوقت فقط (15:30:05)
+    mode="full"   -> يعيد التاريخ والوقت (2026-04-06 15:30:05)
+    """
+    now = datetime.now()
+    if mode == "date":
+        return now.strftime("%Y-%m-%d")
+    elif mode == "time":
+        return now.strftime("%H:%M:%S")
+    else:
+        return now.strftime("%Y-%m-%d %H:%M:%S")
+
 
 # إعداد اللوجر الاحترافي مع التسلسل الهرمي (Hierarchy Logging)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - [CORE:DB] %(message)s')
@@ -281,7 +299,7 @@ def save_user(user_id, username):
             exists = users_sheet.find(str(user_id))
             if exists: return False
         except: pass
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        now = get_system_time("full")
         row = [str(user_id), str(username), now, "نشط", "مجاني", 0, now, "ar", "Direct", "", 0]
         users_sheet.insert_row(row, 2)
         return True
@@ -294,7 +312,7 @@ def save_bot(owner_id, bot_type, bot_name, bot_token):
     if bots_sheet is None or content_sheet is None:
         if not connect_to_google(): return False
     try:
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        now = get_system_time("full")
         bot_token = str(bot_token).strip()
         
         # 1. جلب اسم البوت واليوزرنايم تلقائياً لضمان الدقة
@@ -385,7 +403,7 @@ def add_log_entry(bot_id, log_type, message):
     if logs_sheet is None:
         if not connect_to_google(): return False
     try:
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        now = get_system_time("full")
         logs_sheet.append_row([str(bot_id), log_type, message, now])
         return True
     except Exception as e:
@@ -563,7 +581,16 @@ def seed_default_settings(bot_token):
                 "title": "وحدة العملة",
                 "value": "نقطة",
                 "note": "الاسم الذي يظهر بجانب الرصيد (مثلاً: نقطة أو ريال)"
+            }, 
+            
+            {
+                "key": "homework_grade",
+                "title": "درجة الواجبات", 
+                "value": "10", 
+                "note": "درجة الواجبات اليومية للطلاب"
             }
+
+            
         ]
 
         # 2. فحص كل مفتاح لضمان عدم التكرار لنفس البوت
@@ -599,7 +626,7 @@ def update_meta_info():
             meta_ws.clear()
             meta_data = [
                 ["key", "value", "updated_at"], 
-                ["version", SCHEMA_VERSION, datetime.now().isoformat()], 
+                ["version", SCHEMA_VERSION, get_system_time("date")], 
                 ["engine_status", "HEALTHY", datetime.now().isoformat()]
             ]
             safe_api_call(meta_ws.update, 'A1', meta_data)
@@ -797,7 +824,7 @@ def add_new_coach_advanced(bot_token, coach_id, name, specialty, phone, **kwargs
             return False
 
         # 1. التوليد التلقائي لتاريخ اليوم
-        today_date = datetime.now().strftime('%Y-%m-%d')
+        today_date = get_system_time("date")
 
             # الترتيب الصحيح حسب المخطط: bot_id, معرف_الفرع, ID, اسم_المدرب...
         row = [
@@ -899,7 +926,7 @@ def save_ai_setup(bot_token, user_id, username, institution_name=None, ai_instru
             cell = sheet.find(str(bot_token).strip(), in_column=1)
         except: pass
 
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        now = get_system_time("full")
         
         if cell:
             # تحديث البيانات في الأعمدة 13 و 14 (حسب ترتيبك)
@@ -1117,7 +1144,7 @@ def add_new_group(bot_token, group_id, name, course_id, days, timing, teacher_id
             kwargs.get('capacity', '30'),              # 12. سعة_المجموعة
             "0",                                       # 13. عدد_الطلاب_الحالي
             kwargs.get('link', 'لم يحدد بعد'),          # 14. رابط_المجموعة
-            datetime.now().strftime("%Y-%m-%d")        # 15. تاريخ_الإنشاء
+            get_system_time("date")        # 15. تاريخ_الإنشاء
         ]
         sheet.append_row(row)
         return True
@@ -1145,7 +1172,7 @@ def save_group_to_db(bot_token, data):
     """حفظ المجموعة في الشيت بناءً على الأعمدة الـ 15 المحدثة"""
     try:
         sheet = ss.worksheet("إدارة_المجموعات")
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        now = get_system_time("full")
         row = [
             str(bot_token),                # 1. bot_id
             "001",                         # 2. معرف_الفرع
@@ -1234,7 +1261,7 @@ def add_question_to_bank(bot_token, data):
             data.get('explanation', ''),       # 17. شرح_الإجابة
             data.get('tag', 'عام'),            # 18. الوسم_التصنيفي
             "نشط",                             # 19. حالة_السؤال
-            datetime.now().strftime("%Y-%m-%d"),# 20. تاريخ_الإضافة
+            get_system_time("date"),     # 20. تاريخ_الإضافة
             data.get('creator_id')             # 21. معرف_المنشئ
         ]
         sheet.append_row(row)
@@ -1267,7 +1294,7 @@ def create_auto_quiz(bot_token, data):
             data.get('show_res', 'TRUE'),      # 13
             "FALSE",                           # 14. حالة_الاختبار (تبدأ مخفية)
             data.get('coach_id'),              # 15
-            datetime.now().strftime("%Y-%m-%d")# 16
+            get_system_time("date")         # 16
         ]
         sheet.append_row(row)
         return True
@@ -1473,7 +1500,7 @@ def save_discount_code_full(bot_token, data):
     """حفظ البيانات بمطابقة تامة لهيكل ورقة 'أكواد_الخصم' المكونة من 15 عموداً"""
     try:
         sheet = ss.worksheet("أكواد_الخصم")
-        now_date = datetime.now().strftime("%Y-%m-%d") # تاريخ اليوم
+        now_date = get_system_time("date") # تاريخ اليوم
         
         # الترتيب الذي تطلبه ورقتك حرفياً:
         row = [
@@ -1580,7 +1607,7 @@ def get_user_referral_stats(bot_token, user_id):
 def redeem_points_for_course(bot_token, user_id, course_price):
     """التحقق من الرصيد وخصم النقاط لفتح دورة"""
     try:
-        sheet_users = ss.worksheet("المخدمين")
+        sheet_users = ss.worksheet("المستخدمين")
         user_cell = sheet_users.find(str(user_id), in_column=1)
         
         if user_cell:
@@ -1693,7 +1720,72 @@ def get_newly_activated_students(bot_token):
                 })
         return activated
     except: return []
+    
 # --------------------------------------------------------------------------
+# --------------------------------------------------------------------------
+# --- [ نظام الطلاب - محرك الواجبات ] ---
+
+def get_student_assignments(bot_token, course_id, group_id):
+    """جلب الواجبات المفلترة والمسموحة للطالب (مرئي_للطالب == TRUE)"""
+    try:
+        sheet = ss.worksheet("الواجبات")
+        records = sheet.get_all_records()
+        # الفلترة: bot_id + الدورة + المجموعة + شرط الرؤية [بند 1، 5 في الوثيقة]
+        return [r for r in records if str(r.get("bot_id")) == str(bot_token) 
+                and str(r.get("معرف_الدورة")) == str(course_id) 
+                and str(group_id) in str(r.get("معرف_المجموعة", ""))
+                and str(r.get("مرئي_للطالب", "FALSE")).upper() == "TRUE"]
+    except: return []
+
+def check_student_submission(bot_token, student_id, hw_id):
+    """فحص محرك الحالات: هل يوجد تسليم سابق لهذا الواجب؟ [بند 2 في الوثيقة]"""
+    try:
+        sheet = ss.worksheet("تنفيذ_الواجبات_من_الطلاب")
+        records = sheet.get_all_records()
+        # البحث عن آخر تسليم للطالب لهذا الواجب
+        submission = next((r for r in records if str(r.get("bot_id")) == str(bot_token) 
+                           and str(r.get("معرف_الطالب")) == str(student_id) 
+                           and str(r.get("معرف_الواجب")) == str(hw_id)), None)
+        return submission
+    except: return None
+
+def record_student_submission(bot_token, data):
+    """تدوين البيانات في ورقة تنفيذ_الواجبات_من_الطلاب [ثالثاً في الوثيقة]"""
+    try:
+        sheet = ss.worksheet("تنفيذ_الواجبات_من_الطلاب")
+        now = datetime.now()
+        now_str = now.strftime("%Y-%m-%d %H:%M:%S")
+        
+        # حساب وقت الإكمال بالدقائق (تاريخ_التسليم - تاريخ_البداية)
+        start_time = datetime.strptime(data['start_time'], "%Y-%m-%d %H:%M:%S")
+        duration = round((now - start_time).total_seconds() / 60, 2)
+
+        # الالتزام الحرفي بأسماء الأعمدة الـ 18 المذكورة في الوثيقة
+        row = [
+            str(bot_token),                # bot_id
+            data.get('branch_id', '001 '), # معرف_الفرع (مع المسافة حسب طلبك)
+            f"EXEC{str(uuid.uuid4().int)[:5]}", # معرف_التنفيذ
+            data['hw_id'],                 # معرف_الواجب
+            data['student_id'],            # معرف_الطالب
+            data['group_id'],              # معرف_المجموعة
+            data['course_id'],             # معرف_الدورة
+            data['start_time'],            # تاريخ_البداية
+            now_str,                       # تاريخ_التسليم
+            "قيد المراجعة",                # حالة_التنفيذ
+            "0",                           # النقاط_المكتسبة
+            "",                            # ملاحظات_المعلم
+            data['file_link'],             # مرفقات_الطالب
+            "1",                           # عدد_محاولات_التسليم
+            str(duration),                 # وقت_الإكمال (بالدقائق)
+            "",                            # تقييم_التسليم
+            now_str,                       # آخر_تحديث
+            "TRUE"                         # مرئي_للطالب
+        ]
+        sheet.append_row(row)
+        return True
+    except Exception as e:
+        print(f"❌ Error Recording Submission: {e}")
+        return False
 
 # --------------------------------------------------------------------------
 

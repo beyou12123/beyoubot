@@ -3,9 +3,9 @@ import sys
 import re
 import asyncio
 import time
-import importlib # استيراد الموديولات ديناميكياً لتشغيل الملفات المرفوعة
+import importlib  # لاستيراد الموديولات ديناميكياً
+from datetime import datetime  # مضافة من الاستدعاءات الداخلية
 
-# استيراد الأدوات الأساسية من مكتبة تليجرام
 from telegram import (
     Update, 
     ReplyKeyboardMarkup, 
@@ -15,7 +15,6 @@ from telegram import (
     Bot
 )
 
-# استيراد أدوات المعالجة والتشغيل من مكتبة telegram.ext
 from telegram.ext import (
     Application,
     ApplicationBuilder, 
@@ -28,7 +27,7 @@ from telegram.ext import (
     ChatMemberHandler
 )
 
-# استيراد الدوال من ملف البرمجة الخاص بقاعدة البيانات(sheets.py)
+
 from sheets import (
     save_user, 
     save_bot, 
@@ -38,11 +37,11 @@ from sheets import (
     get_total_bots_count,
     get_total_factory_users,
     get_all_active_bots,
-    setup_bot_factory_database, # أضف هذه أيضاً لأنها المحرك الرئيسي
+    setup_bot_factory_database, 
     ensure_sheet_schema,
-    ensure_all_sheets_schema
+    ensure_all_sheets_schema,
+    meta_sheet # مضافة من الاستدعاءات الداخلية
 )
-
 
 # --- الإعدادات الأساسية ---
 TOKEN = "8532487667:AAGYgoSw-S2G7ruf_To8LGGd5OGCfn_T6dw"
@@ -69,7 +68,7 @@ def get_types_menu_inline():
     ]
     
     # استيراد ورقة الميتا لجلب الأوصاف
-    from sheets import meta_sheet
+
     descriptions = {}
     try:
         if meta_sheet:
@@ -77,7 +76,7 @@ def get_types_menu_inline():
             descriptions = {r['key']: r['value'] for r in records if str(r['key']).startswith('desc_')}
     except: pass
 
-    exclude_files = ['main.py', 'sheets.py', 'contact_bot.py', 'education_bot.py', 'protection_bot.py', 'store_bot.py', 'config.py', 'runner.py', 'course_engine.py', 'educational_manager.py']
+    exclude_files = ['main.py', 'sheets.py', 'contact_bot.py', 'education_bot.py', 'protection_bot.py', 'store_bot.py', 'config.py', 'runner.py', 'course_engine.py', 'educational_manager.py', 'downloader_bot.py']
     
     dynamic_buttons = []
     for file in os.listdir('.'):
@@ -119,10 +118,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دالة الانطلاق، تسجيل المستخدم، وإشعار المطور بالعضو الجديد"""
     user = update.effective_user
     
-    # استيراد الدالة المطلوبة من sheets
-    from sheets import save_user, get_total_factory_users
-
-
     # محاولة حفظ المستخدم (الدالة تعيد True إذا كان المستخدم جديداً)
     is_new = save_user(user.id, user.username)
     
@@ -207,8 +202,7 @@ async def receive_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def run_dynamic_bot(bot_token, bot_type, user_id):
     """الحل الجذري: ربط الاسم الوصفي بالملف البرمجي وتشغيل المحرك"""
     try:
-        from sheets import meta_sheet
-        import importlib
+
         
         # 1. تحديد اسم الملف البرمجي الحقيقي (Mapping)
         module_file_name = None
@@ -294,7 +288,7 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = await update.message.reply_text("⏳ جاري تهيئة المحرك وفك تداخل التوكينات...")
 
     try:
-        from telegram import Bot
+
         # إنشاء كائن بوت مستقل للتعامل مع التوكن الجديد
         temp_bot = Bot(bot_token)
         
@@ -305,7 +299,7 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
         bot_username = f"@{bot_info.username}"
 
         # حفظ البيانات في جوجل شيت
-        from sheets import save_bot, get_total_bots_count
+
         success = save_bot(user_id, bot_type, bot_display_name, bot_token)
 
         if success:
@@ -469,8 +463,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "<i>يرجى الانتظار، لا تغلق هذه الصفحة...</i>"
         )
 
-        from sheets import setup_bot_factory_database
-        import time
+
 
         # 2. تشغيل المهمة في مسار خلفي لضمان استجابة البوت
         setup_task = asyncio.create_task(asyncio.to_thread(setup_bot_factory_database, context.bot.token))
@@ -585,8 +578,7 @@ async def finalize_module_name(update: Update, context: ContextTypes.DEFAULT_TYP
     # --- نظام الحفظ الذكي في شيت الميتا (تحديث أو إضافة) ---
     status_msg = "تمت إضافته كنوع جديد"
     try:
-        from sheets import meta_sheet
-        from datetime import datetime
+
         if meta_sheet:
             # البحث عن الملف إذا كان مسجلاً مسبقاً
             cell = None
@@ -655,7 +647,7 @@ admin_module_conv = ConversationHandler(
 
 # --- دالة تشغيل البوتات المصنوعة تلقائياً ---
 async def start_all_sub_bots():
-    from sheets import get_all_active_bots
+
     active_bots = get_all_active_bots()
     print(f"🔄 جاري محاولة تشغيل {len(active_bots)} بوت مصنوع...")
     
@@ -686,7 +678,7 @@ app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message
 
 
 if __name__ == "__main__":
-    import asyncio
+
     try:
         try:
             loop = asyncio.get_running_loop()
