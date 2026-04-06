@@ -777,24 +777,34 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 
     # --- 5. إدارة الأقسام (عرض القائمة) ---
     elif data == "manage_cats":
-        from sheets import check_user_permission
-        # نتحقق هل لديه صلاحية الأقسام؟
+        from sheets import check_user_permission, get_all_categories
+        
+        # 1. التحقق من الصلاحية
         if not check_user_permission(bot_token, user_id, "صلاحية_الأقسام"):
             await query.answer("🚫 ليس لديك صلاحية لإدارة الأقسام.", show_alert=True)
-            return
+            return # هذه الـ return تمنع إكمال الكود لغير المخولين
             
-        # إذا كان لديه صلاحية، يكمل الكود الطبيعي...
-        from sheets import get_all_categories 
+        # 2. جلب الأقسام
         categories = get_all_categories(bot_token)
-        # ... بقية الكود
-
         
-    elif data == "start_add_course":
-        from sheets import get_all_categories
-        categories = get_all_categories(bot_token)
-        if not categories:
-            await query.edit_message_text("⚠️ أضف قسماً أولاً!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 عودة", callback_data="manage_cats")]]), parse_mode="HTML")
-            return
+        # 3. بناء الأزرار
+        keyboard = []
+        if categories:
+            for cat in categories:
+                keyboard.append([InlineKeyboardButton(f"📁 {cat['name']}", callback_data=f"edit_cat_{cat['id']}")])
+        
+        keyboard.append([InlineKeyboardButton("➕ إضافة قسم جديد", callback_data="add_cat_start")])
+        keyboard.append([InlineKeyboardButton("🔙 عودة", callback_data="manage_educational")])
+        
+        # 4. تحديث الرسالة
+        await query.edit_message_text(
+            "📁 <b>إدارة الأقسام التعليمية</b>\n\nاختر قسماً لإدارته أو أضف قسماً جديداً:",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
+        )
+        return # <--- هنا مكانها الصحيح (بمحاذاة كلمة await)
+
+            
         # اختيار القسم قبل البدء
         keyboard = [[InlineKeyboardButton(f"📁 {cat['name']}", callback_data=f"set_crs_cat_{cat['id']}")] for cat in categories]
         keyboard.append([InlineKeyboardButton("❌ إلغاء", callback_data="manage_courses")])
