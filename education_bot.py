@@ -915,6 +915,102 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         from educational_manager import quiz_create_start_ui
         await quiz_create_start_ui(update, context)
 
+
+    # --------------------------------------------------------------------------
+    
+    
+    # ربط نظام إدارة الواجبات (أدمن)
+    elif data == "manage_homeworks":
+
+        await manage_homeworks_main_ui(update, context)
+        
+    elif data == "hw_view_submissions":
+
+        await hw_view_submissions_course_select(update, context)
+
+        
+    # --- [ نظام الواجبات - معالجة الأزرار والخطوات ] ---
+    elif data == "hw_add_start":
+
+        await homework_add_select_course(update, context)
+
+    elif data.startswith("hw_sel_crs_"):
+        course_id = data.replace("hw_sel_crs_", "")
+
+        await hw_add_select_groups_ui(update, context, course_id)
+
+    elif data.startswith("hw_grp_sel_"):
+        parts = data.split("_")
+        g_id, course_id = parts[3], parts[4]
+        auth = context.user_data.get('temp_hw', {'target_groups': []})
+        
+        if g_id == "ALL":
+
+            all_ids = [str(g['معرف_المجموعة']) for g in get_groups_by_course(bot_token, course_id)]
+            if set(all_ids).issubset(set(auth['target_groups'])):
+                auth['target_groups'] = [gid for gid in auth['target_groups'] if gid not in all_ids]
+            else:
+                auth['target_groups'] = list(set(auth['target_groups'] + all_ids))
+        else:
+            if g_id in auth['target_groups']: auth['target_groups'].remove(g_id)
+            else: auth['target_groups'].append(g_id)
+        
+        context.user_data['temp_hw'] = auth
+
+        await hw_add_select_groups_ui(update, context, course_id)
+
+    elif data == "hw_gen_next_title":
+        if not context.user_data.get('temp_hw', {}).get('target_groups'):
+            await query.answer("⚠️ يرجى اختيار مجموعة واحدة على الأقل!", show_alert=True)
+            return
+        context.user_data['action'] = 'awaiting_hw_title'
+        await query.edit_message_text("📝 <b>إسناد واجب:</b> أرسل الآن <b>عنوان الواجب</b>:", parse_mode="HTML")
+
+    elif data == "exec_save_hw_final":
+
+        if await save_homework_to_db(bot_token, context.user_data.get('temp_hw')):
+            await query.answer("✅ تم إسناد الواجب بنجاح للمجموعات المختارة", show_alert=True)
+
+            await manage_homeworks_main_ui(update, context)
+            context.user_data.pop('temp_hw', None)
+
+        
+    # --------------------------------------------------------------------------
+
+
+    elif data.startswith("q_gen_crs_"):
+        course_id = data.replace("q_gen_crs_", "")
+
+        await quiz_gen_select_groups_ui(update, context, course_id)
+
+    elif data.startswith("q_gen_grp_"):
+        parts = data.split("_")
+        g_id = parts[3]
+        course_id = parts[4]
+        
+        if g_id == "ALL":
+            context.user_data['temp_quiz']['target_groups'] = ["ALL"]
+        else:
+            if "ALL" in context.user_data['temp_quiz']['target_groups']:
+                context.user_data['temp_quiz']['target_groups'].remove("ALL")
+            
+            if g_id in context.user_data['temp_quiz']['target_groups']:
+                context.user_data['temp_quiz']['target_groups'].remove(g_id)
+            else:
+                context.user_data['temp_quiz']['target_groups'].append(g_id)
+        
+
+        await quiz_gen_select_groups_ui(update, context, course_id)
+
+    elif data == "q_gen_next_settings":
+        if not context.user_data.get('temp_quiz', {}).get('target_groups'):
+            await query.answer("⚠️ يرجى اختيار مجموعة واحدة على الأقل!", show_alert=True)
+            return
+        context.user_data['action'] = 'awaiting_quiz_title'
+        await query.edit_message_text("🏷 <b>الخطوة 3:</b> أرسل <b>عنواناً للاختبار</b> (مثلاً: اختبار نهاية الفصل الأول):")
+# --------------------------------------------------------------------------
+
+
     elif data.startswith("q_gen_crs_"):
         course_id = data.replace("q_gen_crs_", "")
         from educational_manager import quiz_gen_select_groups_ui
@@ -2027,6 +2123,38 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
             context.user_data['action'] = None
             return
 
+# --------------------------------------------------------------------------
+        # --- [ تسلسل إسناد واجب جديد - استقبال النصوص ] ---
+        elif action == 'awaiting_hw_title':
+            context.user_data['temp_hw']['title'] = text
+            context.user_data['action'] = 'awaiting_hw_desc'
+            await update.message.reply_text("📋 أرسل الآن <b>وصف الواجب</b> أو التعليمات المطلوبة من الطلاب:", parse_mode="HTML")
+            return
+
+        elif action == 'awaiting_hw_desc':
+            context.user_data['temp_hw']['desc'] = text
+            context.user_data['action'] = 'awaiting_hw_deadline'
+            await update.message.reply_text("📅 أرسل الآن <b>آخر موعد للتسليم</b> (مثلاً: 2026-04-20):", parse_mode="HTML")
+            return
+
+        elif action == 'awaiting_hw_deadline':
+            context.user_data['temp_hw']['deadline'] = text
+            h = context.user_data['temp_hw']
+            summary = (
+                f"📑 <b>مراجعة إسناد الواجب:</b>\n"
+                f"━━━━━━━━━━━━━━\n"
+                f"📘 الدورة: <code>{h['course_id']}</code>\n"
+                f"👥 عدد المجموعات: <code>{len(h['target_groups'])}</code>\n"
+                f"📌 العنوان: {h['title']}\n"
+                f"⏰ موعد التسليم: {text}\n"
+                f"━━━━━━━━━━━━━━\n"
+                f"هل تريد تأكيد إرسال الواجب الآن؟"
+            )
+            keyboard = [[InlineKeyboardButton("✅ نعم، إسناد", callback_data="exec_save_hw_final")],
+                        [InlineKeyboardButton("❌ إلغاء", callback_data="manage_homeworks")]]
+            await update.message.reply_text(summary, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+            context.user_data['action'] = None
+            return
 
 # --------------------------------------------------------------------------
     # --- [ جزء الطلاب والردود التفاعلية - g4f فقط ] ---
@@ -2038,6 +2166,36 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
 
     # تنفيذ الشرط: إذا كان المرسل ليس هو المالك (أي أنه طالب)
     if user.id != bot_owner_id:
+    	        # --- [ معالجة تسليم الواجب ] ---
+        if action == 'awaiting_solution':
+            hw_id = context.user_data.get('target_hw_id')
+
+            student = get_student_enrollment_data(bot_token, user.id)
+            
+            # تحديد نوع الملف والرابط [بند 3 في الوثيقة]
+            file_link = "نص: " + text if text else "ملف/صورة"
+            if update.message.document: file_link = f"وثيقة: {update.message.document.file_id}"
+            elif update.message.photo: file_link = f"صورة: {update.message.photo[-1].file_id}"
+
+            data = {
+                'hw_id': hw_id, 'student_id': str(user.id),
+                'course_id': student['course_id'], 'group_id': student['group_id'],
+                'start_time': context.user_data.get('hw_start_time'),
+                'file_link': file_link, 'branch_id': student.get('معرف_الفرع', '001')
+            }
+
+            if record_student_submission(bot_token, data):
+                await update.message.reply_text("✅ <b>تم استلام حل الواجب بنجاح!</b>\nسيتم مراجعته من قبل المعلم وإشعارك بالنتيجة.", parse_mode="HTML")
+                # إشعار الإدارة [رابعاً في الوثيقة]
+                admin_notif = f"🔔 <b>تسليم جديد:</b>\nقام الطالب <b>{student['student_name']}</b> بتسليم واجب <code>{hw_id}</code>، يرجى التصحيح."
+                try: await context.bot.send_message(chat_id=bot_owner_id, text=admin_notif, parse_mode="HTML")
+                except: pass
+            else:
+                await update.message.reply_text("❌ فشل تسجيل التسليم، يرجى المحاولة لاحقاً.")
+            
+            context.user_data['action'] = None
+            return 
+  
         # 1. فحص الكلمات المفتاحية (FAQ) لسرعة الرد
         faq_keywords = {
             "طريقة الدفع": "💳 يمكنك الدفع عبر (زين كاش، بايبال، أو كروت التعبئة).",
