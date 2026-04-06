@@ -451,47 +451,53 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 
     # --------------------------------------------------------------------------
     
+# --- [ قسم إدارة الواجبات والحلول ] ---
     
-    # ربط نظام إدارة الواجبات (أدمن)
+    # 1. الدخول للوحة إدارة الواجبات الرئيسية (أدمن/موظف)
     elif data == "manage_homeworks":
-
+        from educational_manager import manage_homeworks_main_ui
         await manage_homeworks_main_ui(update, context)
         
+    # 2. عرض تسليمات الطلاب للتصحيح
     elif data == "hw_view_submissions":
-
+        from educational_manager import hw_view_submissions_course_select
         await hw_view_submissions_course_select(update, context)
 
-        
-    # --- [ نظام الواجبات - معالجة الأزرار والخطوات ] ---
+    # 3. بدء عملية إسناد واجب جديد
     elif data == "hw_add_start":
-
+        from educational_manager import homework_add_select_course
         await homework_add_select_course(update, context)
 
+    # 4. معالجة اختيار الدورة لإسناد الواجب
     elif data.startswith("hw_sel_crs_"):
         course_id = data.replace("hw_sel_crs_", "")
-
+        from educational_manager import hw_add_select_groups_ui
         await hw_add_select_groups_ui(update, context, course_id)
 
+    # 5. معالجة اختيار المجموعات (نظام التحديد المتعدد للواجبات)
     elif data.startswith("hw_grp_sel_"):
         parts = data.split("_")
         g_id, course_id = parts[3], parts[4]
+        # التأكد من تهيئة الذاكرة المؤقتة للواجب
         auth = context.user_data.get('temp_hw', {'target_groups': []})
         
+        from sheets import get_groups_by_course
         if g_id == "ALL":
-
             all_ids = [str(g['معرف_المجموعة']) for g in get_groups_by_course(bot_token, course_id)]
-            if set(all_ids).issubset(set(auth['target_groups'])):
+            if set(all_ids).issubset(set(auth.get('target_groups', []))):
                 auth['target_groups'] = [gid for gid in auth['target_groups'] if gid not in all_ids]
             else:
-                auth['target_groups'] = list(set(auth['target_groups'] + all_ids))
+                auth['target_groups'] = list(set(auth.get('target_groups', []) + all_ids))
         else:
+            if 'target_groups' not in auth: auth['target_groups'] = []
             if g_id in auth['target_groups']: auth['target_groups'].remove(g_id)
             else: auth['target_groups'].append(g_id)
         
         context.user_data['temp_hw'] = auth
-
+        from educational_manager import hw_add_select_groups_ui
         await hw_add_select_groups_ui(update, context, course_id)
 
+    # 6. الانتقال لطلب عنوان الواجب
     elif data == "hw_gen_next_title":
         if not context.user_data.get('temp_hw', {}).get('target_groups'):
             await query.answer("⚠️ يرجى اختيار مجموعة واحدة على الأقل!", show_alert=True)
@@ -499,16 +505,13 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         context.user_data['action'] = 'awaiting_hw_title'
         await query.edit_message_text("📝 <b>إسناد واجب:</b> أرسل الآن <b>عنوان الواجب</b>:", parse_mode="HTML")
 
+    # 7. التنفيذ النهائي لحفظ الواجب في قاعدة البيانات
     elif data == "exec_save_hw_final":
-
+        from educational_manager import save_homework_to_db, manage_homeworks_main_ui
         if await save_homework_to_db(bot_token, context.user_data.get('temp_hw')):
             await query.answer("✅ تم إسناد الواجب بنجاح للمجموعات المختارة", show_alert=True)
-
             await manage_homeworks_main_ui(update, context)
             context.user_data.pop('temp_hw', None)
-
-
-
 
 # --------------------------------------------------------------------------
     # --- 3. إدارة شؤون المدربين ---
