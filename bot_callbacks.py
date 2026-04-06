@@ -29,7 +29,7 @@ from educational_manager import (
     hw_add_select_groups_ui, save_homework_to_db, quiz_gen_select_groups_ui, 
     q_bank_manager_ui, browse_q_bank_ui, view_question_details_ui, 
     start_add_question_ui, #quiz_activation_start,
-    quiz_activation_groups, 
+    #quiz_activation_groups, 
     employee_quiz_view, quiz_options_ui
 )
 # كتلة استيراد ملفات المحرك وواجهة المستخدم 
