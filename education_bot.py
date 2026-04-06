@@ -36,17 +36,25 @@ from sheets import (
     get_newly_activated_students, # مضافة من مراقب التفعيل
     ss                   # مضافة لاستخدامها في تحديث الشيت
 )
+
 # كتلة استيراد الملفات الزميلة (الموديولات) 
 from educational_manager import manage_groups_main
 from bot_callbacks import contact_callback_handler, get_admin_panel
 from bot_messages import handle_contact_message
+
+# تصريح التصدير لضمان رؤية المصنع للدوال بشكل صريح ومنع ImportError
+__all__ = ['start_handler', 'run_bot', 'activation_monitor', 'get_student_menu']
+
 # --- [ ذاكرة المحادثات المؤقتة للطلاب ] ---
 user_messages = {} 
+
 # إعداد المفتاح الذي حصلت عليه
 genai.configure(api_key="AIzaSyCkpHbxvjZNqN_PT8O1yXUAIG-dMAGZj2Y")
 model = genai.GenerativeModel('gemini-1.5-flash')
+
 # إعداد السجلات (Logging) لمراقبة أداء البوت وتتبع الأخطاء
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+
 # --- [ القوائم الرئيسية للمنصة - أزرار واجهة المستخدم ] ---
 def get_student_menu():
     keyboard = [
@@ -73,6 +81,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     bot_owner_id = str(config.get("owner_id", "0"))
     admin_list = str(config.get("admin_ids", "0")).split(",")
     ai_config = get_ai_setup(bot_token)
+    
     # --- [ فحص إعدادات المالك (التهيئة الأولى) ] ---
     if str(user.id) == bot_owner_id:
 
@@ -104,6 +113,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_user(user.id, user.username)
 
     # --- [ محرك اختيار الكليشة الذكي ] ---
+    # تم استخدام التوقيت المحلي بناءً على ساعة السيرفر
     hour = datetime.now().hour
     
     if 5 <= hour < 12:
@@ -125,7 +135,6 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"يمكنك إدارة كافة تفاصيل المنصة من الأزرار أدناه:"
         )
         
-        # تصحيح: إضافة معالجة الرسالة النصية للمسؤول لضمان الرد في كافة الحالات
         if query:
             await query.answer()
             await query.edit_message_text(admin_text, reply_markup=get_admin_panel(), parse_mode="HTML")
@@ -134,7 +143,8 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         # واجهة الطالب
         student_text = f"<b>{msg}</b>"
-        # تصحيح: استخدام student_text و get_student_menu بدلاً من واجهة الإدارة لضمان خصوصية لوحة التحكم
+        
+        # تصحيح توجيه الواجهة للطالب باستخدام المتغيرات والمفاتيح الصحيحة
         if query:
             await query.answer()
             await query.edit_message_text(student_text, reply_markup=get_student_menu(), parse_mode="HTML")
@@ -142,11 +152,11 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(student_text, reply_markup=get_student_menu(), parse_mode="HTML")
 
 # --------------------------------------------------------------------------
-# دالة فحص الطلاب وإرسال الرسائل (مصححة لتعمل مع النظام الموحد)
+# دالة فحص الطلاب وإرسال الرسائل 
 async def activation_monitor(context: ContextTypes.DEFAULT_TYPE):
     """وظيفة خلفية تراقب تفعيلات الطلاب وترسل تنبيهات فورا"""
     bot_token = context.bot.token
-    
+
     new_activations = get_newly_activated_students(bot_token)
     
     for student in new_activations:
@@ -159,7 +169,7 @@ async def activation_monitor(context: ContextTypes.DEFAULT_TYPE):
             )
             await context.bot.send_message(chat_id=student['user_id'], text=msg, parse_mode="HTML")
             
-            # تحديث الشيت لكي لا يرسل الرسالة مرة أخرى باستخدام المحرك الموحد get_system_time
+            # تحديث الشيت لكي لا يرسل الرسالة مرة أخرى باستخدام المحرك الموحد
             sheet = ss.worksheet("قاعدة_بيانات_الطلاب")
             sheet.update_cell(student['row'], 21, f"تم الإشعار: {get_system_time('full')}")
 
@@ -178,8 +188,7 @@ async def run_bot(token, owner_id):
     application.add_handler(CallbackQueryHandler(contact_callback_handler))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_contact_message))
     
-    # 2. إعداد مراقب التفعيل (يُوضع هنا بعد تعريف الـ application)
-    # سيقوم بفحص الشيت كل 60 ثانية وإرسال رسائل للطلاب المفعلين
+    # 2. إعداد مراقب التفعيل
     job_queue = application.job_queue
     job_queue.run_repeating(activation_monitor, interval=60, first=10)
     
