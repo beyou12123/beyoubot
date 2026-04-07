@@ -203,7 +203,7 @@ async def receive_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["bot_token"] = token
     
     # 3. [تعديل جوهري]: استدعاء محرك الإنهاء والانتظار حتى يكتمل الحفظ
-    --------------------------------------------------------------------------
+ #   --------------------------------------------------------------------------
     # نستخدم await لضمان أن دالة finalize_bot أكملت تسجيل البيانات في جوجل شيت
     await finalize_bot(update, context)
     
