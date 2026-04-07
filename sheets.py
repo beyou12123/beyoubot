@@ -388,19 +388,23 @@ def save_bot(owner_id, bot_type, bot_name, bot_token):
             str(ai_cost_val)        # 44. تكلفة_AI (ديناميكي)
         ]
         
-        # 4. معالجة ورقة "البوتات_المصنوعة" (تحديث شامل لكافة الأعمدة الـ 44)
         try:
-            # البحث عن التوكن لضمان التحديث وعدم التكرار
+            # البحث عن التوكن لمعرفة هل هو بوت موجود مسبقاً
             cell_bot = bots_sheet.find(bot_token)
-            # تحديث الصف بالكامل من A إلى AR (44 عموداً)
-            last_col_letter = "AR" 
-            range_to_update = f"A{cell_bot.row}:{last_col_letter}{cell_bot.row}"
-            bots_sheet.update(range_to_update, [bot_row])
-            print(f"♻️ تم تحديث كافة بيانات البوت (44 عموداً) في السطر {cell_bot.row}")
+            row_idx = cell_bot.row
+            # تحديث (الحالة، آخر تشغيل، الإصدار) فقط للحفاظ على تاريخ الإنشاء والباقة الأصلية
+            updates = [
+                {'range': f"E{row_idx}", 'values': [["نشط"]]}, 
+                {'range': f"I{row_idx}", 'values': [[now]]},
+                {'range': f"AM{row_idx}", 'values': [["1.0.0"]]}
+            ]
+            bots_sheet.batch_update(updates)
+            print(f"♻️ تم تحديث بيانات التشغيل للبوت في السطر {row_idx} مع حماية التاريخ والباقة")
         except:
-            # إضافة صف جديد بالكامل إذا لم يكن موجوداً
+            # إضافة صف جديد بالكامل فقط إذا لم يكن البوت موجوداً نهائياً
             bots_sheet.append_row(bot_row)
-            print("✨ تم إضافة بوت جديد ببياناته الكاملة (44 عموداً) بناءً على الإعدادات")
+            print("✨ تم إضافة بوت جديد ببياناته الكاملة")
+
 
         # 5. إدارة ورقة "إعدادات_المحتوى" لضمان الملكية
         content_row = [
