@@ -489,7 +489,7 @@ def check_connection():
         return connect_to_google()
 
 # --------------------------------------------------------------------------
-
+# جلب الإحصائيات 
 def get_all_active_bots():
     global bots_sheet
     if bots_sheet is None: connect_to_google()
@@ -812,6 +812,9 @@ def add_new_category(bot_token, cat_id, cat_name):
                 "إضافة عبر لوحة التحكم"       # 8. ملاحظات
             ]
             departments_sheet.append_row(row)
+            update_global_version(bot_token)
+
+
             return True
         return False
     except Exception as e:
@@ -828,8 +831,14 @@ def delete_category_by_id(bot_token, cat_id):
         for i, row in enumerate(all_rows):
             # التأكد من مطابقة التوكن (العمود 1) والـ ID (العمود 2)
             if row[0] == bot_token and row[1] == cat_id:
-                # i+1 لأن قاعدة البيانات يبدأ العد من 1 وليس 0
                 departments_sheet.delete_rows(i + 1)
+                # يجب أن تكون هنا لضمان أن التحديث تم فعلاً
+                update_global_version(bot_token)
+                return True
+
+
+
+
                 return True
         return False
     except Exception as e:
@@ -848,6 +857,9 @@ def update_category_name(bot_token, cat_id, new_name):
             if row[0] == bot_token and row[1] == cat_id:
                 # تحديث العمود الثالث (Index 3 في الشيت يبدأ من 1)
                 departments_sheet.update_cell(i + 1, 3, new_name)
+            update_global_version(bot_token)
+
+
                 return True
         return False
     except Exception as e:
@@ -888,6 +900,9 @@ def add_new_course(bot_token, course_id, name, hours, start_date, end_date, c_ty
         
         # 3. تنفيذ عملية الحفظ الفعلية
         courses_sheet.append_row(row)
+        update_global_version(bot_token)
+
+
         return True
     except Exception as e:
         print(f"❌ Error in add_new_course: {e}")
@@ -898,31 +913,32 @@ def add_new_course(bot_token, course_id, name, hours, start_date, end_date, c_ty
 def get_courses_by_category(bot_token, cat_id):
     """جلب كافة الدورات المرتبطة بقسم محدد بناءً على ID القسم (العمود 18)"""
     try:
-        if courses_sheet is None: 
-            return []
-            
-        all_rows = courses_sheet.get_all_values()
-        courses = []
-        
-        # تحويل المتغيرات لنصوص وتجهيزها خارج الحلقة لزيادة سرعة الأداء
-        search_token = str(bot_token).strip()
-        search_cat = str(cat_id).strip()
-        
-        for row in all_rows[1:]:
-            # فحص طول الصف (18 عمود) ومطابقة التوكن (العمود 1) ومعرف القسم (العمود 18)
-            if len(row) >= 18:
-                current_bot_id = str(row[0]).strip()
-                current_cat_id = str(row[17]).strip()
-                
-                if current_bot_id == search_token and current_cat_id == search_cat:
-                    courses.append({
-                        "id": row[2],    # معرف الدورة (العمود 3)
-                        "name": row[3]   # اسم الدورة (العمود 4)
-                    })
-        return courses
+        # يجب أن تبدأ بـ 8 مسافات (داخل try)
+        smart_sync_check(bot_token)
+        all_courses = get_bot_data_from_cache(bot_token, "الدورات_التدريبية")
+        return [{"id": c.get("معرف_الدورة"), "name": c.get("اسم_الدورة")} for c in all_courses if str(c.get("معرف_القسم")) == str(cat_id)]
+
     except Exception as e:
-        print(f"❌ Error fetching courses: {e}")
+
+        print(f"❌ Error fetching courses from cache: {e}")
         return []
+
+
+def get_all_categories(bot_token):
+    """جلب كافة الأقسام المتاحة لبوت معين"""
+    try:
+        # إزاحة للداخل (داخل try)
+        smart_sync_check(bot_token)
+        records = get_bot_data_from_cache(bot_token, "الأقسام")
+        return [{"id": r.get("معرف_القسم"), "name": r.get("اسم_القسم")} for r in records]
+
+    except Exception as e:
+        print(f"❌ Error fetching categories: {e}")
+        return []
+
+
+
+
 # --------------------------------------------------------------------------
 #دالة حذف الدورات
 def delete_course_by_id(bot_token, course_id):
@@ -937,6 +953,8 @@ def delete_course_by_id(bot_token, course_id):
 
                 # i + 1 لأن ترقيم قاعدة البيانات يبدأ من 1 وليس 0
                 courses_sheet.delete_rows(i + 1)
+            update_global_version(bot_token)
+
                 return True
         return False
     except Exception as e:
@@ -1001,6 +1019,7 @@ def add_new_coach_advanced(bot_token, coach_id, name, specialty, phone, **kwargs
 
         # 3. إضافة الصف للشيت
         coaches_sheet.append_row(row)
+        update_global_version(bot_token)
         
         # 4. تسجيل العملية في سجل العمليات (Logging) لزيادة الاحترافية
         print(f"✅ تم تسجيل المدرب {name} بنجاح بتاريخ {today_date}")
@@ -1093,6 +1112,7 @@ def save_ai_setup(bot_token, user_id, username, institution_name=None, ai_instru
                 "", 0, institution_name or "", ai_instructions or ""
             ]
             sheet.append_row(row)
+            update_global_version(bot_token)
         return True
     except Exception as e:
         print(f"❌ Error saving AI setup: {e}")
@@ -1299,6 +1319,9 @@ def add_new_group(bot_token, group_id, name, course_id, days, timing, teacher_id
             get_system_time("date")        # 15. تاريخ_الإنشاء
         ]
         sheet.append_row(row)
+        update_global_version(bot_token)
+
+
         return True
     except Exception as e:
         print(f"❌ خطأ في إضافة المجموعة: {e}")
@@ -1343,6 +1366,7 @@ def save_group_to_db(bot_token, data):
             now                            # 15. تاريخ_الإنشاء
         ]
         sheet.append_row(row)
+        update_global_version(bot_token)
         return True
     except Exception as e:
         print(f"❌ Error saving group: {e}")
@@ -1360,6 +1384,8 @@ def delete_group_by_id(bot_token, group_id):
             # الترتيب: bot_id (0), معرف_المجموعة (2)
             if len(row) >= 3 and str(row[0]) == str(bot_token) and str(row[2]) == str(group_id):
                 sheet.delete_rows(i + 1)
+            update_global_version(bot_token)
+
                 return True
         return False
     except Exception as e:
@@ -1380,6 +1406,8 @@ def update_group_field(bot_token, group_id, col_name, new_value):
         for i, row in enumerate(all_rows):
             if len(row) >= 3 and str(row[0]) == str(bot_token) and str(row[2]) == str(group_id):
                 sheet.update_cell(i + 1, col_index, str(new_value))
+                # رفع إصدار البوت فوراً لتحديث بيانات المجموعات في الرام
+                update_global_version(bot_token)
                 return True
         return False
     except Exception as e:
@@ -1417,6 +1445,9 @@ def add_question_to_bank(bot_token, data):
             data.get('creator_id')             # 21. معرف_المنشئ
         ]
         sheet.append_row(row)
+                # إبلاغ النظام برفع رقم الإصدار لتحديث بنك الأسئلة في الرام فوراً
+        update_global_version(bot_token)
+
         return True
     except Exception as e:
         print(f"❌ خطأ في بنك الأسئلة: {e}")
@@ -1449,6 +1480,9 @@ def create_auto_quiz(bot_token, data):
             get_system_time("date")         # 16
         ]
         sheet.append_row(row)
+                # إبلاغ النظام برفع رقم الإصدار لتحديث بنك الأسئلة في الرام فوراً
+        update_global_version(bot_token)
+
         return True
     except Exception as e:
         print(f"❌ خطأ إنشاء اختبار: {e}")
@@ -1465,6 +1499,7 @@ def toggle_quiz_visibility(bot_token, quiz_id):
                 current_val = str(row[13]).upper()
                 new_val = "FALSE" if current_val == "TRUE" else "TRUE"
                 sheet.update_cell(i + 1, 14, new_val)
+                update_global_version(bot_token)
                 return new_val
         return "FALSE"
     except:
@@ -1495,9 +1530,12 @@ def ensure_permission_row_exists(bot_token, person_id):
 def get_all_questions_from_bank(bot_token):
     """جلب كافة الأسئلة المسجلة لهذا البوت من بنك الأسئلة"""
     try:
-        sheet = ss.worksheet("بنك_الأسئلة")
-        records = sheet.get_all_records()
-        return [r for r in records if str(r.get("bot_id")) == str(bot_token)]
+        # ضمان تحديث البيانات قبل القراءة (المزامنة الصامتة)
+        smart_sync_check(bot_token)
+        records = get_bot_data_from_cache(bot_token, "بنك_الأسئلة")
+        
+        return records
+
     except Exception as e:
         print(f"❌ خطأ جلب الأسئلة: {e}")
         return []
@@ -1511,6 +1549,8 @@ def delete_question_from_bank(bot_token, q_id):
             # العمود 1 توكن، العمود 6 معرف السؤال (Index 5)
             if row[0] == str(bot_token) and str(row[5]) == str(q_id):
                 sheet.delete_rows(i + 1)
+                                # رفع إصدار البوت فوراً لتحديث الرام وحذف السؤال من الكاش
+                update_global_version(bot_token)
                 return True
         return False
     except Exception as e:
@@ -1518,28 +1558,15 @@ def delete_question_from_bank(bot_token, q_id):
         return False
 
 # --------------------------------------------------------------------------
-#استيراد الأقسام 
-def get_all_categories(bot_token):
-    """جلب كافة الأقسام المتاحة لبوت معين"""
-    try:
-        if departments_sheet is None: return []
-        # جلب كافة البيانات من شيت الأقسام
-        records = departments_sheet.get_all_records()
-        # تصفية الأقسام حسب التوكن وتنسيقها
-        return [
-            {"id": r.get("معرف_القسم"), "name": r.get("اسم_القسم")}
-            for r in records 
-            if str(r.get("bot_id")).strip() == str(bot_token).strip()
-        ]
-    except Exception as e:
-        print(f"❌ Error fetching categories: {e}")
-        return []
 
 # --------------------------------------------------------------------------
 # --- [ 1. دوال مسار الموظف - بناءً على الصلاحيات ] ---
 def get_employee_allowed_courses(bot_token, employee_id):
     """جلب قائمة الدورات المسموحة للموظف من ورقة الصلاحيات"""
     try:
+        # ضمان مزامنة البيانات قبل التحقق
+        smart_sync_check(bot_token)
+        
         perms = get_employee_permissions(bot_token, employee_id)
         if not perms: return []
         
@@ -1547,13 +1574,15 @@ def get_employee_allowed_courses(bot_token, employee_id):
         allowed_ids = str(perms.get("الدورات_المسموحة", "")).split(",")
         allowed_ids = [i.strip() for i in allowed_ids if i.strip()]
         
-        # جلب أسماء هذه الدورات من شيت الدورات للترجمة
-        all_courses = courses_sheet.get_all_records()
+        # جلب البيانات من الرام فوراً (0 استهلاك API)
+        all_courses = get_bot_data_from_cache(bot_token, "الدورات_التدريبية")
+        
         return [
             {"id": c.get("معرف_الدورة"), "name": c.get("اسم_الدورة")}
             for c in all_courses 
-            if str(c.get("bot_id")) == str(bot_token) and str(c.get("معرف_الدورة")) in allowed_ids
+            if str(c.get("معرف_الدورة")) in allowed_ids
         ]
+
     except Exception as e:
         print(f"❌ Error fetching employee courses: {e}")
         return []
@@ -1561,19 +1590,25 @@ def get_employee_allowed_courses(bot_token, employee_id):
 def get_employee_allowed_groups(bot_token, employee_id, course_id):
     """جلب المجموعات التابعة لدورة محددة والمسموحة لهذا الموظف"""
     try:
+        # ضمان المزامنة الصامتة
+        smart_sync_check(bot_token)
+        
         perms = get_employee_permissions(bot_token, employee_id)
+        if not perms: return []
+        
         allowed_group_ids = str(perms.get("المجموعات_المسموحة", "")).split(",")
         allowed_group_ids = [i.strip() for i in allowed_group_ids if i.strip()]
         
-        # جلب المجموعات من شيت إدارة_المجموعات
-        all_groups = ss.worksheet("إدارة_المجموعات").get_all_records()
+        # جلب المجموعات من الرام بدلاً من ورقة إدارة_المجموعات مباشرة
+        all_groups = get_bot_data_from_cache(bot_token, "إدارة_المجموعات")
+        
         return [
             {"id": g.get("معرف_المجموعة"), "name": g.get("اسم_المجموعة")}
             for g in all_groups
-            if str(g.get("bot_id")) == str(bot_token) 
-            and str(g.get("معرف_الدورة")) == str(course_id)
+            if str(g.get("معرف_الدورة")) == str(course_id)
             and str(g.get("معرف_المجموعة")) in allowed_group_ids
         ]
+
     except: return []
 
 # --- [ 2. دوال مسار الطالب - بناءً على قاعدة البيانات ] ---
@@ -1581,10 +1616,16 @@ def get_employee_allowed_groups(bot_token, employee_id, course_id):
 def get_student_enrollment_data(bot_token, telegram_id):
     """جلب بيانات تسجيل الطالب (الدورة والمجموعة) من قاعدة بيانات الطلاب"""
     try:
-        if students_db_sheet is None: return None
-        records = students_db_sheet.get_all_records()
+        # ضمان مزامنة البيانات قبل القراءة (المزامنة الصامتة)
+        smart_sync_check(bot_token)
+        
+        # جلب سجلات الطلاب من الرام فوراً (0 استهلاك API)
+        # الدالة تعيد تلقائياً السجلات المفلترة لهذا الـ bot_token
+        records = get_bot_data_from_cache(bot_token, "قاعدة_بيانات_الطلاب")
+        
         for r in records:
-            if str(r.get("bot_id")) == str(bot_token) and str(r.get("ID_المستخدم_تيليجرام")) == str(telegram_id):
+            # البحث عن الطالب باستخدام ID التليجرام داخل سجلات البوت الحالي
+            if str(r.get("ID_المستخدم_تيليجرام")) == str(telegram_id):
                 return {
                     "student_name": r.get("الاسم_بالعربي"),
                     "course_id": r.get("معرف_الدورة"),
@@ -1600,13 +1641,19 @@ def get_student_enrollment_data(bot_token, telegram_id):
 def get_lectures_by_group(bot_token, group_id):
     """جلب جدول الحصص الفعلي من ورقة جدول_المحاضرات بناءً على المجموعة"""
     try:
-        if lectures_sheet is None: return []
-        records = lectures_sheet.get_all_records()
-        # التصفية حسب البوت والمجموعة
+        # ضمان تحديث البيانات في الرام قبل القراءة (المزامنة الصامتة)
+        smart_sync_check(bot_token)
+        
+        # جلب سجلات جدول المحاضرات من الرام فوراً (0 استهلاك API)
+        # الدالة تعيد فقط السجلات الخاصة بـ bot_token هذا
+        records = get_bot_data_from_cache(bot_token, "جدول_المحاضرات")
+        
+        # التصفية حسب المجموعة [بناءً على طلبك في الكود الأصلي]
         return [
             r for r in records 
-            if str(r.get("bot_id")) == str(bot_token) and str(r.get("معرف_المجموعة")) == str(group_id)
+            if str(r.get("معرف_المجموعة")) == str(group_id)
         ]
+
     except: return []
 
 # --------------------------------------------------------------------------
@@ -1614,15 +1661,21 @@ def get_lectures_by_group(bot_token, group_id):
 def get_active_discount_codes(bot_token):
     """جلب أكواد الخصم النشطة مع أسماء الدورات المربوطة بها"""
     try:
-        sheet = ss.worksheet("أكواد_الخصم")
-        records = sheet.get_all_records()
+        # ضمان تحديث البيانات قبل القراءة
+        smart_sync_check(bot_token)
+        
+        # سحب سجلات الأكواد والدورات من الرام فوراً (0 استهلاك API)
+        records = get_bot_data_from_cache(bot_token, "أكواد_الخصم")
+        all_courses = get_bot_data_from_cache(bot_token, "الدورات_التدريبية")
+        
         active_codes = []
         
-        # جلب خريطة الدورات (ID -> Name) لتسهيل العرض
-        courses = {c.get("معرف_الدورة"): c.get("اسم_الدورة") for c in courses_sheet.get_all_records() if str(c.get("bot_id")) == str(bot_token)}
+        # بناء خريطة الدورات من البيانات المخزنة في الرام
+        courses = {c.get("معرف_الدورة"): c.get("اسم_الدورة") for c in all_courses}
         
         for r in records:
-            if str(r.get("bot_id")) == str(bot_token) and str(r.get("الحالة")) == "نشط":
+            # التحقق من الحالة من الرام (عمود bot_id مفلتر تلقائياً داخل الدالة)
+            if str(r.get("الحالة")) == "نشط":
                 course_name = courses.get(str(r.get("معرف_الدورة")), "كافة الدورات")
                 active_codes.append({
                     "code": r.get("معرف_الخصم"),
@@ -1631,16 +1684,20 @@ def get_active_discount_codes(bot_token):
                     "expiry": r.get("تاريخ_الانتهاء")
                 })
         return active_codes
+
     except: return []
 
 #التحقق من وجود كود الخصم 
 def check_course_has_discount(bot_token, course_id):
     """التحقق من وجود كود سابق للدورة"""
     try:
-        sheet = ss.worksheet("أكواد_الخصم")
-        records = sheet.get_all_records()
+        smart_sync_check(bot_token)
+        # جلب البيانات المفلترة لهذا البوت من الرام
+        records = get_bot_data_from_cache(bot_token, "أكواد_الخصم")
+        
         for r in records:
-            if str(r.get("bot_id")) == str(bot_token) and str(r.get("معرف_الدورة")) == str(course_id):
+            # المقارنة تتم على مستوى معرف الدورة داخل سجلات البوت
+            if str(r.get("معرف_الدورة")) == str(course_id):
                 return r.get("معرف_الخصم")
         return None
     except: return None
@@ -1674,6 +1731,9 @@ def save_discount_code_full(bot_token, data):
         ]
         
         sheet.append_row(row)
+        # رفع إصدار البوت لتحديث الرام فوراً ليعلم النظام بالكود الجديد
+        update_global_version(bot_token)
+
         return True
     except Exception as e:
         print(f"❌ خطأ في مطابقة الأعمدة: {e}")
@@ -1682,98 +1742,130 @@ def save_discount_code_full(bot_token, data):
 # --------------------------------------------------------------------------
  # قسم روابط الاحالة
 def get_bot_setting(bot_token, key, default=0):
-    """جلب قيمة إعداد محدد لبوت معين باستخدام المفتاح البرمجي"""
+    """جلب قيمة إعداد محدد من الرام فوراً (0 استهلاك API)"""
     try:
-        sheet = ss.worksheet("الإعدادات")
-        records = sheet.get_all_records()
-        # البحث عن السطر الذي يطابق توكن البوت والمفتاح
-        for r in records:
-            if str(r.get('bot_id')) == str(bot_token) and str(r.get('المفتاح_البرمجي')) == key:
+        # 1. المزامنة الصامتة (تتصل بجوجل فقط مرة كل 15 دقيقة)
+        smart_sync_check(bot_token)
+        
+        # 2. جلب كافة إعدادات المصنع المخزنة في الرام (RAM)
+        all_settings = get_bot_data_from_cache(bot_token, "الإعدادات")
+        
+        # 3. البحث داخل القائمة المخزنة محلياً عن المفتاح المطلوب
+        # ملاحظة: get_bot_data_from_cache تعيد فقط إعدادات البوت الحالي
+        for r in all_settings:
+            if str(r.get('المفتاح_البرمجي')) == key:
                 return r.get('القيمة')
+        
         return default
     except Exception as e:
-        print(f"❌ خطأ في جلب الإعداد {key}: {e}")
+        print(f"❌ خطأ في جلب الإعداد {key} من الكاش: {e}")
         return default
+
 
  
 def link_user_to_inviter(bot_token, student_id, inviter_id):
-    """ربط الطالب بالداعي ومنح النقاط ديناميكياً بناءً على إعدادات كل بوت"""
+    """ربط الطالب بالداعي ومنح النقاط ديناميكياً مع الهروب من الـ API [نظام الكاش]"""
     try:
-        # 1. جلب قيمة النقاط من ورقة 'الإعدادات' لهذا البوت تحديداً
-        sheet_settings = ss.worksheet("الإعدادات")
-        settings_records = sheet_settings.get_all_records()
+        # 0. المزامنة الذكية قبل البدء لضمان دقة البيانات
+        smart_sync_check(bot_token)
         
-        # البحث عن مفتاح 'ref_points_join' لهذا الـ bot_id
-        points_to_add = 10  # قيمة افتراضية في حال لم يجد الإعداد
+        # 1. جلب قيمة النقاط من الرام (بدلاً من ورقة الإعدادات مباشرة)
+        settings_records = get_bot_data_from_cache(bot_token, "الإعدادات")
+        points_to_add = 10  # القيمة الافتراضية
+        
         for reg in settings_records:
-            if str(reg.get('bot_id')) == str(bot_token) and reg.get('المفتاح_البرمجي') == 'ref_points_join':
+            # الفلترة تتم آلياً داخل الكاش، نبحث فقط عن المفتاح
+            if reg.get('المفتاح_البرمجي') == 'ref_points_join':
                 points_to_add = float(reg.get('القيمة') or 10)
                 break
 
-        # 2. إضافة النقاط لرصيد الداعي في ورقة 'المستخدمين' (العمود 11)
+        # 2. جلب بيانات المستخدمين من الرام لتحديد الصفوف (توفير عمليات find)
+        users_records = get_bot_data_from_cache(bot_token, "المستخدمين")
         sheet_users = ss.worksheet("المستخدمين")
-        inviter_cell = sheet_users.find(str(inviter_id), in_column=1) # البحث في عمود معرف_التليجرام
+        
+        # البحث عن الداعي (Inviter) والطالب (Student) في الرام
+        inviter_data = next((r for r in users_records if str(r.get("ID_المستخدم")) == str(inviter_id)), None)
+        
+        # تنفيذ العمليات في جوجل شيت بناءً على البيانات المستخرجة
+        # ملاحظة: سنستخدم find هنا فقط للكتابة (Write) لضمان دقة رقم الصف
+        
+        # أ) إضافة النقاط للداعي
+        inviter_cell = sheet_users.find(str(inviter_id), in_column=1)
         if inviter_cell:
-            # جلب الرصيد الحالي وإضافة النقاط الجديدة
-            current_balance = float(sheet_users.cell(inviter_cell.row, 11).value or 0)
+            # الرصيد الحالي نجلبة من الرام (user_data) لتوفير طلب API
+            current_balance = float(inviter_data.get("النقاط") or 0) if inviter_data else 0
             sheet_users.update_cell(inviter_cell.row, 11, current_balance + points_to_add)
         
-        # 3. تسجيل 'معرف الإحالة' للطالب الجديد (العمود 10)
+        # ب) تسجيل معرف الإحالة للطالب الجديد
         student_cell = sheet_users.find(str(student_id), in_column=1)
         if student_cell:
             sheet_users.update_cell(student_cell.row, 10, str(inviter_id))
+            
+        # 3. رفع إصدار البوت فوراً لتحديث الرام في العمليات القادمة
+        update_global_version(bot_token)
             
         return True
     except Exception as e:
         print(f"❌ خطأ في نظام الإحالة الديناميكي: {e}")
         return False
 
+
 # --------------------------------------------------------------------------
+# جلب الإحصائيات 
 def get_user_referral_stats(bot_token, user_id):
     """حساب عدد المدعوين والرصيد المكتسب من ورقة المستخدمين"""
     try:
-        # التأكد من الاتصال بالشيت
-        global users_sheet
-        if users_sheet is None: connect_to_google()
-        
-        # جلب كافة السجلات
-        all_users = users_sheet.get_all_records()
-        
-        # 1. حساب عدد الطلاب الذين سجلوا عبر هذا المستخدم (العمود رقم 10: معرف إحالة)
+        # إزاحة 8 مسافات (داخل try)
+        smart_sync_check(bot_token)
+        all_users = get_bot_data_from_cache(bot_token, "المستخدمين")
         count = sum(1 for u in all_users if str(u.get('معرف إحالة', '')).strip() == str(user_id))
-        
-        # 2. جلب الرصيد الحالي للمستخدم من (العمود رقم 11: رصيد)
-        user_cell = users_sheet.find(str(user_id))
-        if user_cell:
-            # تم تصحيح الباراميتر هنا ليكون متوافقاً مع مكتبة gspread
-            balance = users_sheet.cell(user_cell.row, 11).value or 0
-        else:
-            balance = 0
-            
-        return {"count": count, "balance": balance}
+        user_data = next((u for u in all_users if str(u.get('ID المستخدم')) == str(user_id)), {})
+        return {"count": count, "balance": user_data.get('رصيد', 0)}
+
     except Exception as e:
+
         print(f"❌ خطأ في جلب إحصائيات الإحالة: {e}")
         return {"count": 0, "balance": 0}
 # --------------------------------------------------------------------------
 # استبدال النقاط 
 def redeem_points_for_course(bot_token, user_id, course_price):
-    """التحقق من الرصيد وخصم النقاط لفتح دورة"""
+    """التحقق من الرصيد وخصم النقاط لفتح دورة [بأقصى سرعة وأقل استهلاك API]"""
     try:
-        sheet_users = ss.worksheet("المستخدمين")
-        user_cell = sheet_users.find(str(user_id), in_column=1)
+        # 1. ضمان مزامنة البيانات قبل التحقق من الرصيد
+        smart_sync_check(bot_token)
         
-        if user_cell:
-            current_balance = float(sheet_users.cell(user_cell.row, 11).value or 0)
+        # 2. جلب بيانات المستخدمين من الرام بدلاً من البحث المباشر في الشيت
+        users_records = get_bot_data_from_cache(bot_token, "المستخدمين")
+        
+        # البحث عن سجل المستخدم (العمود 1 هو ID المستخدم)
+        user_data = next((r for r in users_records if str(r.get("ID_المستخدم")) == str(user_id)), None)
+        
+        if user_data:
+            # افتراض أن العمود 11 هو 'النقاط' أو 'الرصيد' حسب ترتيب ورقة المستخدمين
+            current_balance = float(user_data.get("النقاط") or 0)
+            
             if current_balance >= float(course_price):
-                # خصم النقاط
-                new_balance = current_balance - float(course_price)
-                sheet_users.update_cell(user_cell.row, 11, new_balance)
-                return True, new_balance
+                # 3. جلب الورقة للكتابة فقط (توفير API القراءة)
+                sheet_users = ss.worksheet("المستخدمين")
+                
+                # البحث عن الصف لتحديثه
+                user_cell = sheet_users.find(str(user_id), in_column=1)
+                if user_cell:
+                    new_balance = current_balance - float(course_price)
+                    
+                    # تحديث القيمة في جوجل شيت (العمود 11)
+                    sheet_users.update_cell(user_cell.row, 11, new_balance)
+                    
+                    # 4. رفع إصدار البوت فوراً لتحديث الرام في الطلب القادم
+                    update_global_version(bot_token)
+                    
+                    return True, new_balance
+                    
         return False, 0
     except Exception as e:
-        print(f"❌ خطأ في عملية الاستبدال: {e}")
+        print(f"❌ خطأ في عملية استبدال النقاط: {e}")
         return False, 0
- 
+
 
 
 # --------------------------------------------------------------------------
@@ -1781,33 +1873,35 @@ def redeem_points_for_course(bot_token, user_id, course_price):
 def get_filtered_library_content(bot_token, user_id, course_id):
     """جلب المحتوى المخصص للطالب بناءً على حالة الدفع والدورة"""
     try:
-        # 1. جلب حالة الطالب من ورقة قاعدة_بيانات_الطلاب
-        student_sheet = ss.worksheet("قاعدة_بيانات_الطلاب")
-        student_records = student_sheet.get_all_records()
+        # ضمان تحديث البيانات في الرام قبل البدء (نبضة الـ 15 دقيقة)
+        smart_sync_check(bot_token)
         
-        # البحث عن سجل الطالب لهذا البوت وهذه الدورة
-        student_data = next((r for r in student_records if str(r.get("ID_المستخدم_تيليجرام")) == str(user_id) 
-                             and str(r.get("bot_id")) == str(bot_token)), None)
+        # 1. جلب بيانات الطلاب من الرام (بدلاً من الاتصال المباشر بجوجل)
+        student_records = get_bot_data_from_cache(bot_token, "قاعدة_بيانات_الطلاب")
         
+        # البحث عن سجل الطالب المطابق للتوكن والآيدي
+        student_data = next((r for r in student_records if str(r.get("ID_المستخدم_تيليجرام")) == str(user_id)), None)
+        
+        # منطق التحقق من الدفع (لم يتغير لضمان الوظيفة)
         is_paid = False
         if student_data and str(student_data.get("الحالة")).strip() in ["مدفوع", "دافع", "مقبول"]:
             is_paid = True
 
-        # 2. جلب محتوى المكتبة وتصفيته
-        library_sheet = ss.worksheet("المكتبة")
-        all_content = library_sheet.get_all_records()
+        # 2. جلب محتوى المكتبة كامل المصنع من الرام وتصفيته
+        all_content = get_bot_data_from_cache(bot_token, "المكتبة")
         
         filtered_content = []
         for item in all_content:
-            # يجب أن يكون المحتوى تابعاً لهذا البوت ولهذه الدورة
-            if str(item.get("bot_id")) == str(bot_token) and str(item.get("الدورة")) == str(course_id):
+            # فلترة المحتوى بناءً على الدورة المحددة (التي مررها البوت)
+            if str(item.get("الدورة")) == str(course_id):
                 status = str(item.get("الحالة")).strip()
                 
-                # السماح إذا كان الملف مجاني أو إذا كان الطالب قد دفع للمحتوى المدفوع
+                # السماح بالوصول بناءً على القواعد المذكورة في التعليمات
                 if status == "مجاني" or (status == "مدفوع" and is_paid):
                     filtered_content.append(item)
         
         return filtered_content
+
     except Exception as e:
         print(f"❌ خطأ في تصفية محتوى المكتبة: {e}")
         return []
@@ -1880,25 +1974,27 @@ def get_newly_activated_students(bot_token):
 def get_student_assignments(bot_token, course_id, group_id):
     """جلب الواجبات المفلترة والمسموحة للطالب (مرئي_للطالب == TRUE)"""
     try:
-        sheet = ss.worksheet("الواجبات")
-        records = sheet.get_all_records()
+        smart_sync_check(bot_token)
+        records = get_bot_data_from_cache(bot_token, "الواجبات")
         # الفلترة: bot_id + الدورة + المجموعة + شرط الرؤية [بند 1، 5 في الوثيقة]
         return [r for r in records if str(r.get("bot_id")) == str(bot_token) 
                 and str(r.get("معرف_الدورة")) == str(course_id) 
                 and str(group_id) in str(r.get("معرف_المجموعة", ""))
                 and str(r.get("مرئي_للطالب", "FALSE")).upper() == "TRUE"]
+
     except: return []
 
 def check_student_submission(bot_token, student_id, hw_id):
     """فحص محرك الحالات: هل يوجد تسليم سابق لهذا الواجب؟ [بند 2 في الوثيقة]"""
     try:
-        sheet = ss.worksheet("تنفيذ_الواجبات_من_الطلاب")
-        records = sheet.get_all_records()
+        smart_sync_check(bot_token)
+        records = get_bot_data_from_cache(bot_token, "تنفيذ_الواجبات_من_الطلاب")
         # البحث عن آخر تسليم للطالب لهذا الواجب
         submission = next((r for r in records if str(r.get("bot_id")) == str(bot_token) 
                            and str(r.get("معرف_الطالب")) == str(student_id) 
                            and str(r.get("معرف_الواجب")) == str(hw_id)), None)
         return submission
+
     except: return None
 
 def record_student_submission(bot_token, data):
@@ -1934,6 +2030,8 @@ def record_student_submission(bot_token, data):
             "TRUE"                         # مرئي_للطالب
         ]
         sheet.append_row(row)
+        update_global_version(bot_token)
+
         return True
     except Exception as e:
         print(f"❌ Error Recording Submission: {e}")
@@ -2045,14 +2143,15 @@ def get_all_branches(bot_token):
     """يعيد قائمة بالفروع: [{'id': 'معرف_الفرع', 'name': 'اسم_الفرع'}]"""
     branches = []
     try:
-        sheet = ss.worksheet("إدارة_الفروع")
-        records = sheet.get_all_records()
+        smart_sync_check(bot_token)
+        records = get_bot_data_from_cache(bot_token, "إدارة_الفروع")
         for r in records:
             if str(r.get("bot_id")) == str(bot_token):
                 branches.append({
                     "id": str(r.get("معرف_الفرع")),
                     "name": r.get("اسم_الفرع") or "فرع بلا اسم"
                 })
+
     except Exception as e:
         print(f"❌ خطأ في جلب الفروع: {e}")
     return branches
@@ -2062,14 +2161,15 @@ def get_all_personnel(bot_token):
     """يعيد قائمة بالموظفين: [{'id': 'ID', 'name': 'الاسم_الكامل'}]"""
     staff = []
     try:
-        sheet = ss.worksheet("إدارة_الموظفين")
-        records = sheet.get_all_records()
+        smart_sync_check(bot_token)
+        records = get_bot_data_from_cache(bot_token, "إدارة_الموظفين")
         for r in records:
             if str(r.get("bot_id")) == str(bot_token):
                 staff.append({
                     "id": str(r.get("ID")),
                     "name": r.get("الاسم_الكامل") or r.get("اسم_الموظف") or "موظف مجهول"
                 })
+
     except Exception as e:
         print(f"❌ خطأ في جلب الموظفين: {e}")
     return staff
@@ -2079,14 +2179,15 @@ def get_all_coaches_list(bot_token):
     """يعيد قائمة بالمدربين: [{'id': 'ID', 'name': 'اسم_المدرب'}]"""
     coaches = []
     try:
-        sheet = ss.worksheet("المدربين")
-        records = sheet.get_all_records()
+        smart_sync_check(bot_token)
+        records = get_bot_data_from_cache(bot_token, "المدربين")
         for r in records:
             if str(r.get("bot_id")) == str(bot_token):
                 coaches.append({
                     "id": str(r.get("ID")),
                     "name": r.get("اسم_المدرب") or "مدرب مجهول"
                 })
+
     except Exception as e:
         print(f"❌ خطأ في جلب المدربين: {e}")
     return coaches
