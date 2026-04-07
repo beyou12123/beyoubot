@@ -404,24 +404,22 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         )
         await query.edit_message_text(stats_text, reply_markup=get_admin_panel(), parse_mode="HTML")
 
-#=======================================
-# إدارة واستيراد الدورات (تصحيح نهائي للسطر 423)
-#=======================================
+
+# --- [ إدارة واستيراد الدورات - تصحيح السطر 412 ] ---
+
     elif data == "manage_courses":
-        # 1. جلب الأدوات اللازمة للتحقق
-        --------------------------------------------------------------------------
         from sheets import check_user_permission
         user_id = query.from_user.id
         bot_token = context.bot.token
         
-        # 2. فحص صلاحية الدخول (المالك أو موظف بصلاحية_الدورات)
+        # --------------------------------------------------------------------------
+        # جلب الإعدادات وفحص رتبة المستخدم (مالك أو موظف بصلاحية)
+        config = get_bot_config(bot_token)
+        admin_ids = [int(i.strip()) for i in str(config.get("admin_ids", "0")).split(",") if i.strip().isdigit()]
+        is_owner = user_id in admin_ids
+
         if is_owner or check_user_permission(bot_token, user_id, "صلاحية_الدورات"):
-            # بناء قائمة الأزرار بتنسيق سليم للأقواس
-            menu_text = (
-                "📚 <b>إدارة واستيراد الدورات:</b>\n\n"
-                "اختر الطريقة التي تفضلها لإضافة البيانات:"
-            )
-            
+            text = "📚 <b>إدارة واستيراد الدورات:</b>\n\nاختر الطريقة التي تفضلها لإضافة البيانات:"
             keyboard = [
                 [InlineKeyboardButton("➕ إضافة دورة فردية", callback_data="start_add_course")],
                 [InlineKeyboardButton("📥 إضافة نصية بالجملة (|)", callback_data="bulk_add_start")],
@@ -433,14 +431,14 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             ]
             
             await query.edit_message_text(
-                text=menu_text,
+                text=text,
                 reply_markup=InlineKeyboardMarkup(keyboard),
                 parse_mode="HTML"
             )
         else:
-            # رسالة منع الوصول لغير المخولين
-            await query.answer("🚫 عذراً، لا تملك صلاحية إدارة الدورات في هذه المنصة.", show_alert=True)
+            await query.answer("🚫 عذراً، لا تملك صلاحية إدارة الدورات.", show_alert=True)
 #=======================================
+
 
 
 
