@@ -194,7 +194,7 @@ async def receive_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
     token = update.message.text.strip()
     
     # 1. التحقق من تنسيق التوكن (Regex)
-    --------------------------------------------------------------------------
+#    --------------------------------------------------------------------------
     if not re.match(r'^\d+:[A-Za-z0-9_-]{35,}$', token):
         await update.message.reply_text("❌ التوكن غير صحيح! يرجى إرسال توكن صالح من @BotFather")
         return GETTING_TOKEN
