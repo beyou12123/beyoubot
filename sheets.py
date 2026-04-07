@@ -533,48 +533,47 @@ def safe_api_call(func, *args, **kwargs):
 # --------------------------------------------------------------------------
 # دالة إنشاء وتجهيز الورق - النسخة المعززة بالفواصل الزمنية
 # دالة إنشاء وتجهيز الورق - النسخة المحدثة مع تعطيل الحجم التلقائي وإضافة فواصل زمنية
+
 def setup_bot_factory_database(bot_token=None):
     """المحرك الشامل: ينشئ الجداول، ينسق الهيدرز، يزرع الإعدادات، ويعيد عدد الأوراق ديناميكياً"""
     global ss, _ws_cache
     if 'ss' not in globals() or ss is None: connect_to_google()
     all_requests = []
-    
-    # جلب الهيكل وحساب عدد الأوراق الكلي بشكل ديناميكي
-    structures = get_sheets_structure()
-    total_sheets = len(structures) 
-    
-    # إضافة تأخير بسيط قبل البدء بجلب كافة الأوراق لتجنب الضغط الأولي
-    time.sleep(1)
-    _ws_cache = {ws.title: ws for ws in ss.worksheets()}
-    
-    for config in structures:
-        try:
-            sheet_name = config["name"]
-            headers = config["cols"]
-            if sheet_name not in _ws_cache:
-                worksheet = safe_api_call(ss.add_worksheet, title=sheet_name, rows="500", cols=str(len(headers) + 2))
-                _ws_cache[sheet_name] = worksheet
-                time.sleep(1) # تأخير إضافي عند إنشاء ورقة جديدة
-            else:
-                worksheet = _ws_cache[sheet_name]
-            
-            # قراءة العناوين الحالية
-            current_headers = worksheet.row_values(1)
+
+    # جلب الهيكل وحساب عدد الأوراق الكلي بشكل ديناميكي  
+    structures = get_sheets_structure()  
+    total_sheets = len(structures)   
+
+    # إضافة تأخير بسيط قبل البدء بجلب كافة الأوراق لتجنب الضغط الأولي  
+    time.sleep(1)  
+    _ws_cache = {ws.title: ws for ws in ss.worksheets()}  
+
+    for config in structures:  
+        try:  
+            sheet_name = config["name"]  
+            headers = config["cols"]  
+            if sheet_name not in _ws_cache:  
+                worksheet = safe_api_call(ss.add_worksheet, title=sheet_name, rows="500", cols=str(len(headers) + 2))  
+                _ws_cache[sheet_name] = worksheet  
+                time.sleep(1) # تأخير إضافي عند إنشاء ورقة جديدة  
+            else:  
+                worksheet = _ws_cache[sheet_name]  
+
+            # قراءة العناوين الحالية  
+            current_headers = worksheet.row_values(1)  
+
             # --- [ MIGRATION SYSTEM: إضافة الأعمدة الجديدة بدون حذف القديمة ] ---
             try:
-                # الأعمدة الجديدة التي غير موجودة حالياً
                 new_columns = [col for col in headers if col not in current_headers]
 
                 if new_columns:
                     print(f"🆕 اكتشاف أعمدة جديدة في {sheet_name}: {new_columns}")
 
-                    # حساب عدد الأعمدة الحالي
                     try:
                         current_col_count = len(current_headers)
                     except:
                         current_col_count = 0
 
-                    # توسيع عدد الأعمدة في الشيت إذا لزم
                     try:
                         required_cols = current_col_count + len(new_columns)
                         safe_api_call(
@@ -585,17 +584,12 @@ def setup_bot_factory_database(bot_token=None):
                     except Exception as e:
                         print(f"⚠️ فشل في توسيع الأعمدة في {sheet_name}: {e}")
 
-                    # إعادة قراءة الهيدرز بعد التوسعة
                     try:
-                        current_headers = worksheet.row_values(1)
+                        refreshed_headers = worksheet.row_values(1)
                     except:
-                        current_headers = current_headers
+                        refreshed_headers = current_headers
 
-                    # تحديد موقع البداية للإضافة
-                    start_col_index = len(current_headers)
-
-                    # تجهيز صف الهيدر الجديد
-                    updated_headers = current_headers + new_columns
+                    updated_headers = refreshed_headers + new_columns
 
                     try:
                         safe_api_call(
@@ -605,58 +599,61 @@ def setup_bot_factory_database(bot_token=None):
                         )
                         print(f"✅ تمت إضافة الأعمدة الجديدة في {sheet_name}")
                         time.sleep(1)
+
+                        # ✅ تحديث current_headers لمنع التحديث المزدوج
+                        current_headers = updated_headers
+
                     except Exception as e:
                         print(f"❌ فشل تحديث الهيدرز بعد الإضافة في {sheet_name}: {e}")
 
             except Exception as e:
                 print(f"❌ خطأ في نظام Migration داخل {sheet_name}: {e}")
-                
-            time.sleep(0.6) # فاصل زمني بعد عملية القراءة
-            
-            if set(current_headers) != set(headers):
-                if STRICT_SCHEMA:
-                    safe_api_call(worksheet.update, '1:1', [headers])
-                    time.sleep(1) # تأخير بعد تحديث العناوين
-            
-            sheet_id = worksheet.id
-            all_requests.extend([
-                {"repeatCell": {"range": {"sheetId": sheet_id, "startRowIndex": 0, "endRowIndex": 1}, "cell": {"userEnteredFormat": {"backgroundColor": config.get("color", {"red": 1, "green": 1, "blue": 1}), "textFormat": {"bold": True}, "horizontalAlignment": "CENTER"}}, "fields": "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)"}},
-                {"updateSheetProperties": {"properties": {"sheetId": sheet_id, "gridProperties": {"frozenRowCount": 1}}, "fields": "gridProperties.frozenRowCount"}}
-            ])
-            
-            # تم تعطيل هذا الجزء آلياً بناءً على قيمة AUTO_RESIZE = False في الأعلى
-            if AUTO_RESIZE and (not current_headers or set(current_headers) != set(headers)):
-                safe_api_call(worksheet.columns_auto_resize, 0, len(headers))
-                time.sleep(0.8) 
-            
-            # الفاصل الزمني الأساسي داخل الحلقة لمنع الاصطدام بالحدود
-            time.sleep(1.5)
-            
-        except Exception as e: 
-            print(f"❌ خطأ تهيئة {sheet_name}: {e}")
-            time.sleep(2) # انتظار أطول في حال حدوث خطأ
-            
-            
-    if all_requests:
-        for i in range(0, len(all_requests), BATCH_SIZE):
-            safe_api_call(ss.batch_update, {"requests": all_requests[i:i+BATCH_SIZE]})
-            # تأخير بين دفعات التحديث الجماعي
-            time.sleep(2.5) 
-            
-    # --- [ إضافة: زرع الإعدادات الافتراضية ضمن عملية التهيئة ] ---
-    if bot_token:
-        seed_default_settings(bot_token)
-        time.sleep(1.2)
-            
-    update_meta_info()
-    time.sleep(1)
-    
-    # الحفاظ على وظيفة التحقق مع إرجاع العدد الديناميكي في حال النجاح
-    if verify_setup(structures):
-        return total_sheets
+
+            time.sleep(0.6) # فاصل زمني بعد عملية القراءة  
+
+            if set(current_headers) != set(headers):  
+                if STRICT_SCHEMA:  
+                    safe_api_call(worksheet.update, '1:1', [headers])  
+                    time.sleep(1) # تأخير بعد تحديث العناوين  
+
+            sheet_id = worksheet.id  
+            all_requests.extend([  
+                {"repeatCell": {"range": {"sheetId": sheet_id, "startRowIndex": 0, "endRowIndex": 1}, "cell": {"userEnteredFormat": {"backgroundColor": config.get("color", {"red": 1, "green": 1, "blue": 1}), "textFormat": {"bold": True}, "horizontalAlignment": "CENTER"}}, "fields": "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)"}},  
+                {"updateSheetProperties": {"properties": {"sheetId": sheet_id, "gridProperties": {"frozenRowCount": 1}}, "fields": "gridProperties.frozenRowCount"}}  
+            ])  
+
+            # تم تعطيل هذا الجزء آلياً بناءً على قيمة AUTO_RESIZE = False في الأعلى  
+            if AUTO_RESIZE and (not current_headers or set(current_headers) != set(headers)):  
+                safe_api_call(worksheet.columns_auto_resize, 0, len(headers))  
+                time.sleep(0.8)   
+
+            # الفاصل الزمني الأساسي داخل الحلقة لمنع الاصطدام بالحدود  
+            time.sleep(1.5)  
+
+        except Exception as e:   
+            print(f"❌ خطأ تهيئة {sheet_name}: {e}")  
+            time.sleep(2) # انتظار أطول في حال حدوث خطأ  
+
+    if all_requests:  
+        for i in range(0, len(all_requests), BATCH_SIZE):  
+            safe_api_call(ss.batch_update, {"requests": all_requests[i:i+BATCH_SIZE]})  
+            # تأخير بين دفعات التحديث الجماعي  
+            time.sleep(2.5)   
+
+    # --- [ إضافة: زرع الإعدادات الافتراضية ضمن عملية التهيئة ] ---  
+    if bot_token:  
+        seed_default_settings(bot_token)  
+        time.sleep(1.2)  
+
+    update_meta_info()  
+    time.sleep(1)  
+
+    # الحفاظ على وظيفة التحقق مع إرجاع العدد الديناميكي في حال النجاح  
+    if verify_setup(structures):  
+        return total_sheets  
     return 0
 
-    
+
 # --------------------------------------------------------------------------    
 # تجهيز وتعبئة ورقة الإعدادات (الدالة المدمجة والكاملة)
 def seed_default_settings(bot_token):
