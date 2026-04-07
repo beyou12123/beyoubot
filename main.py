@@ -627,6 +627,9 @@ async def finalize_module_name(update: Update, context: ContextTypes.DEFAULT_TYP
 # --------------------------------------------------------------------------
 
 # إعداد الـ ConversationHandler لإنشاء البوت (مع خطوة الاسم المخصص)
+#=======================================
+# نظام المحادثة المطور لإنشاء البوت (تم إصلاح التحذير)
+#=======================================
 create_bot_conv = ConversationHandler(
     entry_points=[
         MessageHandler(filters.Regex('^➕ إنشاء بوت$'), start_create_bot),
@@ -642,7 +645,11 @@ create_bot_conv = ConversationHandler(
         CallbackQueryHandler(cancel, pattern="^cancel_action$"),
         MessageHandler(filters.Regex('^🔙 العودة$'), cancel)
     ],
+    per_message=True, # <--- هذه هي الإضافة التي ستحل تحذير PTBUserWarning نهائياً
 )
+#=======================================
+
+
 
 # إعداد الـ ConversationHandler لرفع الموديولات للمطور
 admin_module_conv = ConversationHandler(
