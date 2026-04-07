@@ -404,42 +404,44 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         )
         await query.edit_message_text(stats_text, reply_markup=get_admin_panel(), parse_mode="HTML")
 
-    # --- 2. إدارة الدورات التدريبية (الواجهة الرئيسية) ---
-# تحديث قسم إدارة الدورات ليشمل كافة طرق الاستيراد المتاحة
 #=======================================
-# إدارة واستيراد الدورات (نظام الصلاحيات المطور)
+# إدارة واستيراد الدورات (تصحيح نهائي للسطر 417)
 #=======================================
     elif data == "manage_courses":
-        # التحقق من الصلاحية: المالك أو موظف لديه (صلاحية_الدورات)
+        # التحقق من الصلاحيات قبل عرض القائمة
         from sheets import check_user_permission
+        user_id = query.from_user.id
+        bot_token = context.bot.token
+        
+        # فحص هوية المسؤول
+        config = get_bot_config(bot_token)
+        admin_ids = [int(i.strip()) for i in str(config.get("admin_ids", "0")).split(",") if i.strip().isdigit()]
+        is_owner = user_id in admin_ids
+
         if is_owner or check_user_permission(bot_token, user_id, "صلاحية_الدورات"):
-            # الكتل المنطقية للواجهة
+            # الكتل المنطقية للواجهة - تم تصحيح الأقواس هنا
             --------------------------------------------------------------------------
-            menu_text = (
-                "📚 <b>إدارة واستيراد الدورات:</b>\n\n"
-                "اختر الطريقة التي تفضلها لإضافة البيانات:"
-            )
-            
+            text = "📚 <b>إدارة واستيراد الدورات:</b>\n\nاختر الطريقة التي تفضلها لإضافة البيانات:"
             keyboard = [
                 [InlineKeyboardButton("➕ إضافة دورة فردية", callback_data="start_add_course")],
-                [InlineKeyboardButton("📥 نصية (|)", callback_data="bulk_add_start")],
+                [InlineKeyboardButton("📥 إضافة نصية بالجملة (|)", callback_data="bulk_add_start")],
                 [
-                    InlineKeyboardButton("📄 ملف CSV", callback_data="csv_import_start"),
+                    InlineKeyboardButton("📄 ملف CSV / Excel", callback_data="csv_import_start"),
                     InlineKeyboardButton("🔗 رابط Google Sheet", callback_data="sheet_link_import")
                 ],
-                [InlineKeyboardButton("🔙 عودة", callback_data="back_to_admin")]
+                [InlineKeyboardButton("🔙 عودة للوحة التحكم", callback_data="back_to_admin")]
             ]
             
             await query.edit_message_text(
-                text=menu_text,
+                text=text,
                 reply_markup=InlineKeyboardMarkup(keyboard),
                 parse_mode="HTML"
             )
             --------------------------------------------------------------------------
         else:
-            # ردع المحاولات غير المصرح بها
-            await query.answer("🚫 عذراً، لا تملك صلاحية إدارة الدورات في هذه المنصة.", show_alert=True)
+            await query.answer("🚫 لا تملك صلاحية الوصول إلى إدارة الدورات.", show_alert=True)
 #=======================================
+
 
 # --------------------------------------------------------------------------
 
@@ -2501,39 +2503,7 @@ async def run_bot(token, owner_id):
     
 #=======================================
 
-#=======================================
-# --- [ تصحيح واجهة إدارة الدورات ] ---
-#=======================================
-    elif data == "manage_courses":
-        # التحقق من الصلاحيات قبل عرض القائمة
-        from sheets import check_user_permission
-        user_id = query.from_user.id
-        bot_token = context.bot.token
-        
-        # السماح للمالك أو من لديه صلاحية "صلاحية_الدورات"
-        config = get_bot_config(bot_token)
-        admin_ids = [int(i.strip()) for i in str(config.get("admin_ids", "0")).split(",") if i.strip().isdigit()]
-        is_owner = user_id in admin_ids
 
-        if is_owner or check_user_permission(bot_token, user_id, "صلاحية_الدورات"):
-            text = "📚 <b>إدارة واستيراد الدورات:</b>\n\nاختر الطريقة التي تفضلها لإضافة البيانات:"
-            keyboard = [
-                [InlineKeyboardButton("➕ إضافة دورة فردية", callback_data="start_add_course")],
-                [InlineKeyboardButton("📥 إضافة نصية بالجملة (|)", callback_data="bulk_add_start")],
-                [
-                    InlineKeyboardButton("📄 ملف CSV / Excel", callback_data="csv_import_start"),
-                    InlineKeyboardButton("🔗 رابط Google Sheet", callback_data="sheet_link_import")
-                ],
-                [InlineKeyboardButton("🔙 عودة للوحة التحكم", callback_data="back_to_admin")]
-            ]
-            
-            await query.edit_message_text(
-                text=text,
-                reply_markup=InlineKeyboardMarkup(keyboard),
-                parse_mode="HTML"
-            )
-        else:
-            await query.answer("🚫 لا تملك صلاحية الوصول إلى إدارة الدورات.", show_alert=True)
             
 #=======================================
 
