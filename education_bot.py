@@ -406,22 +406,41 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 
     # --- 2. إدارة الدورات التدريبية (الواجهة الرئيسية) ---
 # تحديث قسم إدارة الدورات ليشمل كافة طرق الاستيراد المتاحة
+#=======================================
+# إدارة واستيراد الدورات (نظام الصلاحيات المطور)
+#=======================================
     elif data == "manage_courses":
-        await query.edit_message_text(
-        "📚 <b>إدارة واستيراد الدورات:</b>\n\nاختر الطريقة التي تفضلها لإضافة البيانات:", 
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("➕ إضافة دورة فردية", callback_data="start_add_course")],
-            [
-                InlineKeyboardButton("📥 نصية (|)", callback_data="bulk_add_start")
-            ],
-            [
-                InlineKeyboardButton("📄 ملف CSV", callback_data="csv_import_start"),
-                InlineKeyboardButton("🔗 رابط Google Sheet", callback_data="sheet_link_import")
-            ],
-            [InlineKeyboardButton("🔙 عودة", callback_data="back_to_admin")]
-        ]), 
-        parse_mode="HTML"
-    )
+        # التحقق من الصلاحية: المالك أو موظف لديه (صلاحية_الدورات)
+        from sheets import check_user_permission
+        if is_owner or check_user_permission(bot_token, user_id, "صلاحية_الدورات"):
+            # الكتل المنطقية للواجهة
+            --------------------------------------------------------------------------
+            menu_text = (
+                "📚 <b>إدارة واستيراد الدورات:</b>\n\n"
+                "اختر الطريقة التي تفضلها لإضافة البيانات:"
+            )
+            
+            keyboard = [
+                [InlineKeyboardButton("➕ إضافة دورة فردية", callback_data="start_add_course")],
+                [InlineKeyboardButton("📥 نصية (|)", callback_data="bulk_add_start")],
+                [
+                    InlineKeyboardButton("📄 ملف CSV", callback_data="csv_import_start"),
+                    InlineKeyboardButton("🔗 رابط Google Sheet", callback_data="sheet_link_import")
+                ],
+                [InlineKeyboardButton("🔙 عودة", callback_data="back_to_admin")]
+            ]
+            
+            await query.edit_message_text(
+                text=menu_text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode="HTML"
+            )
+            --------------------------------------------------------------------------
+        else:
+            # ردع المحاولات غير المصرح بها
+            await query.answer("🚫 عذراً، لا تملك صلاحية إدارة الدورات في هذه المنصة.", show_alert=True)
+#=======================================
+
 # --------------------------------------------------------------------------
 
     # --- [ معالج التحديث اليدوي للبيانات والقيود ] ---
@@ -1981,23 +2000,29 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
 #=======================================
 # تصحيح الجزء الخاص بحفظ الدورة (السطر 1981 وما حوله)
 #=======================================
+#=======================================
+# تصحيح نهائي لكتلة حفظ الدورة (الأسطر 1980 وما حولها)
+#=======================================
         if success:
-            # تحديث الذاكرة المؤقتة للقيود فوراً بعد الحفظ
-            [span_4](start_span)sync_bot_limits(context, bot_token)[span_4](end_span)
+            # تحديث الذاكرة المؤقتة للقيود فوراً
+            sync_bot_limits(context, bot_token)
             
-            # إرسال رسالة التأكيد للمسؤول
+            # إرسال رسالة التأكيد للمسؤول مع استخدام <code> للتنسيق الآمن
             await update.message.reply_text(
                 f"✅ <b>تم الحفظ بنجاح!</b>\n🆔 المعرف: <code>{course_id}</code>", 
                 reply_markup=get_admin_panel(), 
                 parse_mode="HTML"
-            [span_5](start_span))
+            )
             
-            # تنظيف حالة الإجراء لمنع تكرار التنفيذ
-            context.user_data['action'] = None[span_5](end_span)
+            # تنظيف حالة الإجراء لمنع التكرار
+            context.user_data['action'] = None
         else:
-            [span_6](start_span)await update.message.reply_text("❌ حدث خطأ أثناء الحفظ في قاعدة البيانات.")[span_6](end_span)
+            await update.message.reply_text("❌ حدث خطأ أثناء الحفظ في قاعدة البيانات.")
         
-        [span_7](start_span)return[span_7](end_span)
+        return
+
+#=======================================
+
 #=======================================
 
 # نهاية تسلسل اضافة دورة
@@ -2445,25 +2470,73 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
 # --------------------------------------------------------------------------
 
 # --- [ محرك التشغيل المتوافق مع المصنع ] ---
-
+#=======================================
+# --- [ محرك التشغيل المتوافق مع المصنع ] ---
+#=======================================
 async def run_bot(token, owner_id):
     """هذه الدالة هي التي يستدعيها ملف main.py لتشغيل البوت ديناميكياً"""
+    
+    # بناء التطبيق مع ضبط إعدادات الشبكة لتقليل أخطاء التعارض
     application = ApplicationBuilder().token(token).build()
     
     # 1. إضافة المعالجات (Handlers)
+    # --------------------------------------------------------------------------
     application.add_handler(CommandHandler("start", start_handler))
     application.add_handler(CallbackQueryHandler(contact_callback_handler))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_contact_message))
     
-    # 2. إعداد مراقب التفعيل (يُوضع هنا بعد تعريف الـ application)
+    # 2. إعداد مراقب التفعيل
+    # --------------------------------------------------------------------------
     # سيقوم بفحص الشيت كل 60 ثانية وإرسال رسائل للطلاب المفعلين
-    job_queue = application.job_queue
-    job_queue.run_repeating(activation_monitor, interval=60, first=10)
+    if application.job_queue:
+        application.job_queue.run_repeating(activation_monitor, interval=60, first=10)
     
-    # 3. بدء تشغيل المحرك
+    # 3. بدء تشغيل المحرك مع تنظيف التحديثات القديمة
+    # --------------------------------------------------------------------------
     await application.initialize()
     await application.start()
-    await application.updater.start_polling()
+    
+    # ملاحظة: drop_pending_updates=True تساعد في حل خطأ Conflict 409
+    await application.updater.start_polling(drop_pending_updates=True)
+    
+#=======================================
+
+#=======================================
+# --- [ تصحيح واجهة إدارة الدورات ] ---
+#=======================================
+    elif data == "manage_courses":
+        # التحقق من الصلاحيات قبل عرض القائمة
+        from sheets import check_user_permission
+        user_id = query.from_user.id
+        bot_token = context.bot.token
+        
+        # السماح للمالك أو من لديه صلاحية "صلاحية_الدورات"
+        config = get_bot_config(bot_token)
+        admin_ids = [int(i.strip()) for i in str(config.get("admin_ids", "0")).split(",") if i.strip().isdigit()]
+        is_owner = user_id in admin_ids
+
+        if is_owner or check_user_permission(bot_token, user_id, "صلاحية_الدورات"):
+            text = "📚 <b>إدارة واستيراد الدورات:</b>\n\nاختر الطريقة التي تفضلها لإضافة البيانات:"
+            keyboard = [
+                [InlineKeyboardButton("➕ إضافة دورة فردية", callback_data="start_add_course")],
+                [InlineKeyboardButton("📥 إضافة نصية بالجملة (|)", callback_data="bulk_add_start")],
+                [
+                    InlineKeyboardButton("📄 ملف CSV / Excel", callback_data="csv_import_start"),
+                    InlineKeyboardButton("🔗 رابط Google Sheet", callback_data="sheet_link_import")
+                ],
+                [InlineKeyboardButton("🔙 عودة للوحة التحكم", callback_data="back_to_admin")]
+            ]
+            
+            await query.edit_message_text(
+                text=text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode="HTML"
+            )
+        else:
+            await query.answer("🚫 لا تملك صلاحية الوصول إلى إدارة الدورات.", show_alert=True)
+            
+#=======================================
+
 
 
 # --------------------------------------------------------------------------
