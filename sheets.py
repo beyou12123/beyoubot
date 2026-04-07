@@ -429,7 +429,6 @@ def save_bot(owner_id, bot_type, bot_name, bot_token):
 
         # --- [ حجر الأساس: ربط البوت بنظام المزامنة والذاكرة المؤقتة ] ---
         ensure_bot_sync_row(bot_token, owner_id)
-
         return True
     except Exception as e:
         print(f"❌ خطأ حرج في save_bot المحدثة: {e}")
@@ -771,26 +770,40 @@ def seed_default_settings(bot_token):
         return False
 
 # --------------------------------------------------------------------------
+# --- [ كتلة تحديث الميتا والتحقق من سلامة الهيكل ] ---
+# تقوم دالة update_meta_info بتسجيل حالة المحرك وإصدار المخطط في ورقة _meta لضمان التوافق.
+# تقوم دالة verify_setup بفحص كافة أوراق العمل والتأكد من مطابقة الأعمدة للهيكل المعتمد.
+
 def update_meta_info():
+    """تحديث سجلات النظام وإصدار الهيكل في ورقة الميتا لضمان صحة عمل المحرك"""
     try:
+        # استدعاء ورقة الميتا من الكاش الداخلي
         meta_ws = _ws_cache.get("_meta")
         if meta_ws:
+            # مسح البيانات القديمة لتجنب تداخل الإصدارات
             meta_ws.clear()
+            # إعداد مصفوفة البيانات الجديدة (الإصدار، حالة المحرك، تاريخ التحديث)
             meta_data = [
                 ["key", "value", "updated_at"], 
                 ["version", SCHEMA_VERSION, get_system_time("date")], 
                 ["engine_status", "HEALTHY", datetime.now().isoformat()]
             ]
+            # تنفيذ الكتابة عبر الوسيط الذكي لضمان تجاوز حدود API جوجل
             safe_api_call(meta_ws.update, 'A1', meta_data)
     except Exception as e: 
         print(f"❌ فشل ميتا: {e}")
 
 def verify_setup(structures):
+    """الفحص النهائي: التأكد من أن كل ورقة تم إنشاؤها تحتوي على كافة الأعمدة المطلوبة"""
     for config in structures:
+        # جلب الورقة من الكاش
         ws = _ws_cache.get(config["name"])
+        # التحقق من وجود الورقة ومطابقة عناوين الأعمدة (Headers) للهيكل الأصلي
         if not ws or set(ws.row_values(1)) != set(config["cols"]): 
             return False
+    # في حال اجتياز كافة الفحوصات يعيد نجاح كامل للتهيئة
     return True
+
 # --------------------------------------------------------------------------
 # إضافة قسم 
 def add_new_category(bot_token, cat_id, cat_name):
@@ -1327,8 +1340,6 @@ def add_new_group(bot_token, group_id, name, course_id, days, timing, teacher_id
         ]
         sheet.append_row(row)
         update_global_version(bot_token)
-
-
         return True
     except Exception as e:
         print(f"❌ خطأ في إضافة المجموعة: {e}")
@@ -1392,8 +1403,7 @@ def delete_group_by_id(bot_token, group_id):
             if len(row) >= 3 and str(row[0]) == str(bot_token) and str(row[2]) == str(group_id):
                 sheet.delete_rows(i + 1)
             update_global_version(bot_token)
-
-                return True
+            return True
         return False
     except Exception as e:
         print(f"❌ Error deleting group: {e}")
@@ -1454,7 +1464,6 @@ def add_question_to_bank(bot_token, data):
         sheet.append_row(row)
                 # إبلاغ النظام برفع رقم الإصدار لتحديث بنك الأسئلة في الرام فوراً
         update_global_version(bot_token)
-
         return True
     except Exception as e:
         print(f"❌ خطأ في بنك الأسئلة: {e}")
@@ -1489,7 +1498,6 @@ def create_auto_quiz(bot_token, data):
         sheet.append_row(row)
                 # إبلاغ النظام برفع رقم الإصدار لتحديث بنك الأسئلة في الرام فوراً
         update_global_version(bot_token)
-
         return True
     except Exception as e:
         print(f"❌ خطأ إنشاء اختبار: {e}")
@@ -1525,7 +1533,7 @@ def ensure_permission_row_exists(bot_token, person_id):
             new_row = [str(bot_token), str(person_id)] + ["FALSE"] * 9 + ["", "", "FALSE"]
             sheet.append_row(new_row)
             return True
-        return True # موجود مسبقاً
+
     except Exception as e:
         print(f"❌ خطأ في تأسيس الصلاحية: {e}")
         return False
@@ -1740,7 +1748,6 @@ def save_discount_code_full(bot_token, data):
         sheet.append_row(row)
         # رفع إصدار البوت لتحديث الرام فوراً ليعلم النظام بالكود الجديد
         update_global_version(bot_token)
-
         return True
     except Exception as e:
         print(f"❌ خطأ في مطابقة الأعمدة: {e}")
@@ -1810,7 +1817,6 @@ def link_user_to_inviter(bot_token, student_id, inviter_id):
             
         # 3. رفع إصدار البوت فوراً لتحديث الرام في العمليات القادمة
         update_global_version(bot_token)
-            
         return True
     except Exception as e:
         print(f"❌ خطأ في نظام الإحالة الديناميكي: {e}")
@@ -1865,7 +1871,6 @@ def redeem_points_for_course(bot_token, user_id, course_price):
                     
                     # 4. رفع إصدار البوت فوراً لتحديث الرام في الطلب القادم
                     update_global_version(bot_token)
-                    
                     return True, new_balance
                     
         return False, 0
@@ -2038,7 +2043,6 @@ def record_student_submission(bot_token, data):
         ]
         sheet.append_row(row)
         update_global_version(bot_token)
-
         return True
     except Exception as e:
         print(f"❌ Error Recording Submission: {e}")
