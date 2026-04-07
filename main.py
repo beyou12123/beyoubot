@@ -186,31 +186,19 @@ async def select_type(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     return GETTING_TOKEN
 
-#=======================================
-# --- [ تصحيح دالة استقبال التوكن لضمان التصنيع ] ---
-#=======================================
 async def receive_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """التحقق من صحة التوكن والانتقال النهائي للحفظ والتشغيل"""
+    """التحقق من صحة التوكن وطلب اسم البوت"""
     token = update.message.text.strip()
     
-    # 1. التحقق من تنسيق التوكن (Regex)
-#    --------------------------------------------------------------------------
+    # التحقق من تنسيق التوكن باستخدام التعبيرات النمطية (Regex)
     if not re.match(r'^\d+:[A-Za-z0-9_-]{35,}$', token):
         await update.message.reply_text("❌ التوكن غير صحيح! يرجى إرسال توكن صالح من @BotFather")
         return GETTING_TOKEN
     
-    # 2. تخزين البيانات في ذاكرة الجلسة
     context.user_data["bot_token"] = token
-    
-    # 3. [تعديل جوهري]: استدعاء محرك الإنهاء والانتظار حتى يكتمل الحفظ
- #   --------------------------------------------------------------------------
-    # نستخدم await لضمان أن دالة finalize_bot أكملت تسجيل البيانات في جوجل شيت
+    # ملاحظة: تم الإبقاء على الوظيفة كما هي بناءً على النسخة السابقة مع تفعيل التجاوز التلقائي لاحقاً
     await finalize_bot(update, context)
-    
-    # إنهاء حالة المحادثة في المصنع بعد نجاح التشغيل
     return ConversationHandler.END
-#=======================================
-
 
 # --------------------------------------------------------------------------
 # --- المحرك الديناميكي الأوتوماتيكي المطور ---
@@ -639,9 +627,6 @@ async def finalize_module_name(update: Update, context: ContextTypes.DEFAULT_TYP
 # --------------------------------------------------------------------------
 
 # إعداد الـ ConversationHandler لإنشاء البوت (مع خطوة الاسم المخصص)
-#=======================================
-# نظام المحادثة المطور لإنشاء البوت (تم إصلاح التحذير)
-#=======================================
 create_bot_conv = ConversationHandler(
     entry_points=[
         MessageHandler(filters.Regex('^➕ إنشاء بوت$'), start_create_bot),
@@ -657,11 +642,7 @@ create_bot_conv = ConversationHandler(
         CallbackQueryHandler(cancel, pattern="^cancel_action$"),
         MessageHandler(filters.Regex('^🔙 العودة$'), cancel)
     ],
-    per_message=True, # <--- هذه هي الإضافة التي ستحل تحذير PTBUserWarning نهائياً
 )
-#=======================================
-
-
 
 # إعداد الـ ConversationHandler لرفع الموديولات للمطور
 admin_module_conv = ConversationHandler(
