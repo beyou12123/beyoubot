@@ -1978,11 +1978,28 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
             cat_id                               # 18. معرف_القسم
         )
                     
-            if success:
-                sync_bot_limits(context, bot_token)
-                await update.message.reply_text(f"✅ <b>تم الحفظ!</b>\n🆔 المعرف: {c_id}", reply_markup=get_admin_panel(), parse_mode="HTML")
-                context.user_data['action'] = None
-            return
+#=======================================
+# تصحيح الجزء الخاص بحفظ الدورة (السطر 1981 وما حوله)
+#=======================================
+        if success:
+            # تحديث الذاكرة المؤقتة للقيود فوراً بعد الحفظ
+            [span_4](start_span)sync_bot_limits(context, bot_token)[span_4](end_span)
+            
+            # إرسال رسالة التأكيد للمسؤول
+            await update.message.reply_text(
+                f"✅ <b>تم الحفظ بنجاح!</b>\n🆔 المعرف: <code>{course_id}</code>", 
+                reply_markup=get_admin_panel(), 
+                parse_mode="HTML"
+            [span_5](start_span))
+            
+            # تنظيف حالة الإجراء لمنع تكرار التنفيذ
+            context.user_data['action'] = None[span_5](end_span)
+        else:
+            [span_6](start_span)await update.message.reply_text("❌ حدث خطأ أثناء الحفظ في قاعدة البيانات.")[span_6](end_span)
+        
+        [span_7](start_span)return[span_7](end_span)
+#=======================================
+
 # نهاية تسلسل اضافة دورة
 # --------------------------------------------------------------------------
         # تسلسل إضافة مدرب
