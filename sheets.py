@@ -70,7 +70,7 @@ def get_sheets_structure():
         {"name": "الإعدادات","cols": ["bot_id", "المفتاح_البرمجي", "العنوان", "القيمة", "ملاحظات"],"color": {"red": 0.8, "green": 0.9, "blue": 1}},
         {"name": "الهيكل_التنظيمي_والصلاحيات", "cols": ["bot_id", "معرف_الفرع", "ID_الموظف_أو_المدرب", "صلاحية_الأقسام", "صلاحية_الدورات", "صلاحية_المدربين", "صلاحية_الموظفين", "صلاحية_الإحصائيات", "صلاحية_الإذاعة", "صلاحية_الرسائل_الخاصة", "صلاحية_الكوبونات", "صلاحية_أكواد_الخصم", "الدورات_المسموحة", "المجموعات_المسموحة", "تحديث_السيرفر"]}, 
         {"name": "المستخدمين", "cols": ["ID المستخدم","اسم المستخدم","تاريخ التسجيل","الحالة","نوع الاشتراك","عدد البوتات","آخر نشاط","اللغة","مصدر التسجيل","معرف إحالة","رصيد"], "color": {"red": 0.85, "green": 0.92, "blue": 0.83}},
-        {"name": "البوتات_المصنوعة", "cols": ["ID المالك","نوع البوت","اسم البوت","التوكن","حالة التشغيل","bot_id","username_bot","تاريخ الإنشاء","آخر تشغيل","عدد المستخدمين","عدد الرسائل","الحالة التقنية","webhook_url","api_type","plan","expiration_date","is_active","errors_log"], "color": {"red": 0.81, "green": 0.88, "blue": 0.95}},
+        {"name": "البوتات_المصنوعة", "cols": ["ID المالك","نوع البوت","اسم البوت","التوكن","حالة التشغيل","bot_id","username_bot","تاريخ الإنشاء","آخر تشغيل","عدد المستخدمين","عدد الرسائل","الحالة التقنية","webhook_url","api_type","plan","expiration_date","is_active","errors_log","تاريخ_آخر_تجديد","سعر_الاشتراك","رصيد_البوت","الحد_الأقصى_للطلاب","الحد_الأقصى_للدوات","الحد_الأقصى_للاقسام", "ميزة_الذكاء_الاصطناعي", "ميزة_رفع_وتصدير_البيانات_اكسل" ,"معرف_الفاتورة","متوسط_زمن_الاستجابة","استخدام_CPU","استخدام_الذاكرة","المستخدمون_النشطون_يومياً","المستخدمون_النشطون_شهرياً","معدل_الاحتفاظ","تاريخ_آخر_تحديث_للتوكن","حالة_التوكن","حالة_الدفع","طريقة_الدفع","دورة_الفوترة","إصدار_البوت","بيئة_التشغيل","إعادة_تشغيل_تلقائي","نموذج_الذكاء_الاصطناعي","استهلاك_التوكنات_AI","تكلفة_AI"], color: {"red":0.81,"green":0.88,"blue":0.95} }, 
         {"name": "إعدادات_المحتوى", "cols": ["bot_id","الرسالة الترحيبية","القوانين","رد التوقف","auto_reply","ai_enabled","welcome_enabled","buttons","banned_words","admin_ids","language","theme","delay_response","broadcast_enabled","custom_commands", "welcome_morning", "welcome_noon", "welcome_evening", "welcome_night"], "color": {"red": 1.0, "green": 0.95, "blue": 0.8}},
         {"name": "الإحصائيات", "cols": ["bot_id","daily_users","messages_count","new_users","blocked_users","date"], "color": {"red": 0.92, "green": 0.82, "blue": 0.86}},
         {"name": "السجلات", "cols": ["bot_id","type","message","time"], "color": {"red": 0.93, "green": 0.93, "blue": 0.93}},
@@ -83,7 +83,7 @@ def get_sheets_structure():
         {"name": "إدارة_الحملات_الإعلانية", "cols": ["bot_id", "معرف_الفرع","معرف_الدورة", "معرف_الحملة","المنصة","تاريخ_البداية","تاريخ_النهاية","الميزانية","عدد_المسجلين","الحالة","ID_المسوق"] },
         {"name": "أكواد_الخصم", "cols": ["bot_id", "معرف_الفرع", "معرف_الخصم","نوع_الخصم","الوصف","قيمة_الخصم","الحد_الأقصى_للاستخدام","عدد_الاستخدامات","تاريخ_البداية","تاريخ_الانتهاء","الحالة","معرف_الدورة","اسم_الموظف","معرف_الحملة_التسويقية","ملاحظات"]},
         {"name": "الكوبونات", "cols": ["bot_id", "معرف_الفرع", "معرف_الكوبون","معرف_الكوبون","معرف_الطالب","قيمة_الخصم","نوع_الخصم","الحد_الأقصى_للاستخدام","حالة_الكوبون","تاريخ_الإنشاء","تاريخ_الانتهاء","ملاحظات"]},
-        {"name": "الدورات_التدريبية", "cols": ["bot_id", "معرف_الفرع", "معرف_الدورة", "اسم_الدورة", "عدد_الساعات", "تاريخ_البداية", "تاريخ_النهاية", "نوع_الدورة", "سعر_الدورة", "الحد_الأقصى", "المتطلبات", "اسم_الموظف", "معرف_الموظف", "معرف_الحملة_التسويقية", "معرف_المدرب", "ID_المدرب", "اسم_المدرب", "معرف_القسم"]},
+        {"name": "الدورات_التدريبية", "cols": ["bot_id", "معرف_الفرع", "معرف_الدورة", "اسم_الدورة", "الوصف", "تاريخ_البداية", "تاريخ_النهاية", "نوع_الدورة", "سعر_الدورة", "الحد_الأقصى", "المتطلبات", "اسم_الموظف", "معرف_الموظف", "معرف_الحملة_التسويقية", "معرف_المدرب", "ID_المدرب", "اسم_المدرب", "معرف_القسم"]},
         {"name": "الأسئلة_الشائعة", "cols": ["bot_id" ,"معرف_الفرع", "معرف_القسم","معرف_الدورة","اسم_الدورة", "محتوى_السؤال_مع_الإجابة","الحالة","ترتيب_العرض","تاريخ_الإنشاء","معرف_الفرع","اسم_الفرع","ملاحظات"]},
         {"name": "المدربين", "cols": ["bot_id","معرف_الفرع ","ID", "اسم_المدرب", "التخصص", "رقم_الهاتف", "البريد_الإلكتروني", "السيرة_الذاتية", "رابط_الصورة", "الحالة", "bot_id", "معرف_الفرع", "اسم_الفرع", "عدد_الدورات_الحالية", "تاريخ_التعاقد", "ملاحظات"], "color": {"red": 0.88, "green": 0.95, "blue": 0.88}}, 
         {"name": "إدارة_الموظفين", "cols": ["bot_id","معرف_الفرع ","ID","معرف_الموظف","الاسم_الكامل","الجنس","تاريخ_الميلاد","رقم_الهوية","العنوان","الصورة_الشخصية","التخصص","المسمى_الوظيفي","المواد_التي_يدرسها","المؤهل_العلمي","سنوات_الخبرة","الشهادات_المهنية","مستوى_التقييم","رقم_الهاتف","رقم_واتساب","رقم_طوارئ","البريد_الإلكتروني","كلمة_المرور","نوع_العقد","تاريخ_التعيين","تاريخ_بداية_العقد","تاريخ_نهاية_العقد","عدد_ساعات_العمل","الدرجة_الوظيفية","الحالة_الوظيفية","الراتب_الأساسي","نسبة_الحوافز","البدلات","الخصومات","إجمالي_الراتب","طريقة_الدفع","رقم_الحساب_المالي","المشرف_المباشر","الصلاحيات","تاريخ_آخر_تسجيل_دخول","حالة_الحساب","اسم_الموظف"] },
@@ -307,15 +307,18 @@ def save_user(user_id, username):
         print(f"❌ خطأ تسجيل مستخدم: {e}")
         return False
 # --------------------------------------------------------------------------
+# دالة الحفظ وتهيئة البوت
+
 def save_bot(owner_id, bot_type, bot_name, bot_token):
     global bots_sheet, content_sheet
     if bots_sheet is None or content_sheet is None:
         if not connect_to_google(): return False
     try:
         now = get_system_time("full")
+        today = get_system_time("date")
         bot_token = str(bot_token).strip()
         
-        # 1. جلب اسم البوت واليوزرنايم تلقائياً لضمان الدقة
+        # 1. جلب معلومات البوت من تيليجرام لضمان الدقة
         real_bot_name = bot_name
         username_bot = ""
         try:
@@ -326,25 +329,80 @@ def save_bot(owner_id, bot_type, bot_name, bot_token):
                 username_bot = res["result"]["username"]
         except: pass
 
-        # 2. معالجة ورقة "البوتات_المصنوعة" (تحديث أو إضافة)
+        # 2. زرع الإعدادات الافتراضية أولاً لضمان وجود القيم
+        seed_default_settings(bot_token)
+
+        # --- [ جلب القيم الحقيقية من ورقة الإعدادات قبل الحفظ ] ---
+        sub_price = get_bot_setting(bot_token, "subscription_price", default="100")
+        max_students = get_bot_setting(bot_token, "maximum_number_students", default="100")
+        max_courses = get_bot_setting(bot_token, "maximum_number_courses", default="10")
+        max_sections = get_bot_setting(bot_token, "maximum_number_sections", default="3")
+        ai_cost_val = get_bot_setting(bot_token, "AI_cost", default="100")
+        op_env = get_bot_setting(bot_token, "operating_environment", default="Production")
+
+        # 3. بناء مصفوفة البيانات الكاملة (44 عموداً) بالترتيب الدقيق والمحدث
         bot_row = [
-            str(owner_id), bot_type, real_bot_name, bot_token, 
-            "نشط", bot_token.split(':')[0], username_bot, 
-            now, "", 0, 0, "جيد", "", "polling", "free", "", "true", ""
+            str(owner_id),          # 1. ID المالك
+            bot_type,               # 2. نوع البوت
+            real_bot_name,          # 3. اسم البوت
+            bot_token,              # 4. التوكن
+            "نشط",                  # 5. حالة التشغيل
+            bot_token.split(':')[0],# 6. bot_id
+            username_bot,           # 7. username_bot
+            now,                    # 8. تاريخ الإنشاء
+            now,                    # 9. آخر تشغيل
+            0,                      # 10. عدد المستخدمين
+            0,                      # 11. عدد الرسائل
+            "جيد",                  # 12. الحالة التقنية
+            "",                     # 13. webhook_url
+            "polling",              # 14. api_type
+            "free",                 # 15. plan
+            "",                     # 16. expiration_date
+            "true",                 # 17. is_active
+            "",                     # 18. errors_log
+            today,                  # 19. تاريخ_آخر_تجديد
+            str(sub_price),         # 20. سعر_الاشتراك (ديناميكي)
+            "0",                    # 21. رصيد_البوت
+            str(max_students),      # 22. الحد_الأقصى_للطلاب (ديناميكي)
+            str(max_courses),       # 23. الحد_الأقصى_للدوات (ديناميكي)
+            str(max_sections),      # 24. الحد_الأقصى_للاقسام (ديناميكي)
+            "TRUE",                 # 25. ميزة_الذكاء_الاصطناعي
+            "FALSE",                # 26. ميزة_رفع_وتصدير_البيانات_اكسل (القيمة الافتراضية المطلوبة)
+            f"INV-{uuid.uuid4().hex[:6].upper()}", # 27. معرف_الفاتورة
+            "0ms",                  # 28. متوسط_زمن_الاستجابة
+            "0%",                   # 29. استخدام_CPU
+            "0MB",                  # 30. استخدام_الذاكرة
+            0,                      # 31. المستخدمون_النشطون_يومياً
+            0,                      # 32. المستخدمون_النشطون_شهرياً
+            "100%",                 # 33. معدل_الاحتفاظ
+            now,                    # 34. تاريخ_آخر_تحديث_للتوكن
+            "Valid",                # 35. حالة_التوكن
+            "Pending",              # 36. حالة_الدفع
+            "Manual",               # 37. طريقة_الدفع
+            "Monthly",              # 38. دورة_الفوترة
+            "1.0.0",                # 39. إصدار_البوت
+            str(op_env),            # 40. بيئة_التشغيل (ديناميكي)
+            "true",                 # 41. إعادة_تشغيل_تلقائي
+            "Gemini-1.5-Flash",     # 42. نموذج_الذكاء_الاصطناعي
+            0,                      # 43. استهلاك_التوكنات_AI
+            str(ai_cost_val)        # 44. تكلفة_AI (ديناميكي)
         ]
         
+        # 4. معالجة ورقة "البوتات_المصنوعة" (تحديث شامل لكافة الأعمدة الـ 44)
         try:
+            # البحث عن التوكن لضمان التحديث وعدم التكرار
             cell_bot = bots_sheet.find(bot_token)
-            # إذا وجده، نحدث السطر
-            range_to_update = f"A{cell_bot.row}:R{cell_bot.row}"
+            # تحديث الصف بالكامل من A إلى AR (44 عموداً)
+            last_col_letter = "AR" 
+            range_to_update = f"A{cell_bot.row}:{last_col_letter}{cell_bot.row}"
             bots_sheet.update(range_to_update, [bot_row])
-            print(f"♻️ تم تحديث بيانات البوت في السطر {cell_bot.row}")
+            print(f"♻️ تم تحديث كافة بيانات البوت (44 عموداً) في السطر {cell_bot.row}")
         except:
-            # إذا لم يجده، نضيفه
+            # إضافة صف جديد بالكامل إذا لم يكن موجوداً
             bots_sheet.append_row(bot_row)
-            print("✨ تم إضافة بوت جديد")
+            print("✨ تم إضافة بوت جديد ببياناته الكاملة (44 عموداً) بناءً على الإعدادات")
 
-        # 3. حل مشكلة تكرار "إعدادات_المحتوى" (فحص مستقل)
+        # 5. إدارة ورقة "إعدادات_المحتوى" لضمان الملكية
         content_row = [
             bot_token, "أهلاً بك! 🤖", "لا توجد قوانين حالياً.", 
             "عذراً، البوت متوقف مؤقتاً.", "false", "false", "true", "[]", "[]", 
@@ -352,20 +410,20 @@ def save_bot(owner_id, bot_type, bot_name, bot_token):
         ]
 
         try:
-            # هنا يكمن الحل: نبحث عن التوكن في ورقة المحتوى أيضاً
             cell_content = content_sheet.find(bot_token)
-            # إذا وجده، نحدث فقط معرف الأدمن لضمان ملكية البوت ولا نكرر الصف
+            # تحديث معرف المالك لضمان السيطرة
             content_sheet.update_cell(cell_content.row, 10, str(owner_id))
-            print(f"✅ التوكن موجود مسبقاً في المحتوى، تم تحديث المالك فقط")
+            print(f"✅ تم تحديث ملكية المحتوى للتليجرام ID: {owner_id}")
         except:
-            # نضيف صف المحتوى فقط إذا لم يكن التوكن موجوداً إطلاقاً
             content_sheet.append_row(content_row)
-            print("📝 تم إنشاء إعدادات محتوى جديدة")
+            print("📝 تم إنشاء سجل إعدادات المحتوى لأول مرة")
 
         return True
     except Exception as e:
-        print(f"❌ خطأ حرج في save_bot: {e}")
+        print(f"❌ خطأ حرج في save_bot المحدثة: {e}")
         return False
+
+
 # --------------------------------------------------------------------------
 
 def update_content_setting(bot_id, column_name, new_value):
@@ -502,6 +560,57 @@ def setup_bot_factory_database(bot_token=None):
             
             # قراءة العناوين الحالية
             current_headers = worksheet.row_values(1)
+            # --- [ MIGRATION SYSTEM: إضافة الأعمدة الجديدة بدون حذف القديمة ] ---
+            try:
+                # الأعمدة الجديدة التي غير موجودة حالياً
+                new_columns = [col for col in headers if col not in current_headers]
+
+                if new_columns:
+                    print(f"🆕 اكتشاف أعمدة جديدة في {sheet_name}: {new_columns}")
+
+                    # حساب عدد الأعمدة الحالي
+                    try:
+                        current_col_count = len(current_headers)
+                    except:
+                        current_col_count = 0
+
+                    # توسيع عدد الأعمدة في الشيت إذا لزم
+                    try:
+                        required_cols = current_col_count + len(new_columns)
+                        safe_api_call(
+                            worksheet.add_cols,
+                            len(new_columns)
+                        )
+                        time.sleep(1)
+                    except Exception as e:
+                        print(f"⚠️ فشل في توسيع الأعمدة في {sheet_name}: {e}")
+
+                    # إعادة قراءة الهيدرز بعد التوسعة
+                    try:
+                        current_headers = worksheet.row_values(1)
+                    except:
+                        current_headers = current_headers
+
+                    # تحديد موقع البداية للإضافة
+                    start_col_index = len(current_headers)
+
+                    # تجهيز صف الهيدر الجديد
+                    updated_headers = current_headers + new_columns
+
+                    try:
+                        safe_api_call(
+                            worksheet.update,
+                            '1:1',
+                            [updated_headers]
+                        )
+                        print(f"✅ تمت إضافة الأعمدة الجديدة في {sheet_name}")
+                        time.sleep(1)
+                    except Exception as e:
+                        print(f"❌ فشل تحديث الهيدرز بعد الإضافة في {sheet_name}: {e}")
+
+            except Exception as e:
+                print(f"❌ خطأ في نظام Migration داخل {sheet_name}: {e}")
+                
             time.sleep(0.6) # فاصل زمني بعد عملية القراءة
             
             if set(current_headers) != set(headers):
@@ -577,20 +686,53 @@ def seed_default_settings(bot_token):
                 "note": "الحد الأدنى من النقاط المطلوب لفتح دورة مجانية"
             },
             {
+                "key": "AI_cost",
+                "title": "تكلفة_AI",
+                "value": "100",
+                "note": "تكلفة استخدام الذكاء الاصطناعي لكل بوت"
+            },
+            {
+                "key": "operating_environment",
+                "title": "بيئة_التشغيل",
+                "value": "Ar",
+                "note": "تحدد بيئة تشغيل البوت (إنتاج/تجريبي)"
+            },
+            {
+                "key": "subscription_price",
+                "title": "سعر_الاشتراك",
+                "value": "100",
+                "note": "السعر المطلوب للاشتراك في البوت"
+            },
+            {
+                "key": "maximum_number_sections",
+                "title": "الحد الأقصى للاقسام",
+                "value": "3",
+                "note": "أقصى عدد أقسام يمكن للبوت إدارتها"
+            },
+            {
+                "key": "maximum_number_courses",
+                "title": "الحد الأقصى للدورات",
+                "value": "10",
+                "note": "أقصى عدد دورات يمكن للبوت إدارتها"
+            },
+            {
+                "key": "maximum_number_students",
+                "title": "الحد الأقصى للطلاب",
+                "value": "100",
+                "note": "أقصى عدد طلاب يمكن للبوت خدمتهم"
+            },
+            {
                 "key": "currency_unit",
                 "title": "وحدة العملة",
                 "value": "نقطة",
                 "note": "الاسم الذي يظهر بجانب الرصيد (مثلاً: نقطة أو ريال)"
-            }, 
-            
+            },
             {
                 "key": "homework_grade",
-                "title": "درجة الواجبات", 
-                "value": "10", 
+                "title": "درجة الواجبات",
+                "value": "10",
                 "note": "درجة الواجبات اليومية للطلاب"
             }
-
-            
         ]
 
         # 2. فحص كل مفتاح لضمان عدم التكرار لنفس البوت
@@ -1788,8 +1930,156 @@ def record_student_submission(bot_token, data):
         return False
 
 # --------------------------------------------------------------------------
+# دالة فحص الصلاحيات والقيود للبوتات 
+def check_bot_limits(bot_token, feature_name):
+    """
+    المحرك المركزي لفحص القيود (الدورات، الأقسام، الطلاب، والذكاء الاصطناعي)
+    feature_name: "course", "section", "student", "ai", "excel"
+    """
+    global bots_sheet
+    if bots_sheet is None: connect_to_google()
+    
+    try:
+        # 1. جلب بيانات البوت من ورقة "البوتات_المصنوعة"
+        cell = bots_sheet.find(str(bot_token).strip())
+        if not cell: return False, "البوت غير مسجل في النظام."
+        
+        bot_data = bots_sheet.row_values(cell.row)
+        # توضيح الفهارس بناءً على الهيكل الـ 44 عموداً
+        plan = bot_data[14]           # العمود 15: plan
+        created_at_str = bot_data[7]  # العمود 8: تاريخ الإنشاء
+        is_active = bot_data[16]      # العمود 17: is_active
+        
+        # فحص حالة النشاط العامة
+        if str(is_active).upper() != "TRUE":
+            return False, "عذراً، هذا البوت متوقف حالياً من قبل الإدارة."
 
+        # 2. منطق الذكاء الاصطناعي (الفترة التجريبية 30 يوم)
+        if feature_name == "ai":
+            from datetime import datetime
+            # تحويل تاريخ الإنشاء لمقارنته
+            created_at = datetime.strptime(created_at_str, "%Y-%m-%d %H:%M:%S")
+            days_passed = (datetime.now() - created_at).days
+            
+            ai_feature_status = str(bot_data[24]).upper() # العمود 25: ميزة_الذكاء_الاصطناعي
+            
+            # إذا مر أكثر من 30 يوم والباقة مجانية، يتم القفل آلياً
+            if days_passed > 30 and str(plan).lower() == "free":
+                # تحديث الشيت آلياً إلى FALSE عند المحاولة بعد 30 يوم
+                bots_sheet.update_cell(cell.row, 25, "FALSE")
+                return False, "انتهت الفترة التجريبية لمساعد الذكاء الاصطناعي (30 يوم). يرجى الترقية للاستمرار."
+            
+            return (ai_feature_status == "TRUE"), "ميزة الذكاء الاصطناعي غير مفعلة في باقتك."
+
+        # 3. منطق حدود الأقسام والدورات
+        if feature_name == "section":
+            max_sections = int(bot_data[23]) # العمود 24: الحد_الأقصى_للاقسام
+            from sheets import departments_sheet
+            all_deps = departments_sheet.get_all_records()
+            current_count = sum(1 for d in all_deps if str(d.get('bot_id')) == str(bot_token))
+            
+            if current_count >= max_sections:
+                return False, f"لقد وصلت للحد الأقصى للأقسام ({max_sections}). ارتقِ بباقتك لفتح المزيد."
+
+        if feature_name == "course":
+            max_courses = int(bot_data[22]) # العمود 23: الحد_الأقصى_للدوات
+            from sheets import courses_sheet
+            all_crs = courses_sheet.get_all_records()
+            current_count = sum(1 for c in all_crs if str(c.get('bot_id')) == str(bot_token))
+            
+            if current_count >= max_courses:
+                return False, f"لقد وصلت للحد الأقصى للدورات ({max_courses}). ارتقِ بباقتك لإضافة دورات جديدة."
+
+        # 4. منطق ميزة الإكسل
+        if feature_name == "excel":
+            excel_status = str(bot_data[25]).upper() # العمود 26: ميزة_رفع_وتصدير_البيانات_اكسل
+            if excel_status != "TRUE":
+                return False, "ميزة استيراد وتصدير بيانات الإكسل متاحة فقط في الباقة الاحترافية."
+
+        return True, "Success"
+
+    except Exception as e:
+        print(f"❌ خطأ في محرك القيود: {e}")
+        return False, "حدث خطأ أثناء التحقق من الصلاحيات."
+
+
+# دالة التخزين المؤقت 
+def sync_bot_limits(context, bot_token):
+    """جلب بيانات البوت من الشيت وتخزينها في ذاكرة البوت المؤقتة"""
+    global bots_sheet
+    try:
+        cell = bots_sheet.find(str(bot_token).strip())
+        if cell:
+            # جلب الصف بالكامل (44 عموداً)
+            row = bots_sheet.row_values(cell.row)
+            
+            # تخزين البيانات في قاموس منظم داخل الذاكرة
+            context.bot_data['limits'] = {
+                'plan': row[14],               # plan
+                'created_at': row[7],          # تاريخ الإنشاء
+                'max_students': int(row[21]),  # الحد_الأقصى_للطلاب
+                'max_courses': int(row[22]),   # الحد_الأقصى_للدورات
+                'max_sections': int(row[23]),  # الحد_الأقصى_للاقسام
+                'ai_active': str(row[24]).upper() == "TRUE",
+                'excel_active': str(row[25]).upper() == "TRUE",
+                'last_sync': get_system_time("full")
+            }
+            return True
+    except Exception as e:
+        print(f"❌ فشل مزامنة الذاكرة: {e}")
+    return False
+ 
 # --------------------------------------------------------------------------
+# --- 1. جلب قائمة الفروع ---
+def get_all_branches(bot_token):
+    """يعيد قائمة بالفروع: [{'id': 'معرف_الفرع', 'name': 'اسم_الفرع'}]"""
+    branches = []
+    try:
+        sheet = ss.worksheet("إدارة_الفروع")
+        records = sheet.get_all_records()
+        for r in records:
+            if str(r.get("bot_id")) == str(bot_token):
+                branches.append({
+                    "id": str(r.get("معرف_الفرع")),
+                    "name": r.get("اسم_الفرع") or "فرع بلا اسم"
+                })
+    except Exception as e:
+        print(f"❌ خطأ في جلب الفروع: {e}")
+    return branches
+
+# --- 2. جلب قائمة الموظفين ---
+def get_all_personnel(bot_token):
+    """يعيد قائمة بالموظفين: [{'id': 'ID', 'name': 'الاسم_الكامل'}]"""
+    staff = []
+    try:
+        sheet = ss.worksheet("إدارة_الموظفين")
+        records = sheet.get_all_records()
+        for r in records:
+            if str(r.get("bot_id")) == str(bot_token):
+                staff.append({
+                    "id": str(r.get("ID")),
+                    "name": r.get("الاسم_الكامل") or r.get("اسم_الموظف") or "موظف مجهول"
+                })
+    except Exception as e:
+        print(f"❌ خطأ في جلب الموظفين: {e}")
+    return staff
+
+# --- 3. جلب قائمة المدربين ---
+def get_all_coaches_list(bot_token):
+    """يعيد قائمة بالمدربين: [{'id': 'ID', 'name': 'اسم_المدرب'}]"""
+    coaches = []
+    try:
+        sheet = ss.worksheet("المدربين")
+        records = sheet.get_all_records()
+        for r in records:
+            if str(r.get("bot_id")) == str(bot_token):
+                coaches.append({
+                    "id": str(r.get("ID")),
+                    "name": r.get("اسم_المدرب") or "مدرب مجهول"
+                })
+    except Exception as e:
+        print(f"❌ خطأ في جلب المدربين: {e}")
+    return coaches
 
 # --------------------------------------------------------------------------
 
