@@ -944,26 +944,29 @@ def get_all_categories(bot_token):
 
 
 # --------------------------------------------------------------------------
-#دالة حذف الدورات
+# دالة حذف الدورات
 def delete_course_by_id(bot_token, course_id):
     """حذف صف دورة محددة من الشيت بناءً على معرف الدورة والتوكن لضمان الدقة وعدم تداخل البيانات"""
     try:
         if courses_sheet is None: return False
         all_rows = courses_sheet.get_all_values()
         for i, row in enumerate(all_rows):
-            # التحقق من مطابقة التوكن (العمود 1) ومعرف الدورة (العمود 2)
-                        # التعديل: استخدام Index 2 للوصول لمعرف الدورة بدلاً من Index 1
+            # التحقق من مطابقة التوكن (العمود 1) ومعرف الدورة (العمود 3 -> Index 2)
             if len(row) >= 3 and str(row[0]) == str(bot_token) and str(row[2]) == str(course_id):
-
-                # i + 1 لأن ترقيم قاعدة البيانات يبدأ من 1 وليس 0
+                # 1. تنفيذ الحذف الفعلي من جوجل شيت
                 courses_sheet.delete_rows(i + 1)
-            update_global_version(bot_token)
-
+                
+                # 2. رفع رقم الإصدار لتحديث الرام (يجب أن يكون بمحاذاة delete_rows)
+                update_global_version(bot_token)
+                
+                # 3. العودة بنجاح (يجب أن يكون بمحاذاة delete_rows)
                 return True
+                
         return False
     except Exception as e:
         print(f"❌ Error deleting course: {e}")
         return False
+
 #دالة البحث عن مدرب
 def find_user_by_username(bot_token, username):
     """البحث عن بيانات المدرب في شيت المستخدمين باستخدام اليوزرنايم"""
