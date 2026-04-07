@@ -855,16 +855,20 @@ def update_category_name(bot_token, cat_id, new_name):
         for i, row in enumerate(all_rows):
             # العمود 1 توكن، العمود 2 ID
             if row[0] == bot_token and row[1] == cat_id:
-                # تحديث العمود الثالث (Index 3 في الشيت يبدأ من 1)
+                # 1. تحديث الخلية في جوجل شيت
                 departments_sheet.update_cell(i + 1, 3, new_name)
-            update_global_version(bot_token)
-
-
+                
+                # 2. رفع إصدار البوت فوراً لتحديث الكاش (داخل شرط الـ if)
+                update_global_version(bot_token)
+                
+                # 3. العودة بنجاح
                 return True
+                
         return False
     except Exception as e:
         print(f"❌ Error in update_category_name: {e}")
         return False
+
 
 # --------------------------------------------------------------------------
 #إضافة الدورات 
