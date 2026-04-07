@@ -3,9 +3,6 @@ import time
 from datetime import datetime
 import gspread
 
-# استيراد الأدوات اللازمة من ملف sheets لضمان الاتصال المتوافق مع المصنع
-from sheets import ss, safe_api_call, get_sheets_structure
-
 # ==========================================================================
 # كتلة الإعدادات الأساسية والمحرك العام
 # ==========================================================================
@@ -36,6 +33,9 @@ def ensure_bot_sync_row(bot_id, owner_id=None, developer_id=None):
     الوظيفة: إضافة صف جديد للبوت في ورقة 'نظام_المزامنة' عند الصنع لأول مرة.
     المكان: تُستدعى من دالة save_bot في sheets.py.
     """
+    # استيراد محلي لتجنب الخطأ الدائري
+    from sheets import ss, safe_api_call
+
     try:
         # الاتصال بورقة نظام_المزامنة المخصصة للتحكم في الكاش
         try:
@@ -85,6 +85,9 @@ def fetch_full_factory_data():
     المهمة: سحب بيانات المصنع كاملة (37 ورقة) وتخزينها في الرام.
     هذه الدالة هي المسؤولة عن ملء مستودع FACTORY_GLOBAL_CACHE بالبيانات الحقيقية.
     """
+    # استيراد محلي لتجنب الخطأ الدائري
+    from sheets import ss, get_sheets_structure
+
     global FACTORY_GLOBAL_CACHE
     try:
         # جلب الهيكل التنظيمي لكافة أوراق المصنع
@@ -167,6 +170,9 @@ def update_global_version(bot_id):
     رفع رقم الإصدار في جوجل شيت عند قيام الأدمن بأي تعديل (إضافة/حذف).
     تُحدث أيضاً الذاكرة المحلية للسيرفر فوراً لضمان الاتساق.
     """
+    # استيراد محلي لتجنب الخطأ الدائري
+    from sheets import ss
+
     try:
         sync_sheet = ss.worksheet("نظام_المزامنة")
         cell = sync_sheet.find(str(bot_id), in_column=1)
