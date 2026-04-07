@@ -60,7 +60,9 @@ def get_main_menu_inline(user_id):
         keyboard.append([InlineKeyboardButton("🛠 لوحة التحكم (للمالك)", callback_data="open_admin_dashboard")])
     return InlineKeyboardMarkup(keyboard)
 # --------------------------------------------------------------------------
-def get_types_menu_inline():
+def get_types_menu_inline(user_id):
+    hidden_dev_files = ['test_lab.py']
+ 
     keyboard = [
         [InlineKeyboardButton("📩 تواصل", callback_data="set_type_contact_bot"),
          InlineKeyboardButton("🛡 حماية", callback_data="set_type_protection_bot")],
@@ -82,6 +84,9 @@ def get_types_menu_inline():
     dynamic_buttons = []
     for file in os.listdir('.'):
         if file.endswith('.py') and file not in exclude_files:
+            if file in hidden_dev_files and user_id != ADMIN_ID:
+                continue
+        	
             module_name = file[:-3]
             # جلب الاسم الوصفي من الشيت، وإذا لم يوجد نستخدم اسم الملف كبديل
             display_name = descriptions.get(f"desc_{file}", module_name)
@@ -153,7 +158,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 # --- نظام إنشاء البوت (Conversation Flow) ---
-
 async def start_create_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """بدء عملية إنشاء بوت جديد وطلب اختيار النوع (عن طريق الأزرار الشفافة)"""
     query = update.callback_query
@@ -161,14 +165,16 @@ async def start_create_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer()
         await query.edit_message_text(
             "🛠 **مرحباً بك في قسم التصنيع**\n\nاختر نوع البوت الذي تريد إنشاءه:",
-            reply_markup=get_types_menu_inline()
+            reply_markup=get_types_menu_inline(query.from_user.id)
         )
     else:
         await update.message.reply_text(
             "🛠 **مرحباً بك في قسم التصنيع**\n\nاختر نوع البوت الذي تريد إنشاءه:",
-            reply_markup=get_types_menu_inline()
+            reply_markup=get_types_menu_inline(update.effective_user.id)
         )
     return CHOOSING_TYPE
+
+
 
 async def select_type(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """تخزين النوع المختار وطلب التوكن"""
