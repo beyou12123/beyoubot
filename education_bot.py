@@ -64,8 +64,8 @@ def get_admin_panel():
          InlineKeyboardButton("📡 الإذاعة المستهدفة", callback_data="smart_broadcast")],
         [InlineKeyboardButton("🛠 الإعدادات العامة وتجهيز النظام", callback_data="tech_settings")], 
         [InlineKeyboardButton("معلومات تجهيز النظام", callback_data="system_setup_information")],
-        [InlineKeyboardButton("📤 تصدير نسخة احتياطية", callback_data="export_data_json"),
-         InlineKeyboardButton("📥 رفع نسخة بيانات", callback_data="import_data_json")],
+        [InlineKeyboardButton("📥 تحميل نسخة احتياطية ", callback_data="export_data_json"),
+         InlineKeyboardButton("📤 رفع نسخة بيانات", callback_data="import_data_json")],
 
         [InlineKeyboardButton("❌ إغلاق", callback_data="close_panel")]
     ]
@@ -79,49 +79,62 @@ def get_employee_panel():
     text = "👨‍🏫 <b>إدارة الشؤون التعليمية :</b>\nيمكنك إضافة مدربين جدد دورات جديدة او اقسام او مجموعات أو استعراض القائمة الحالية للحذف."
     
     keyboard = [
-        [InlineKeyboardButton("📁 إدارة الأقسام", callback_data="manage_cats"), 
-         InlineKeyboardButton("📚 إدارة الدورات", callback_data="manage_courses")],
-        [InlineKeyboardButton("المكتبة الشاملة", callback_data="manage_library"), 
-         InlineKeyboardButton("الأوسمة والإنجازات", callback_data="honors_achievements")],
-        [InlineKeyboardButton("إدارة المجموعات", callback_data="manage_group"), 
-         InlineKeyboardButton("الأسئلة الشائعة", callback_data="frequently_guestions")],
-        [InlineKeyboardButton("جداول المحاضرات", callback_data="schedules_lectures"), 
-         InlineKeyboardButton("🎟 الكوبونات", callback_data="manage_coupons")],
-        [InlineKeyboardButton("الكنترول", callback_data="manage_control")],
+        [InlineKeyboardButton("📁 إدارة الأقسام", callback_data="manage_cats_employee"), 
+         InlineKeyboardButton("📚 إدارة الدورات", callback_data="manage_courses_employee")],
+        [InlineKeyboardButton("المكتبة الشاملة", callback_data="manage_library_employee"), 
+         InlineKeyboardButton("الأوسمة والإنجازات", callback_data="honors_achievements_employee")],
+        [InlineKeyboardButton("إدارة المجموعات", callback_data="manage_group_employee"), 
+         InlineKeyboardButton("الأسئلة الشائعة", callback_data="frequently_guestions_employee")],
+        [InlineKeyboardButton("جداول المحاضرات", callback_data="schedules_lectures_employee"), 
+         InlineKeyboardButton("🎟 الكوبونات", callback_data="manage_coupons_employee")],
+        [InlineKeyboardButton("الكنترول", callback_data="manage_control_employee")],
         [InlineKeyboardButton("🔙 عودة", callback_data="main_menu")]
     ]
     return InlineKeyboardMarkup(keyboard)
 
 
+#لوحة المدرب 
+def get_coach_panel():
+    """لوحة التحكم الأكاديمية الخاصة بالمدربين"""
+    text = "👨‍🏫 <b>غرفة الإدارة الأكاديمية (المدرب):</b>\nمرحباً بك! يمكنك إدارة مجموعاتك، متابعة طلابك، وتصحيح الواجبات من هنا."
+    
+    keyboard = [
+        [InlineKeyboardButton("👥 مجموعاتي الدراسية", callback_data="manage_group_coach"), 
+         InlineKeyboardButton("📚 دوراتي المتاحة", callback_data="manage_courses")],
+        [InlineKeyboardButton("📅 جدول المحاضرات", callback_data="schedules_lectures_coach"), 
+         InlineKeyboardButton("📖 المكتبة التعليمية", callback_data="manage_library_coach")],
+        [InlineKeyboardButton("📑 تصحيح الواجبات", callback_data="hw_view_submissions_coach"), 
+         InlineKeyboardButton("📝 بنك الأسئلة", callback_data="manage_q_bank_coach")],
+        [InlineKeyboardButton("🏆 الأوسمة والتقييمات", callback_data="honors_achievements_coach"), 
+         InlineKeyboardButton("🎮 غرفة الكنترول", callback_data="manage_control_coach")],
+        [InlineKeyboardButton("🔙 عودة للقائمة", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
 
-# --- [ المعالجات الأساسية - أمر البداية ] ---
+
+# --- [ المعالجات الأساسية - أمر البداية المطوّر ] ---
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """معالجة أمر /start برسائل ترحيبية ذكية ودعم نظام الإحالة"""
+    """معالجة أمر /start برسائل ترحيبية ذكية ودعم نظام الإحالة والأدوار (مالك، موظف، مدرب، طالب)"""
     from datetime import datetime
+    from sheets import get_ai_setup, save_user, link_user_to_inviter, check_user_permission
+    
     user = update.effective_user
     bot_token = context.bot.token
-    
-    # تحديد هل القادم ضغطة زر أم رسالة نصية لضمان عدم حدوث Error
     query = update.callback_query
     
     # جلب كافة الإعدادات من قاعدة البيانات
     config = get_bot_config(bot_token)
     bot_owner_id = int(config.get("admin_ids", 0))
-
-    from sheets import get_ai_setup, save_user, link_user_to_inviter
     ai_config = get_ai_setup(bot_token)
     
-    # --- [ فحص إعدادات المالك (التهيئة الأولى) ] ---
+    # --- [ 1. فحص إعدادات المالك (التهيئة الأولى) ] ---
     if user.id == bot_owner_id:
         if not ai_config or not ai_config.get('اسم_المؤسسة'):
             context.user_data['action'] = 'awaiting_institution_name'
-            
             text = (
                 "👋 <b>أهلاً بك يا دكتور!</b>\n\n"
                 "قبل البدء، يرجى إرسال <b>اسم المنصة التعليمية</b> الخاصة بك:"
             )
-
-            # التنسيق الصحيح للرد حسب نوع التحديث (زر أو رسالة) لضمان استمرار البوت
             if query:
                 await query.answer()
                 await query.edit_message_text(text, parse_mode="HTML")
@@ -129,20 +142,17 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text(text, parse_mode="HTML")
             return
 
-    # --- [ نظام الإحالة (Referral System) ] ---
-    # نضع نظام الإحالة قبل التسجيل لضمان ربط الداعي بالمدعو فوراً
+    # --- [ 2. نظام الإحالة (Referral System) ] ---
     if context.args and context.args[0].startswith("ref_"):
         inviter_id = context.args[0].replace("ref_", "")
-        # التأكد أن الشخص لا يدعو نفسه
         if str(inviter_id) != str(user.id):
             link_user_to_inviter(bot_token, user.id, inviter_id)
 
     # تسجيل المستخدم في القاعدة
     save_user(user.id, user.username)
 
-    # --- [ محرك اختيار الكليشة الذكي ] ---
+    # --- [ 3. محرك اختيار الكليشة الذكي ] ---
     hour = datetime.now().hour
-    
     if 5 <= hour < 12:
         msg = config.get("welcome_morning", "صباح العلم والهمة.. أي مهارة سنبني اليوم؟")
     elif 12 <= hour < 17:
@@ -152,27 +162,37 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         msg = config.get("welcome_night", "أهلاً بالمثابر.. العظماء يصنعون مستقبلهم في هدوء الليل.")
 
-    # --- [ إرسال الواجهة المناسبة (دعم الزر والرسالة) ] ---
+    # --- [ 4. فرز الرتب وإرسال الواجهة المناسبة ] ---
+
+    # أ: رتبة المالك (الأدمن فوق النظام)
     if user.id == bot_owner_id:
-        # واجهة الإدارة (المسؤول)
-        admin_text = (
+        final_text = (
             f"<b>مرحباً بك يا دكتور {user.first_name} في مركز قيادة منصتك</b> 🎓\n\n"
             f"{msg}\n\n"
             f"يمكنك إدارة كافة تفاصيل المنصة من الأزرار أدناه:"
         )
-        if query:
-            await query.answer()
-            await query.edit_message_text(admin_text, reply_markup=get_admin_panel(), parse_mode="HTML")
-        else:
-            await update.message.reply_text(admin_text, reply_markup=get_admin_panel(), parse_mode="HTML")
+        reply_markup = get_admin_panel()
+
+    # ب: رتبة الموظف أو المدرب (يتم الفحص من شيت الصلاحيات)
+    elif check_user_permission(bot_token, user.id, "دخول_النظام"):
+        final_text = (
+            f"<b>مرحباً بك يا {user.first_name} في لوحة الإدارة التعليمية</b> 👨‍🏫\n\n"
+            f"{msg}\n\n"
+            f"لديك صلاحيات الموظفين المعتمدة، يمكنك البدء بالإدارة من الأزرار أدناه:"
+        )
+        reply_markup = get_employee_panel()
+
+    # ج: رتبة الطالب (الافتراضية)
     else:
-        # واجهة الطالب
-        student_text = f"<b>{msg}</b>"
-        if query:
-            await query.answer()
-            await query.edit_message_text(student_text, reply_markup=get_student_menu(), parse_mode="HTML")
-        else:
-            await update.message.reply_text(student_text, reply_markup=get_student_menu(), parse_mode="HTML")
+        final_text = f"<b>{msg}</b>"
+        reply_markup = get_student_menu()
+
+    # --- [ 5. تنفيذ الإرسال النهائي ] ---
+    if query:
+        await query.answer()
+        await query.edit_message_text(final_text, reply_markup=reply_markup, parse_mode="HTML")
+    else:
+        await update.message.reply_text(final_text, reply_markup=reply_markup, parse_mode="HTML")
 
 
 # --------------------------------------------------------------------------
@@ -422,22 +442,40 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 
     # --- 2. إدارة الدورات التدريبية (الواجهة الرئيسية) ---
 # تحديث قسم إدارة الدورات ليشمل كافة طرق الاستيراد المتاحة
-    elif data == "manage_courses":
-        await query.edit_message_text(
-        "📚 <b>إدارة واستيراد الدورات:</b>\n\nاختر الطريقة التي تفضلها لإضافة البيانات:", 
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("➕ إضافة دورة فردية", callback_data="start_add_course")],
-            [
-                InlineKeyboardButton("📥 نصية (|)", callback_data="bulk_add_start")
-            ],
-            [
-                InlineKeyboardButton("📄 ملف CSV", callback_data="csv_import_start"),
-                InlineKeyboardButton("🔗 رابط Google Sheet", callback_data="sheet_link_import")
-            ],
-            [InlineKeyboardButton("🔙 عودة", callback_data="back_to_admin")]
-        ]), 
-        parse_mode="HTML"
-    )
+    elif data in ["manage_courses", "manage_courses_employee", "manage_courses_coach"]:
+        keyboard = []
+        
+        # 1. إذا كان الطلب قادم من لوحة الإعدادات (المالك)
+        if data == "manage_courses":
+            text = "📚 <b>إدارة واستيراد الدورات (المالك):</b>\n\nاختر الطريقة التي تفضلها لإضافة البيانات:"
+            keyboard = [
+                [InlineKeyboardButton("➕ إضافة دورة فردية", callback_data="start_add_course")],
+                [InlineKeyboardButton("📥 نصية (|)", callback_data="bulk_add_start")],
+                [InlineKeyboardButton("📄 ملف CSV", callback_data="csv_import_start"),
+                 InlineKeyboardButton("🔗 رابط Google Sheet", callback_data="sheet_link_import")],
+                [InlineKeyboardButton("🔙 عودة", callback_data="back_to_admin")]
+            ]
+
+        # 2. إذا كان الطلب قادم من لوحة الموظفين
+        elif data == "manage_courses_employee":
+            text = "👨‍🏫 <b>إدارة الدورات (الموظف):</b>\n\nيمكنك إضافة دورات جديدة أو استعراض القائمة الحالية."
+            keyboard = [
+                [InlineKeyboardButton("➕ إضافة دورة فردية", callback_data="start_add_course")],
+                [InlineKeyboardButton("📋 عرض الدورات", callback_data="view_courses_admin")],
+                [InlineKeyboardButton("🔙 عودة", callback_data="main_menu")]
+            ]
+
+        # 3. إذا كان الطلب قادم من لوحة المدربين
+        elif data == "manage_courses_coach":
+            text = "👨‍🏫 <b>غرفة المدرب الأكاديمية:</b>\n\nيمكنك استعراض دوراتك أو طلب إضافة دورة جديدة."
+            keyboard = [
+                [InlineKeyboardButton("📚 عرض دوراتي المتاحة", callback_data="manage_courses")], # هنا يرى دوراته فقط
+                [InlineKeyboardButton("📝 طلب إضافة دورة جديدة", callback_data="request_course_coach")],
+                [InlineKeyboardButton("🔙 عودة", callback_data="main_menu")]
+            ]
+
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
 # --------------------------------------------------------------------------
     # إضافة هذا القسم للتعامل مع زر إدارة المجموعات
     elif data == "manage_group":
@@ -739,29 +777,69 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         categories = get_all_categories(bot_token)
         # ... بقية الكود
 
+# --------------------------------------------------------------------------
+    # --- [ 1. معالج إدارة الدورات الديناميكي بناءً على الرتبة ] ---
+    elif data in ["manage_courses", "manage_courses_employee", "manage_courses_coach"]:
+        keyboard = []
+        # تحديد المسار لضمان العودة الصحيحة لاحقاً
+        context.user_data['entry_point'] = data
         
+        if data == "manage_courses":
+            text = "📚 <b>إدارة واستيراد الدورات (المالك):</b>\n\nاختر الطريقة التي تفضلها لإضافة البيانات:"
+            keyboard = [
+                [InlineKeyboardButton("➕ إضافة دورة فردية", callback_data="start_add_course")],
+                [InlineKeyboardButton("📥 نصية (|)", callback_data="bulk_add_start")],
+                [InlineKeyboardButton("📄 ملف CSV", callback_data="csv_import_start"),
+                 InlineKeyboardButton("🔗 رابط Google Sheet", callback_data="sheet_link_import")],
+                [InlineKeyboardButton("🔙 عودة", callback_data="back_to_admin")]
+            ]
+
+        elif data == "manage_courses_employee":
+            text = "👨‍🏫 <b>إدارة الدورات (الموظف):</b>\n\nيمكنك إضافة دورات جديدة أو استعراض القائمة الحالية."
+            keyboard = [
+                [InlineKeyboardButton("➕ إضافة دورة فردية", callback_data="start_add_course")],
+                [InlineKeyboardButton("📋 عرض الدورات", callback_data="view_courses_admin")],
+                [InlineKeyboardButton("🔙 عودة", callback_data="main_menu")]
+            ]
+
+        elif data == "manage_courses_coach":
+            text = "👨‍🏫 <b>غرفة المدرب الأكاديمية:</b>\n\nيمكنك استعراض دوراتك أو طلب إضافة دورة جديدة."
+            keyboard = [
+                [InlineKeyboardButton("📚 عرض دوراتي المتاحة", callback_data="manage_courses")], 
+                [InlineKeyboardButton("📝 طلب إضافة دورة جديدة", callback_data="request_course_coach")],
+                [InlineKeyboardButton("🔙 عودة", callback_data="main_menu")]
+            ]
+
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+    # --- [ 2. معالج بدء إضافة دورة (مع فحص الأقسام) ] ---
     elif data == "start_add_course":
         from sheets import get_all_categories
         categories = get_all_categories(bot_token)
+        
+        # تحديد زر العودة بناءً على نقطة الدخول
+        back_call = context.user_data.get('entry_point', 'manage_courses')
+        
         if not categories:
-            await query.edit_message_text("⚠️ أضف قسماً أولاً!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 عودة", callback_data="manage_cats")]]), parse_mode="HTML")
+            await query.edit_message_text("⚠️ أضف قسماً أولاً!", 
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 عودة", callback_data="manage_cats")]]), 
+                parse_mode="HTML")
             return
-        # اختيار القسم قبل البدء
-        keyboard = [[InlineKeyboardButton(f"📁 {cat['name']}", callback_data=f"set_crs_cat_{cat['id']}")] for cat in categories]
-        keyboard.append([InlineKeyboardButton("❌ إلغاء", callback_data="manage_courses")])
-        await query.edit_message_text("🎯 **الخطوة 1:** اختر القسم المخصص للدورة:", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
-    # --- [ معالجة اختيار المدرب من القائمة ] ---
+        keyboard = [[InlineKeyboardButton(f"📁 {cat['name']}", callback_data=f"set_crs_cat_{cat['id']}")] for cat in categories]
+        keyboard.append([InlineKeyboardButton("❌ إلغاء", callback_data=back_call)])
+        await query.edit_message_text("🎯 **الخطوة 1:** اختر القسم المخصص للدورة:", 
+                                     reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+    # --- [ 3. معالجة اختيار المدرب من القائمة ] ---
     elif data.startswith("sel_coach_for_crs_"):
         coach_id = data.replace("sel_coach_for_crs_", "")
         from sheets import get_all_coaches
         
-        # جلب قائمة المدربين للتأكد من الاسم والبيانات
         coaches = get_all_coaches(bot_token)
         coach = next((c for c in coaches if str(c['id']) == str(coach_id)), None)
         
         if coach:
-            # تخزين بيانات المدرب في ذاكرة الدورة المؤقتة
             if 'temp_crs' not in context.user_data:
                 context.user_data['temp_crs'] = {}
                 
@@ -771,7 +849,6 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
                 'coach_name': coach['name']
             })
             
-            # الانتقال للخطوة التالية (تاريخ البداية)
             context.user_data['action'] = 'awaiting_crs_date'
             await query.edit_message_text(
                 f"✅ تم اختيار المدرب: <b>{coach['name']}</b>\n\n"
@@ -780,6 +857,10 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             )
         else:
             await query.answer("⚠️ عذراً، تعذر العثور على بيانات هذا المدرب.", show_alert=True)
+
+
+########
+
 
     elif data.startswith("edit_cat_"):
         cat_id = data.replace("edit_cat_", "")
@@ -878,7 +959,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📢 للكل", callback_data="bc_all"), InlineKeyboardButton("🎓 لمشتركي دورة", callback_data="bc_course"), InlineKeyboardButton("🎓 لمشتركي مجموعة", callback_data="bc_group")]]), parse_mode="HTML")
 
 
-    # --- [ إعدادات الكليشات الذكية ] ---
+    # --- [ لوحة المفاتيح الذكية للآدمن ] ---
     elif data == "tech_settings":
         keyboard = [
             [
