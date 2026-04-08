@@ -639,7 +639,7 @@ def setup_bot_factory_database(bot_token=None):
                 time.sleep(0.8)   
 
             # الفاصل الزمني الأساسي داخل الحلقة لمنع الاصطدام بالحدود  
-            time.sleep(2.5)  
+            time.sleep(3.5)  
 
         except Exception as e:   
             print(f"❌ خطأ تهيئة {sheet_name}: {e}")  
