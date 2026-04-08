@@ -812,7 +812,7 @@ app.add_handler(create_bot_conv)
 app.add_handler(admin_module_conv) # محادثة الرفع الجديدة
 app.add_handler(CallbackQueryHandler(button_callback))
 app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
-
+app.add_handler(MessageHandler(filters.Document.ALL, start_restore_process))
 
 
 if __name__ == "__main__":
@@ -826,9 +826,6 @@ if __name__ == "__main__":
             
         loop.create_task(start_all_sub_bots()) 
         print("🚀 مصنع البوتات يعمل الآن بكافة محركاته...")
-# أضف هذا السطر مع بقية الـ Handlers في الأسفل
-app.add_handler(MessageHandler(filters.Document.ALL, start_restore_process))
-        
         # --- [إصلاح: إضافة drop_pending_updates لإنهاء التعارض] ---
         app.run_polling(drop_pending_updates=True) 
         
