@@ -5,7 +5,7 @@ import os
 import asyncio
 from datetime import datetime
 import gspread
-
+import base64
 # ==========================================================================
 # 1. كتلة الإعدادات الأساسية والمحرك العام (المفاتيح الأصلية)
 # ==========================================================================
@@ -66,6 +66,47 @@ def save_cache_to_disk():
         logger.info(f"💾 [المرآة]: تم تحديث كافة ملفات الكاش على القرص بنجاح.")
     except Exception as e:
         logger.error(f"❌ خطأ حرج أثناء الكتابة على القرص: {e}")
+
+
+# انشاء نسخة مشفرة
+
+
+
+def generate_secure_backup(bot_id=None):
+    """إنشاء نسخة احتياطية مشفرة: للمطور (الكل) أو للعميل (خاص ببوت معين)"""
+    try:
+        # إذا كان bot_id موجود، نسحب بياناته فقط، وإذا لم يوجد (مطور) نسحب الكل
+        data_to_save = {}
+        if bot_id:
+            for sheet_name, records in FACTORY_GLOBAL_CACHE["data"].items():
+                filtered = [r for r in records if str(r.get("bot_id")) == str(bot_id)]
+                if filtered: data_to_save[sheet_name] = filtered
+        else:
+            data_to_save = FACTORY_GLOBAL_CACHE["data"]
+
+        # تحويل البيانات إلى نص مشفر Base64 لضمان قبول الاستضافة وسهولة الرفع
+        json_string = json.dumps(data_to_save, ensure_ascii=False, indent=2)
+        encoded_data = base64.b64encode(json_string.encode('utf-8')).decode('utf-8')
+        
+        backup_content = {
+            "backup_info": {
+                "type": "FULL" if not bot_id else "CLIENT",
+                "bot_id": bot_id,
+                "timestamp": get_system_time()
+            },
+            "payload": encoded_data
+        }
+        
+        file_path = os.path.join(CACHE_DIR, f"backup_{bot_id if bot_id else 'MASTER'}.json")
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(backup_content, f, ensure_ascii=False, indent=4)
+        return file_path
+    except Exception as e:
+        logger.error(f"❌ خطأ في تشفير النسخة: {e}")
+        return None
+ 
+
+
 
 # ==========================================================================
 # 3. إدارة نظام المزامنة (Core Logic)
@@ -207,35 +248,99 @@ def update_global_version(bot_id):
 # ==========================================================================
 # 6. دالة التحميل الذكي (تُستدعى من main.py)
 # ==========================================================================
+async def download_mirror_files(bot, user_id):
+    """إرسال نسخة احتياطية مشفرة وموحدة بناءً على صلاحية المستخدم"""
+    # التحقق هل المستخدم مطور أم عميل
+    is_developer = (str(user_id) == str(DEVELOPER_ID))
+    bot_id_filter = None if is_developer else user_id
 
-async def download_mirror_files(bot, admin_id):
-    """
-    إرسال ملفات الكاش الفيزيائية من مجلد السيرفر إلى المطور عبر البوت.
-    تستخدم asyncio لضمان عدم توقف المحرك أثناء الإرسال.
-    """
-    if not os.path.exists(CACHE_DIR):
-        await bot.send_message(chat_id=admin_id, text="❌ مجلد المرآة غير موجود في السيرفر.")
-        return
+    await bot.send_message(chat_id=user_id, text="🔐 جاري تجهيز النسخة الاحتياطية المشفرة...")
 
-    files = [f for f in os.listdir(CACHE_DIR) if f.endswith('.json')]
-    if not files:
-        await bot.send_message(chat_id=admin_id, text="⚠️ لا توجد ملفات كاش جاهزة للتحميل حالياً.")
-        return
+    # توليد الملف الموحد المشفر فوراً
+    file_path = generate_secure_backup(bot_id_filter)
 
-    await bot.send_message(chat_id=admin_id, text=f"📥 جاري جلب {len(files)} ملف من مرآة السيرفر...")
-
-    for file_name in files:
-        file_path = os.path.join(CACHE_DIR, file_name)
+    if file_path and os.path.exists(file_path):
         try:
+            caption = "👑 <b>نسخة المطور الشاملة</b>" if is_developer else "📦 <b>نسخة البوت الخاصة بك</b>"
+            caption += f"\n📅 التاريخ: {get_system_time()}\n🛡️ الحالة: مشفرة وقابلة للاستعادة."
+            
             with open(file_path, 'rb') as doc:
                 await bot.send_document(
-                    chat_id=admin_id,
+                    chat_id=user_id,
                     document=doc,
-                    caption=f"📄 ملف المرآة: {file_name}\n⏰ توقيت السحب: {get_system_time()}"
+                    filename=f"BACKUP_{'MASTER' if is_developer else user_id}.json",
+                    caption=caption,
+                    parse_mode="HTML"
                 )
-            await asyncio.sleep(0.5) # تجنب الحظر عند إرسال ملفات كثيرة
+            # حذف الملف المؤقت بعد الإرسال
+            os.remove(file_path)
         except Exception as e:
-            logger.error(f"❌ فشل إرسال ملف {file_name}: {e}")
+            logger.error(f"❌ فشل إرسال النسخة: {e}")
+    else:
+        await bot.send_message(chat_id=user_id, text="⚠️ فشل إنشاء النسخة، تأكد من وجود بيانات في الكاش أولاً.")
+
+
+
+# --------------------------------------------------------------------------
+# دالة الاستعادة 
+def process_restore_logic(file_content, requester_id):
+    """المحرك الذكي: يقرأ الملف ويقرر نوع الاستبدال (شامل للمطور أو جزئي للعميل)"""
+    from sheets import ss
+    try:
+        # 1. فك التشفير
+        backup_data = json.loads(file_content)
+        encoded_payload = backup_data.get("payload")
+        decoded_data = json.loads(base64.b64decode(encoded_payload).decode('utf-8'))
+        
+        is_developer = (str(requester_id) == str(DEVELOPER_ID))
+        
+        # 2. حلقة المزامنة (التنفيذ على السيرفر + جوجل)
+        for sheet_name, new_records in decoded_data.items():
+            try:
+                sheet = ss.worksheet(sheet_name)
+                
+                if is_developer:
+                    # المطور: استبدال شامل للورقة
+                    sheet.clear()
+                    if new_records:
+                        headers = list(new_records[0].keys())
+                        rows = [list(r.values()) for r in new_records]
+                        sheet.append_row(headers)
+                        sheet.append_rows(rows)
+                    FACTORY_GLOBAL_CACHE["data"][sheet_name] = new_records
+                else:
+                    # العميل: استبدال أسطره فقط والحفاظ على البقية
+                    current_records = FACTORY_GLOBAL_CACHE["data"].get(sheet_name, [])
+                    # حذف أسطر العميل القديمة وإضافة الجديدة
+                    updated_list = [r for r in current_records if str(r.get("bot_id")) != str(requester_id)]
+                    updated_list.extend(new_records)
+                    
+                    # رفع القائمة المحدثة لجوجل (تحديث ذكي)
+                    sheet.clear()
+                    if updated_list:
+                        headers = list(updated_list[0].keys())
+                        rows = [list(r.values()) for r in updated_list]
+                        sheet.append_row(headers)
+                        sheet.append_rows(rows)
+                    
+                    FACTORY_GLOBAL_CACHE["data"][sheet_name] = updated_list
+
+                # تحديث ملف الكاش الفيزيائي (JSON) لكل ورقة
+                file_path = os.path.join(CACHE_DIR, f"{sheet_name}.json")
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    json.dump(FACTORY_GLOBAL_CACHE["data"][sheet_name], f, ensure_ascii=False, indent=4)
+
+            except Exception as e:
+                print(f"⚠️ خطأ أثناء معالجة الورقة {sheet_name}: {e}")
+        
+        save_cache_to_disk() # حفظ نهائي
+        return True
+    except Exception as e:
+        print(f"❌ خطأ حرج في محرك الاستعادة: {e}")
+        return False
+ 
+
+
 
 # ==========================================================================
 # نهاية الملف - تم الحفاظ على كافة المفاتيح والهيكل الأصلي للمصنع

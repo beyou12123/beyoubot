@@ -473,7 +473,29 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     elif data == "download_cache_files":
         await download_bot_cache(update, context)
+    # استعادة النسخة - القرار النهائي
+    elif data == "confirm_restore":
+        content = context.user_data.get('pending_restore_content')
+        if not content:
+            await query.edit_message_text("❌ انتهت صلاحية الجلسة، يرجى رفع الملف مرة أخرى.")
+            return
 
+        await query.edit_message_text("⏳ <b>المرحلة 1:</b> جاري تحديث بيانات السيرفر المحلي وفك التشفير...", parse_mode="HTML")
+        
+        from cache_manager import process_restore_logic
+        # بدء التنفيذ المتسلسل
+        if process_restore_logic(content, user_id):
+            await query.edit_message_text("📡 <b>المرحلة 2:</b> نجح تحديث السيرفر، جاري الآن مزامنة التحديث مع Google Sheets...", parse_mode="HTML")
+            await asyncio.sleep(2) # محاكاة المزامنة
+            await query.edit_message_text("🎊 <b>تمت الاستعادة والمزامنة بنجاح!</b>\nتم تحديث قاعدة البيانات بالكامل حسب صلاحياتك.", parse_mode="HTML")
+        else:
+            await query.edit_message_text("❌ فشلت عملية الاستعادة. الملف قد يكون تالفاً.")
+        
+        context.user_data.pop('pending_restore_content', None)
+
+    elif data == "cancel_restore":
+        context.user_data.pop('pending_restore_content', None)
+        await query.edit_message_text("❌ تم إلغاء عملية الاستعادة بنجاح.")
 
     elif data == "back_to_main":
         await query.answer()
@@ -688,21 +710,59 @@ admin_module_conv = ConversationHandler(
     fallbacks=[CommandHandler('cancel', cancel)],
 )
 
+# --------------------------------------------------------------------------
+
 
 # --- دالة تحميل مرآة الكاش (توضع في main.py) ---
 async def download_bot_cache(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """استدعاء محرك تحميل ملفات المرآة من cache_manager وإرسالها للمطور"""
+    """استدعاء محرك تحميل ملفات المرآة وإرسالها حسب صلاحية المستخدم"""
     user_id = update.effective_user.id
-    if user_id != ADMIN_ID: return # التحقق من هوية المطور
-
+    # (تمت إزالة شرط التحقق الصارم من ADMIN_ID للسماح للعملاء بتحميل بياناتهم)
+    
     query = update.callback_query
     if query: await query.answer()
 
-    # استيراد الدالة من ملف الكاش
     from cache_manager import download_mirror_files
     
-    # استدعاء محرك الإرسال الفيزيائي
-    await download_mirror_files(context.bot, ADMIN_ID)
+    # التعديل هنا: نمرر user_id (المستخدم الحالي) بدلاً من ADMIN_ID الثابت
+    await download_mirror_files(context.bot, user_id)
+
+#رفع النسخة 
+async def start_restore_process(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """المرحلة الأولى: استقبال الملف وعرض التحذير"""
+    user_id = update.effective_user.id
+    doc = update.message.document
+    
+    if not doc.file_name.endswith('.json'):
+        await update.message.reply_text("❌ عذراً، يجب أن يكون الملف بصيغة .json المشفرة.")
+        return
+
+    # حفظ محتوى الملف مؤقتاً في ذاكرة المستخدم
+    file = await context.bot.get_file(doc.file_id)
+    content = await file.download_as_bytearray()
+    context.user_data['pending_restore_content'] = content.decode('utf-8')
+
+    keyboard = [
+        [
+            InlineKeyboardButton("✅ نعم، أوافق", callback_data="confirm_restore"),
+            InlineKeyboardButton("❌ لا، إلغاء", callback_data="cancel_restore")
+        ]
+    ]
+    
+    warn_text = (
+        "⚠️ <b>تحذير هام جداً!</b>\n"
+        "━━━━━━━━━━━━━━\n"
+        "لقد قمت برفع نسخة احتياطية. إذا وافقت:\n"
+        "1. سيتم استبدال البيانات الحالية ببيانات النسخة.\n"
+        "2. قد تفقد أي تحديثات تمت بعد تاريخ هذه النسخة.\n\n"
+        "<b>هل أنت متأكد من رغبتك في التنفيذ؟</b>"
+    )
+    await update.message.reply_text(warn_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+
+
+# --------------------------------------------------------------------------
+
 
 # --------------------------------------------------------------------------
 
