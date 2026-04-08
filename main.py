@@ -689,52 +689,19 @@ admin_module_conv = ConversationHandler(
 
 # --- دالة تحميل مرآة الكاش (توضع في main.py) ---
 async def download_bot_cache(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """إرسال كافة ملفات الكاش الموجودة في السيرفر للمطور"""
-    if update.effective_user.id != ADMIN_ID: return
+    """استدعاء محرك تحميل ملفات المرآة من cache_manager وإرسالها للمطور"""
+    user_id = update.effective_user.id
+    if user_id != ADMIN_ID: return # التحقق من هوية المطور
 
     query = update.callback_query
     if query: await query.answer()
 
-    # فحص المسارات المحتملة للمجلد (تأكد من وجود أحدهم بالسيرفر)
-    possible_dirs = ["./cache_data", "./cache", "./cache_manager"]
-    cache_dir = None
+    # استيراد الدالة من ملف الكاش
+    from cache_manager import download_mirror_files
     
-    for d in possible_dirs:
-        if os.path.exists(d):
-            cache_dir = d
-            break
-    
-    if not cache_dir:
-        msg = "❌ لم يتم العثور على مجلد الكاش في السيرفر (تأكد من اسم المجلد)."
-        if query: await query.edit_message_text(msg)
-        else: await update.message.reply_text(msg)
-        return
+    # استدعاء محرك الإرسال الفيزيائي
+    await download_mirror_files(context.bot, ADMIN_ID)
 
-    # جلب كافة ملفات JSON أو Pickle
-    files = [f for f in os.listdir(cache_dir) if f.endswith(('.json', '.pkl'))]
-    
-    if not files:
-        msg = f"⚠️ المجلد '{cache_dir}' موجود ولكنه فارغ من ملفات المرآة."
-        if query: await query.edit_message_text(msg)
-        else: await update.message.reply_text(msg)
-        return
-
-    # إشعار البدء
-    status_msg = await context.bot.send_message(chat_id=ADMIN_ID, text=f"⏳ جاري سحب {len(files)} ملفات من المرآة...")
-
-    for file_name in files:
-        file_path = os.path.join(cache_dir, file_name)
-        try:
-            with open(file_path, 'rb') as doc:
-                await context.bot.send_document(
-                    chat_id=ADMIN_ID,
-                    document=doc,
-                    caption=f"📁 ملف المرآة: {file_name}\n📍 المسار: {cache_dir}"
-                )
-        except Exception as e:
-            print(f"❌ فشل إرسال {file_name}: {e}")
-
-    await status_msg.delete()
 # --------------------------------------------------------------------------
 
 
