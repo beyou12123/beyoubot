@@ -1644,7 +1644,7 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
     
     # محاولة جلب الإعدادات ومعرف المسؤول
     try:
-        from sheets import get_bot_config
+
         config = get_bot_config(bot_token)
         bot_owner_id = int(config.get("admin_ids", 0))
     except Exception as e:
@@ -2214,7 +2214,7 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
     # --- [ جزء الطلاب والردود التفاعلية - g4f فقط ] ---
     
     # جلب إعدادات البوت أولاً لتعريف bot_owner_id قبل استخدامه في الشرط
-    from sheets import get_bot_config
+
     config = get_bot_config(bot_token)
     bot_owner_id = int(config.get("admin_ids", 0))
 
