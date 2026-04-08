@@ -1582,6 +1582,7 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
         doc = update.message.document
         if action == 'awaiting_json_backup' and doc.file_name.endswith('.json'):
             import json
+            import io
             from sheets import ss, update_global_version
             
             file = await context.bot.get_file(doc.file_id)
