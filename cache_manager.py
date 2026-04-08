@@ -13,6 +13,13 @@ import gspread
 DEVELOPER_ID = 873158772  # معرف المطور الثابت
 logger = logging.getLogger(__name__)
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CACHE_DIR = os.path.join(BASE_DIR, "cache_data")
+
+if not os.path.exists(CACHE_DIR):
+    os.makedirs(CACHE_DIR)
+    print(f"📁 تم إنشاء مجلد الكاش في المسار: {CACHE_DIR}")
+
 # المتغيرات الخاصة بالهروب من الـ API (المزامنة الصامتة)
 LAST_CHECK_TIME = 0       
 CHECK_INTERVAL = 900      # 15 دقيقة
