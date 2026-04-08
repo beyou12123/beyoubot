@@ -464,6 +464,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if data == "restart_factory":
         await query.answer("🔄 جاري إعادة التشغيل...")
+        from cache_manager import fetch_full_factory_data; fetch_full_factory_data()
         await query.edit_message_text("🔄 جاري إعادة تشغيل المصنع لتطبيق التحديثات...")
         os.execv(sys.executable, ['python'] + sys.argv)
         
