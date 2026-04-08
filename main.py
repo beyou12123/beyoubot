@@ -659,8 +659,9 @@ admin_module_conv = ConversationHandler(
     fallbacks=[CommandHandler('cancel', cancel)],
 )
 
-# --- دالة تشغيل البوتات المصنوعة تلقائياً ---
+# --- دالة تشغيل البوتات المصنوعة تلقائياً بنظام التتابع الآمن ---
 async def start_all_sub_bots():
+    """جلب وتشغيل كافة البوتات النشطة مع إضافة فاصل زمني لمنع التصادم 409"""
     from sheets import get_all_active_bots
     active_bots = get_all_active_bots()
     print(f"🔄 جاري محاولة تشغيل {len(active_bots)} بوت مصنوع...")
@@ -669,13 +670,17 @@ async def start_all_sub_bots():
         token = bot_data.get("التوكن")
         owner_id = bot_data.get("ID المالك")
         bot_type = bot_data.get("نوع البوت")
-        if token and bot_type:
-            # تشغيل كل بوت في مهمة مستقلة لضمان عدم توقف المصنع
-            asyncio.create_task(run_dynamic_bot(token, bot_type, owner_id))
-
         
-        # تشغيل البوتات تلقائياً باستخدام المحرك الديناميكي
+        if token and bot_type:
+            # إضافة تأخير بسيط (ثانية واحدة) بين كل عملية تشغيل 
+            # هذا هو "السر" الذي سيمنع التهنيج وتصادم التوكينات
+            await asyncio.sleep(1.5) 
+            
+            # تشغيل البوت في مهمة مستقلة
+            asyncio.create_task(run_dynamic_bot(token, bot_type, owner_id))
+            print(f"✅ تم إرسال أمر تشغيل للبوت: {bot_type}")
 
+    print("🎊 اكتملت عملية إقلاع كافة البوتات التابعة.")
 
 
 

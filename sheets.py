@@ -311,47 +311,52 @@ def save_user(user_id, username):
         print(f"❌ خطأ تسجيل مستخدم: {e}")
         return False
 # --------------------------------------------------------------------------
-# دالة الحفظ وتهيئة البوت
+# --- [ دالة الحفظ وتهيئة البوت - النسخة الاحترافية المسرعة ] ---
 
 def save_bot(owner_id, bot_type, bot_name, bot_token):
+    """
+    حفظ وتجهيز البوت بنظام القفز السريع (0 تأخير للعميل)
+    - تمنع التكرار في ورقة البوتات.
+    - تضمن الكتابة في نظام المزامنة.
+    - تقلل طلبات API جوجل لأدنى مستوى.
+    """
     global bots_sheet, content_sheet
     if bots_sheet is None or content_sheet is None:
         if not connect_to_google(): return False
+        
     try:
         now = get_system_time("full")
         today = get_system_time("date")
         bot_token = str(bot_token).strip()
+        bot_id_only = bot_token.split(':')[0]
         
-        # 1. جلب معلومات البوت من تيليجرام لضمان الدقة
+        # 1. جلب معلومات البوت من تيليجرام (سريع جداً لأنه لا يلمس جوجل)
         real_bot_name = bot_name
         username_bot = ""
         try:
             import requests
-            res = requests.get(f"https://api.telegram.org/bot{bot_token}/getMe").json()
+            res = requests.get(f"https://api.telegram.org/bot{bot_token}/getMe", timeout=5).json()
             if res.get("ok"):
                 real_bot_name = res["result"]["first_name"]
                 username_bot = res["result"]["username"]
         except: pass
 
-        # 2. زرع الإعدادات الافتراضية أولاً لضمان وجود القيم
+        # 2. حجر الأساس: ربط البوت بنظام المزامنة (تتم أولاً لضمان وجود السجل)
+        # هذا السطر يحل مشكلة "عدم الكتابة في ورقة نظام المزامنة"
+        ensure_bot_sync_row(bot_token, owner_id)
+
+        # 3. زرع الإعدادات الافتراضية (تتم في الخلفية)
         seed_default_settings(bot_token)
 
-        # --- [ جلب القيم الحقيقية من ورقة الإعدادات قبل الحفظ ] ---
-        sub_price = get_bot_setting(bot_token, "subscription_price", default="100")
-        max_students = get_bot_setting(bot_token, "maximum_number_students", default="100")
-        max_courses = get_bot_setting(bot_token, "maximum_number_courses", default="10")
-        max_sections = get_bot_setting(bot_token, "maximum_number_sections", default="3")
-        ai_cost_val = get_bot_setting(bot_token, "AI_cost", default="100")
-        op_env = get_bot_setting(bot_token, "operating_environment", default="Production")
-
-        # 3. بناء مصفوفة البيانات الكاملة (44 عموداً) بالترتيب الدقيق والمحدث
+        # 4. بناء مصفوفة البيانات (استخدام قيم افتراضية سريعة للتأسيس لتجنب الثقل)
+        # بدلاً من مناداة get_bot_setting التي تسبب ثقلاً، نضع القيم القياسية للمصنع مباشرة
         bot_row = [
             str(owner_id),          # 1. ID المالك
             bot_type,               # 2. نوع البوت
             real_bot_name,          # 3. اسم البوت
             bot_token,              # 4. التوكن
             "نشط",                  # 5. حالة التشغيل
-            bot_token.split(':')[0],# 6. bot_id
+            bot_id_only,            # 6. bot_id
             username_bot,           # 7. username_bot
             now,                    # 8. تاريخ الإنشاء
             now,                    # 9. آخر تشغيل
@@ -365,13 +370,13 @@ def save_bot(owner_id, bot_type, bot_name, bot_token):
             "true",                 # 17. is_active
             "",                     # 18. errors_log
             today,                  # 19. تاريخ_آخر_تجديد
-            str(sub_price),         # 20. سعر_الاشتراك (ديناميكي)
+            "100",                  # 20. سعر_الاشتراك (قيمة افتراضية سريعة)
             "0",                    # 21. رصيد_البوت
-            str(max_students),      # 22. الحد_الأقصى_للطلاب (ديناميكي)
-            str(max_courses),       # 23. الحد_الأقصى_للدوات (ديناميكي)
-            str(max_sections),      # 24. الحد_الأقصى_للاقسام (ديناميكي)
+            "100",                  # 22. الحد_الأقصى_للطلاب
+            "10",                   # 23. الحد_الأقصى_للدوات
+            "3",                    # 24. الحد_الأقصى_للاقسام
             "TRUE",                 # 25. ميزة_الذكاء_الاصطناعي
-            "FALSE",                # 26. ميزة_رفع_وتصدير_البيانات_اكسل (القيمة الافتراضية المطلوبة)
+            "FALSE",                # 26. ميزة_رفع_وتصدير_البيانات_اكسل
             f"INV-{uuid.uuid4().hex[:6].upper()}", # 27. معرف_الفاتورة
             "0ms",                  # 28. متوسط_زمن_الاستجابة
             "0%",                   # 29. استخدام_CPU
@@ -385,32 +390,31 @@ def save_bot(owner_id, bot_type, bot_name, bot_token):
             "Manual",               # 37. طريقة_الدفع
             "Monthly",              # 38. دورة_الفوترة
             "1.0.0",                # 39. إصدار_البوت
-            str(op_env),            # 40. بيئة_التشغيل (ديناميكي)
+            "Production",           # 40. بيئة_التشغيل
             "true",                 # 41. إعادة_تشغيل_تلقائي
             "Gemini-1.5-Flash",     # 42. نموذج_الذكاء_الاصطناعي
             0,                      # 43. استهلاك_التوكنات_AI
-            str(ai_cost_val)        # 44. تكلفة_AI (ديناميكي)
+            "100"                   # 44. تكلفة_AI
         ]
         
+        # 5. منع التكرار في ورقة "البوتات_المصنوعة"
         try:
-            # البحث عن التوكن لمعرفة هل هو بوت موجود مسبقاً
+            # البحث عن التوكن أو bot_id
             cell_bot = bots_sheet.find(bot_token)
             row_idx = cell_bot.row
-            # تحديث (الحالة، آخر تشغيل، الإصدار) فقط للحفاظ على تاريخ الإنشاء والباقة الأصلية
+            # تحديث وقت التشغيل فقط لمنع التكرار
             updates = [
                 {'range': f"E{row_idx}", 'values': [["نشط"]]}, 
-                {'range': f"I{row_idx}", 'values': [[now]]},
-                {'range': f"AM{row_idx}", 'values': [["1.0.0"]]}
+                {'range': f"I{row_idx}", 'values': [[now]]}
             ]
             bots_sheet.batch_update(updates)
-            print(f"♻️ تم تحديث بيانات التشغيل للبوت في السطر {row_idx} مع حماية التاريخ والباقة")
+            print(f"♻️ تم تحديث بيانات البوت {bot_id_only} وتفادي التكرار.")
         except:
-            # إضافة صف جديد بالكامل فقط إذا لم يكن البوت موجوداً نهائياً
+            # إذا لم يجد التوكن، يضيف صفاً جديداً
             bots_sheet.append_row(bot_row)
-            print("✨ تم إضافة بوت جديد ببياناته الكاملة")
+            print(f"✨ تم تسجيل بوت جديد بنجاح: {bot_id_only}")
 
-
-        # 5. إدارة ورقة "إعدادات_المحتوى" لضمان الملكية
+        # 6. إدارة ورقة "إعدادات_المحتوى" مع منع التكرار
         content_row = [
             bot_token, "أهلاً بك! 🤖", "لا توجد قوانين حالياً.", 
             "عذراً، البوت متوقف مؤقتاً.", "false", "false", "true", "[]", "[]", 
@@ -419,21 +423,16 @@ def save_bot(owner_id, bot_type, bot_name, bot_token):
 
         try:
             cell_content = content_sheet.find(bot_token)
-            # تحديث معرف المالك لضمان السيطرة
+            # تحديث المالك فقط
             content_sheet.update_cell(cell_content.row, 10, str(owner_id))
-            print(f"✅ تم تحديث ملكية المحتوى للتليجرام ID: {owner_id}")
         except:
-            # تنفيذ هذا السطر في حال فشل العثور على البوت (إنشاء جديد)
             content_sheet.append_row(content_row)
-            print("📝 تم إنشاء سجل إعدادات المحتوى لأول مرة")
+            print("📝 تم إنشاء سجل إعدادات المحتوى.")
 
-        # --- [ حجر الأساس: ربط البوت بنظام المزامنة والذاكرة المؤقتة ] ---
-        ensure_bot_sync_row(bot_token, owner_id)
         return True
     except Exception as e:
-        print(f"❌ خطأ حرج في save_bot المحدثة: {e}")
+        print(f"❌ خطأ حرج في دالة التأسيس: {e}")
         return False
-
 
 
 # --------------------------------------------------------------------------
@@ -775,23 +774,25 @@ def seed_default_settings(bot_token):
 # تقوم دالة verify_setup بفحص كافة أوراق العمل والتأكد من مطابقة الأعمدة للهيكل المعتمد.
 
 def update_meta_info():
-    """تحديث سجلات النظام وإصدار الهيكل في ورقة الميتا لضمان صحة عمل المحرك"""
+    """تحديث سجلات النظام وقائمة البوتات المعتمدة بدون مسح البقية"""
     try:
-        # استدعاء ورقة الميتا من الكاش الداخلي
         meta_ws = _ws_cache.get("_meta")
         if meta_ws:
-            # مسح البيانات القديمة لتجنب تداخل الإصدارات
-            meta_ws.clear()
-            # إعداد مصفوفة البيانات الجديدة (الإصدار، حالة المحرك، تاريخ التحديث)
+            # البيانات الأساسية + البوتات الخاصة بك
             meta_data = [
                 ["key", "value", "updated_at"], 
                 ["version", SCHEMA_VERSION, get_system_time("date")], 
-                ["engine_status", "HEALTHY", datetime.now().isoformat()]
+                ["engine_status", "HEALTHY", datetime.now().isoformat()],
+                ["desc_transcriber_bot.py", "transcriber_bot", "Active"],
+                ["desc_ai_bot.py", "ai_bot", "Active"],
+                ["desc_downloader_bot.py", "downloader_bot", "Active"]
             ]
-            # تنفيذ الكتابة عبر الوسيط الذكي لضمان تجاوز حدود API جوجل
-            safe_api_call(meta_ws.update, 'A1', meta_data)
+            # التحديث المباشر للنطاق لضمان عدم مسح أي شيء يدوياً أسفل الصف 7
+            safe_api_call(meta_ws.update, 'A1:C7', meta_data)
+            print("✅ تم تحديث ورقة الميتا وحماية قائمة بوتاتك.")
     except Exception as e: 
-        print(f"❌ فشل ميتا: {e}")
+        print(f"❌ فشل تحديث الميتا: {e}")
+
 
 def verify_setup(structures):
     """الفحص النهائي: التأكد من أن كل ورقة تم إنشاؤها تحتوي على كافة الأعمدة المطلوبة"""
