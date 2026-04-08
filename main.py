@@ -193,43 +193,28 @@ async def select_type(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return GETTING_TOKEN
 
 async def receive_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """استلام التوكن وتحديد الاسم ديناميكياً بدون تعديل كائن الرسالة المحمي"""
     token = update.message.text.strip()
-    
     if not re.match(r'^\d+:[A-Za-z0-9_-]{35,}$', token):
-        await update.message.reply_text("❌ التوكن غير صحيح! يرجى إرسال توكن صالح من @BotFather")
+        await update.message.reply_text("❌ التوكن غير صحيح!")
         return GETTING_TOKEN
     
     context.user_data["bot_token"] = token
-    
-    # محرك جلب الاسم الديناميكي
     bot_type = context.user_data.get("type", "")
-    friendly_name = bot_type 
-    
+
+    # جلب الاسم الوصفي مباشرة من الميتا (ديناميكياً)
+    friendly_name = bot_type
     try:
         from sheets import meta_sheet
-        if meta_sheet:
-            records = meta_sheet.get_all_records()
-            for r in records:
-                if str(r.get('value')).strip() == bot_type.strip():
-                    friendly_name = r.get('value')
-                    break
-        
-        # خارطة طريق بديلة للأسماء الأساسية
-        mapping = {
-            "contact_bot": "بوت تواصل",
-            "protection_bot": "بوت حماية",
-            "education_bot": "منصة تعليمية",
-            "store_bot": "متجر إلكتروني",
-            "ai_bot": "بوت ذكاء اصطناعي"
-        }
-        friendly_name = mapping.get(friendly_name, friendly_name)
+        records = meta_sheet.get_all_records()
+        for r in records:
+            if str(r.get('value')).strip() == bot_type.strip():
+                friendly_name = r.get('value')
+                break
     except: pass
 
-    # حفظ الاسم المكتشف في الذاكرة لكي تقرأه دالة finalize_bot
+    # تخزين الاسم في الذاكرة لكي تقرأه الدالة التالية
     context.user_data["bot_friendly_name"] = friendly_name
     
-    # استدعاء دالة الإنهاء
     await finalize_bot(update, context)
     return ConversationHandler.END
 
@@ -318,7 +303,12 @@ async def run_dynamic_bot(bot_token, bot_type, user_id):
 # --------------------------------------------------------------------------
 async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """حفظ البيانات، فك تداخل التوكينات، وتشغيل الإشعارات الثلاثية بصيغ مميزة وتنسيق آمن"""
-    bot_display_name = update.message.text.strip()
+    
+    # --- [ التصحيح الجذري: جلب الاسم الوصفي ديناميكياً من الذاكرة ] ---
+    # بدلاً من القراءة من update.message.text (التي كانت تحتوي على التوكن)
+    # نقرأ الآن المفتاح bot_friendly_name الذي استخرجناه من ورقة الميتا في الخطوة السابقة
+    bot_display_name = context.user_data.get("bot_friendly_name", "بوت جديد")
+    
     user = update.effective_user
     user_id = user.id
     bot_type = context.user_data.get("type")
@@ -397,7 +387,13 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     except Exception as e:
         print(f"❌ Error in finalize: {e}")
-        await msg.edit_text(f"⚠️ <b>تنبيه تقني:</b>\nحدث تداخل بسيط أثناء التهيئة، لكن البوت {bot_username} قد يكون جاهزاً. يرجى التحقق منه.", parse_mode="HTML")
+        # محاولة تأمين اسم البوت في رسالة الخطأ لتجنب تعليق الدالة
+        try:
+            current_bot_user = bot_username
+        except:
+            current_bot_user = "غير معروف"
+            
+        await msg.edit_text(f"⚠️ <b>تنبيه تقني:</b>\nحدث تداخل بسيط أثناء التهيئة، لكن البوت {current_bot_user} قد يكون جاهزاً. يرجى التحقق منه.", parse_mode="HTML")
 
     context.user_data.clear()
     return ConversationHandler.END
