@@ -193,18 +193,56 @@ async def select_type(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return GETTING_TOKEN
 
 async def receive_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """التحقق من صحة التوكن وطلب اسم البوت"""
+    """استلام التوكن وتعيين الاسم الوصفي للبوت ديناميكياً من الميتا لضمان إشعارات احترافية"""
     token = update.message.text.strip()
     
-    # التحقق من تنسيق التوكن باستخدام التعبيرات النمطية (Regex)
+    # 1. التحقق التقني من صحة تنسيق التوكن
     if not re.match(r'^\d+:[A-Za-z0-9_-]{35,}$', token):
         await update.message.reply_text("❌ التوكن غير صحيح! يرجى إرسال توكن صالح من @BotFather")
         return GETTING_TOKEN
     
+    # 2. تخزين التوكن في ذاكرة الجلسة
     context.user_data["bot_token"] = token
-    # ملاحظة: تم الإبقاء على الوظيفة كما هي بناءً على النسخة السابقة مع تفعيل التجاوز التلقائي لاحقاً
+    
+    # 3. محرك البحث عن الاسم الديناميكي
+    bot_type_key = context.user_data.get("type", "")
+    # القيمة الافتراضية في حال لم يجد اسماً في الميتا
+    final_display_name = bot_type_key 
+    
+    try:
+        from sheets import meta_sheet
+        if meta_sheet:
+            # البحث عن الاسم الوصفي المرتبط بنوع الموديول المختار
+            # (نظام الكاش يجعل هذه العملية سريعة جداً)
+            records = meta_sheet.get_all_records()
+            for r in records:
+                # إذا كانت القيمة تطابق نوع الموديول المختار
+                if str(r.get('value')).strip() == bot_type_key.strip():
+                    final_display_name = r.get('value')
+                    break
+        
+        # توافقية إضافية للأنواع الأساسية
+        mapping = {
+            "contact_bot": "بوت تواصل",
+            "protection_bot": "بوت حماية",
+            "education_bot": "منصة تعليمية",
+            "store_bot": "متجر إلكتروني",
+            "ai_bot": "بوت ذكاء اصطناعي"
+        }
+        if final_display_name in mapping:
+            final_display_name = mapping[final_display_name]
+
+    except Exception as e:
+        print(f"⚠️ تنبيه: فشل جلب الاسم الديناميكي، سيتم استخدام المعرف التقني: {e}")
+
+    # 4. السحر البرمجي: وضع الاسم المكتشف كـ "نص الرسالة" لتقرأه دالة finalize_bot
+    # هذا السطر يمنع ظهور التوكن في خانة "الاسم" بالأشعارات
+    update.message.text = final_display_name
+    
+    # 5. الانطلاق الفوري لإنهاء العملية والحفظ (سريع وبدون أسئلة إضافية للعميل)
     await finalize_bot(update, context)
     return ConversationHandler.END
+
 
 # --------------------------------------------------------------------------
 # --- المحرك الديناميكي الأوتوماتيكي المطور ---
@@ -297,7 +335,7 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     bot_type = context.user_data.get("type")
     bot_token = context.user_data.get("bot_token")
 
-    msg = await update.message.reply_text("⏳ جاري تهيئة المحرك وفك تداخل التوكينات...")
+    msg = await update.message.reply_text("⏳ جاري تهيئة المحرك ...")
 
     try:
         from telegram import Bot

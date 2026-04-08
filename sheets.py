@@ -783,9 +783,9 @@ def update_meta_info():
                 ["key", "value", "updated_at"], 
                 ["version", SCHEMA_VERSION, get_system_time("date")], 
                 ["engine_status", "HEALTHY", datetime.now().isoformat()],
-                ["desc_transcriber_bot.py", "transcriber_bot", "Active"],
-                ["desc_ai_bot.py", "ai_bot", "Active"],
-                ["desc_downloader_bot.py", "downloader_bot", "Active"]
+                ["desc_transcriber_bot.py", "التفريغ الصوتي", "Active"],
+                ["desc_ai_bot.py", "الذكاء الاصطناعي", "Active"],
+                ["desc_downloader_bot.py", "تحميل فيديوهات", "Active"]
             ]
             # التحديث المباشر للنطاق لضمان عدم مسح أي شيء يدوياً أسفل الصف 7
             safe_api_call(meta_ws.update, 'A1:C7', meta_data)
