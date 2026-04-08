@@ -18,6 +18,7 @@ from telegram.ext import (
 # --- [ ذاكرة المحادثات المؤقتة للطلاب ] ---
 user_messages = {} 
 
+# ادمج هذه الكتلة في السطر 21 بدلاً من القديمة واحذف أي استيراد لـ sheets داخل الدوال
 from sheets import (
     get_bot_config, 
     add_log_entry, 
@@ -30,8 +31,41 @@ from sheets import (
     update_category_name,
     add_new_course,
     get_courses_by_category,
-    delete_course_by_id
+    delete_course_by_id,
+    get_ai_setup,
+    link_user_to_inviter,
+    check_user_permission,
+    ss,
+    get_user_referral_stats,
+    get_bot_setting,
+    redeem_points_for_course,
+    courses_sheet,
+    get_all_coaches,
+    delete_coach_from_sheet,
+    add_new_coach_advanced,
+    smart_sync_check,
+    get_bot_data_from_cache,
+    delete_question_from_bank,
+    add_question_to_bank,
+    create_auto_quiz,
+    toggle_quiz_visibility,
+    ensure_permission_row_exists,
+    get_employee_permissions,
+    save_group_to_db,
+    delete_group_by_id,
+    update_group_field,
+    toggle_scope_id,
+    get_all_personnel_list,
+    toggle_employee_permission,
+    get_newly_activated_students,
+    update_global_version,
+    find_user_by_username,
+    update_content_setting,
+    client,
+    save_ai_setup,
+    get_courses_knowledge_base
 )
+
 
 from educational_manager import manage_groups_main
 
@@ -116,7 +150,7 @@ def get_coach_panel():
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """معالجة أمر /start برسائل ترحيبية ذكية ودعم نظام الإحالة والأدوار (مالك، موظف، مدرب، طالب)"""
     from datetime import datetime
-    from sheets import get_ai_setup, save_user, link_user_to_inviter, check_user_permission
+
     
     user = update.effective_user
     bot_token = context.bot.token
@@ -250,7 +284,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
     # 7. معالج حذف الكود
     elif data.startswith("confirm_del_disc_"):
         disc_id = data.replace("confirm_del_disc_", "")
-        from sheets import ss
+
         sheet = ss.worksheet("أكواد_الخصم")
         try:
             cell = sheet.find(disc_id, in_column=3)
@@ -278,7 +312,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         referral_link = f"https://t.me/{bot_username}?start=ref_{user_id}"
         
         # جلب إحصائيات الإحالة والرصيد من ملف sheets
-        from sheets import get_user_referral_stats
+
         stats = get_user_referral_stats(bot_token, user_id)
         
         text = (
@@ -315,7 +349,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         disc_id = parts[2]
         new_action = parts[3] # on أو off
         
-        from sheets import ss
+ 
         sheet = ss.worksheet("أكواد_الخصم")
         try:
             cell = sheet.find(disc_id, in_column=3) # البحث في عمود معرف_الخصم
@@ -334,7 +368,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
     # أضف هذا الشرط داخل دالة contact_callback_handler في education_bot.py
     elif data == "redeem_store":
         await query.answer()
-        from sheets import get_user_referral_stats, get_bot_setting, get_courses_by_category
+        
         
         stats = get_user_referral_stats(bot_token, user_id)
         current_balance = stats.get('balance', 0)
@@ -352,7 +386,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         
         # جلب الدورات المتاحة (يمكنك تعديل هذا لجلب دورات محددة فقط)
         # هنا سنعرض مثالاً لجلب كافة الدورات لتبسيط الاختيار
-        from sheets import ss
+
         courses_ws = ss.worksheet("الدورات_التدريبية")
         all_courses = courses_ws.get_all_records()
         
@@ -374,7 +408,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
     # معالج عملية الشراء الفعلية
     elif data.startswith("buy_c_"):
         course_id = data.replace("buy_c_", "")
-        from sheets import get_bot_setting, redeem_points_for_course
+
         
         redeem_cost = get_bot_setting(bot_token, "min_points_redeem", default=100)
         success, new_balance = redeem_points_for_course(bot_token, user_id, redeem_cost)
@@ -388,7 +422,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 # ربط الدورات بالنقاط
     elif data == "my_profile":
         await query.answer()
-        from sheets import ss
+
         # جلب الدورات التي تسجل فيها الطالب من ورقة سجل_التسجيلات
         reg_sheet = ss.worksheet("سجل_التسجيلات")
         all_regs = reg_sheet.get_all_records()
@@ -446,7 +480,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
     # إضافة هذا القسم للتعامل مع زر إدارة المجموعات
     elif data == "manage_group":
         # بما أن إدارة المجموعات تتطلب معرفة الدورة، سنعرض قائمة الدورات أولاً لاختيار واحدة
-        from sheets import courses_sheet
+
         all_courses = courses_sheet.get_all_records()
         bot_courses = [c for c in all_courses if str(c.get('bot_id')) == str(bot_token)]
         
@@ -487,7 +521,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 # --------------------------------------------------------------------------
     # عرض قائمة المدربين كأزرار
     elif data == "list_coaches":
-        from sheets import get_all_coaches
+
         coaches = get_all_coaches(bot_token)
         if not coaches:
             await query.edit_message_text("⚠️ لا يوجد مدربون مسجلون حالياً.", 
@@ -501,7 +535,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
     # عرض تفاصيل مدرب محدد مع زر الحذف
     elif data.startswith("view_coach_"):
         coach_id = data.replace("view_coach_", "")
-        from sheets import get_all_coaches
+
         coaches = get_all_coaches(bot_token)
         coach = next((c for c in coaches if str(c['id']) == str(coach_id)), None)
         
@@ -516,7 +550,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
     # تنفيذ الحذف الفعلي للمدرب
     elif data.startswith("del_coach_"):
         coach_id = data.replace("del_coach_", "")
-        from sheets import delete_coach_from_sheet
+
         if delete_coach_from_sheet(bot_token, coach_id):
             await query.answer("✅ تم حذف المدرب بنجاح", show_alert=True)
             await query.edit_message_text("✅ تم الحذف. هل تريد إدارة مدرب آخر؟", 
@@ -642,7 +676,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         await query.edit_message_text("✍️ <b>الخطوة 1:</b> أرسل اسم المدرب الثلاثي:", parse_mode="HTML")
 
     elif data == "confirm_save_coach":
-        from sheets import add_new_coach_advanced
+
         c = context.user_data.get('temp_coach')
         
         if not c:
@@ -680,7 +714,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         await query.edit_message_text("✍️ **الخطوة 2:** أرسل اسم الدورة الآن:")
 
     elif data == "confirm_save_full_crs":
-        from sheets import add_new_course 
+
         import uuid
         
         # 1. جلب البيانات المؤقتة (البيانات + معرف القسم)
@@ -732,14 +766,14 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 
     # --- 5. إدارة الأقسام (عرض القائمة) ---
     elif data == "manage_cats":
-        from sheets import check_user_permission
+
         # نتحقق هل لديه صلاحية الأقسام؟
         if not check_user_permission(bot_token, user_id, "صلاحية_الأقسام"):
             await query.answer("🚫 ليس لديك صلاحية لإدارة الأقسام.", show_alert=True)
             return
             
         # إذا كان لديه صلاحية، يكمل الكود الطبيعي...
-        from sheets import get_all_categories 
+   
         categories = get_all_categories(bot_token)
         # ... بقية الكود
 
@@ -784,7 +818,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         await query.answer("⌛ جاري تجهيز القائمة...")
         
         # استدعاء دوال المزامنة والذاكرة المؤقتة لضمان السرعة وعدم ثقل الزر
-        from sheets import smart_sync_check, get_bot_data_from_cache, get_bot_config
+
         
         # إجراء فحص المزامنة الصامت
         smart_sync_check(bot_token)
@@ -825,7 +859,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
     elif data.startswith("sel_coach_for_crs_"):
         coach_id = data.replace("sel_coach_for_crs_", "")
         
-        from sheets import smart_sync_check, get_bot_data_from_cache
+
         smart_sync_check(bot_token)
         coaches_records = get_bot_data_from_cache(bot_token, "المدربين")
         
@@ -875,7 +909,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 
     elif data.startswith("view_crs_in_"):
         cat_id = data.replace("view_crs_in_", "")
-        from sheets import get_courses_by_category
+
         courses = get_courses_by_category(bot_token, cat_id)
         
         keyboard = []
@@ -1123,7 +1157,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 
     elif data.startswith("exec_del_q_"):
         q_id = data.replace("exec_del_q_", "")
-        from sheets import delete_question_from_bank
+
         if delete_question_from_bank(bot_token, q_id):
             await query.answer("🗑️ تم حذف السؤال من البنك بنجاح", show_alert=True)
             from educational_manager import browse_q_bank_ui
@@ -1172,7 +1206,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 
     # التنفيذ الفعلي للحفظ في الشيت
     elif data == "exec_save_question":
-        from sheets import add_question_to_bank
+
         import uuid
         q_data = context.user_data.get('temp_q')
         q_data['q_id'] = f"Q{str(uuid.uuid4().int)[:5]}"
@@ -1187,7 +1221,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             await query.answer("❌ فشل الحفظ في الشيت")
 
     elif data == "exec_create_quiz_final":
-        from sheets import create_auto_quiz
+
         quiz_data = context.user_data.get('temp_quiz')
         # تحويل القائمة لنص لحفظها في الشيت
         quiz_data['target_groups'] = ",".join(quiz_data['target_groups'])
@@ -1222,7 +1256,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
     # معالج تبديل رؤية الاختبار (النسخة المعتمدة والمرنة)
     elif data.startswith("q_toggle_vis_"):
         quiz_id = data.replace("q_toggle_vis_", "")
-        from sheets import toggle_quiz_visibility
+
         
         # 1. تغيير الحالة في الشيت (TRUE <-> FALSE)
         new_status = toggle_quiz_visibility(bot_token, quiz_id)
@@ -1237,7 +1271,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
     # 7. إدارة صلاحيات الموظف (التأسيس الصامت + عرض اللوحة)
     elif data.startswith("setup_p_perms_"):
         person_id = data.replace("setup_p_perms_", "")
-        from sheets import ensure_permission_row_exists, get_employee_permissions
+        
         
         # التأكد من وجود سجل في ورقة الهيكل التنظيمي
         ensure_permission_row_exists(bot_token, person_id)
@@ -1288,7 +1322,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         parts = data.split("_")
         teacher_id = parts[2]
         # جلب الاسم من دالة جلب المدربين السابقة
-        from sheets import get_all_coaches
+        
         coaches = get_all_coaches(bot_token)
         teacher_name = next((c['name'] for c in coaches if str(c['id']) == str(teacher_id)), "مدرب")
         
@@ -1297,7 +1331,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 
     # التنفيذ الفعلي للحفظ
     elif data == "exec_save_group":
-        from sheets import save_group_to_db
+
         group_data = context.user_data.get('temp_grp')
         if save_group_to_db(bot_token, group_data):
             await query.answer("✅ تم إنشاء المجموعة بنجاح", show_alert=True)
@@ -1323,7 +1357,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
     # التنفيذ الفعلي للحذف
     elif data.startswith("grp_exec_del_"):
         group_id = data.replace("grp_exec_del_", "")
-        from sheets import delete_group_by_id
+
         if delete_group_by_id(bot_token, group_id):
             await query.answer("🗑️ تم حذف المجموعة بنجاح", show_alert=True)
             # العودة للقائمة (ستحتاج لتخزين course_id في context.user_data للعودة الصحيحة)
@@ -1334,7 +1368,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
     # التعديلات (تغيير الحالة كمثال سريع)
     elif data.startswith("grp_edit_status_"):
         group_id = data.replace("grp_edit_status_", "")
-        from sheets import update_group_field
+        
         # تبديل الحالة بين نشطة ومغلقة
         update_group_field(bot_token, group_id, "حالة_المجموعة", "مغلقة")
         await query.answer("✅ تم تغيير حالة المجموعة إلى مغلقة")
@@ -1358,7 +1392,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 # --------------------------------------------------------------------------
     # --- [ جزء استعراض الطلاب للدورات ] ---
     elif data == "view_courses":
-        from sheets import get_all_categories
+        
         categories = get_all_categories(bot_token)
         if not categories:
             await query.edit_message_text("⚠️ لا توجد أقسام تعليمية متاحة حالياً.")
@@ -1371,7 +1405,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 
     elif data.startswith("std_cat_"):
         cat_id = data.replace("std_cat_", "")
-        from sheets import get_courses_by_category
+       
         courses = get_courses_by_category(bot_token, cat_id)
         
         if not courses:
@@ -1392,7 +1426,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         emp_id = parts[3]
         target_crs_id = parts[4]
         
-        from sheets import toggle_scope_id
+        
         # تحديث القائمة في الشيت (إضافة/حذف ID الدورة)
         toggle_scope_id(bot_token, emp_id, "الدورات_المسموحة", target_crs_id)
         
@@ -1409,7 +1443,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 # --------------------------------------------------------------------------
 # أضف هذا الجزء داخل دالة contact_callback_handler في ملف education_bot.py
     elif data == "manage_personnel":
-        from sheets import get_all_personnel_list
+        
         people = get_all_personnel_list(bot_token)
         
         if not people:
@@ -1433,7 +1467,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
     # 2. عرض لوحة الصلاحيات (الصح ☑️ والخطأ ✖️) فور اختيار الاسم
     elif data.startswith("manage_perms_"):
         emp_id = data.replace("manage_perms_", "")
-        from sheets import get_employee_permissions
+        
         
         # جلب الصلاحيات الحالية لعرض حالة الأزرار
         current_perms = get_employee_permissions(bot_token, emp_id)
@@ -1460,13 +1494,13 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             await show_course_selector(query, context, emp_id)
         else: # طلب تبديل دورة محددة
             target_crs_id = parts[4]
-            from sheets import toggle_scope_id
+
             toggle_scope_id(bot_token, emp_id, "الدورات_المسموحة", target_crs_id)
             await show_course_selector(query, context, emp_id)
 
 
     elif data == "view_courses_admin": # زر استعراض الدورات للموظف
-        from sheets import get_employee_permissions, courses_sheet
+        
         
         perms = get_employee_permissions(bot_token, user_id)
         allowed_str = perms.get("الدورات_المسموحة", "")
@@ -1557,7 +1591,7 @@ def get_permissions_keyboard(bot_token, employee_id, current_perms):
 # دالة معالجة التبديل (Toggle) في CallbackQueryHandler
 # تذكر إضافتها داخل contact_callback_handler
 async def handle_permission_toggle(query, bot_token, employee_id, col_name):
-    from sheets import toggle_employee_permission, get_employee_permissions
+    
     
     # 1. تحديث القيمة في الشيت
     new_status = toggle_employee_permission(bot_token, employee_id, col_name)
@@ -1573,7 +1607,7 @@ async def handle_permission_toggle(query, bot_token, employee_id, col_name):
  
  # دالة توليد أزرار الدورات لاختيارها للموظف
 async def show_course_selector(update, context, employee_id):
-    from sheets import courses_sheet, get_employee_permissions
+    
     
     bot_token = context.bot.token
     # جلب الصلاحيات الحالية لمعرفة ما هو "مختار" سابقاً
@@ -1601,7 +1635,7 @@ async def show_course_selector(update, context, employee_id):
 async def activation_monitor(context: ContextTypes.DEFAULT_TYPE):
     """وظيفة خلفية تراقب تفعيلات الطلاب وترسل تنبيهات فورا"""
     bot_token = context.bot.token
-    from sheets import get_newly_activated_students, ss
+    
     
     new_activations = get_newly_activated_students(bot_token)
     
@@ -1659,7 +1693,7 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
         if action == 'awaiting_json_backup' and doc.file_name.endswith('.json'):
             import json
             import io
-            from sheets import ss, update_global_version
+
             
             file = await context.bot.get_file(doc.file_id)
             content = await file.download_as_bytearray()
@@ -1693,7 +1727,7 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
         if action == 'awaiting_excel_file':
             import pandas as pd
             import os, uuid
-            from sheets import add_new_course, add_new_category, add_new_coach_advanced
+
             
             file = await context.bot.get_file(doc.file_id)
             file_path = f"temp_{uuid.uuid4().hex}_{doc.file_name}"
@@ -1796,7 +1830,7 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
         if action == 'awaiting_cat_name':
             import uuid
             cat_id = f"C{str(uuid.uuid4().int)[:4]}"
-            from sheets import add_new_category
+           
             if add_new_category(bot_token, cat_id, text):
                 context.user_data['action'] = None
                 await update.message.reply_text(f"✅ تم إنشاء القسم بنجاح: <b>{text}</b>", reply_markup=get_admin_panel(), parse_mode="HTML")
@@ -1808,7 +1842,7 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
         elif action == 'awaiting_emp_id_for_perms':
             emp_id = text
             context.user_data['action'] = None
-            from sheets import get_employee_permissions
+            
             
             # جلب الصلاحيات الحالية من الشيت لعرض الأزرار بشكل صحيح
             current_perms = get_employee_permissions(bot_token, emp_id)
@@ -1825,7 +1859,7 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
         # تعديل اسم قسم
         elif action == 'awaiting_new_cat_name':
             cat_id = context.user_data.get('selected_cat_id')
-            from sheets import update_category_name
+            
             if update_category_name(bot_token, cat_id, text):
                 context.user_data['action'] = None
                 await update.message.reply_text(f"✅ تم تحديث اسم القسم إلى: <b>{text}</b>", reply_markup=get_admin_panel(), parse_mode="HTML")
@@ -1836,7 +1870,7 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
             import uuid
             course_cat = context.user_data.get('temp_course_cat')
             course_id = f"CRS{str(uuid.uuid4().int)[:4]}"
-            from sheets import add_new_course
+            
             if add_new_course(bot_token, course_id, text, course_cat):
                 context.user_data['action'] = None
                 await update.message.reply_text(f"✅ تم إضافة الدورة بنجاح: <b>{text}</b>", reply_markup=get_admin_panel(), parse_mode="HTML")
@@ -1859,7 +1893,7 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
         # الخطوة 4: السعر وعرض خيارات المدربين
         elif action == 'awaiting_crs_price':
             context.user_data['temp_crs']['price'] = text
-            from sheets import get_all_coaches
+            
             coaches = get_all_coaches(bot_token)
             
             msg = "👨‍🏫 <b>الخطوة 5:</b> اختر المدرب من القائمة أدناه، أو أرسل (يوزرنايم/ID) يدوي:"
@@ -1882,7 +1916,7 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
                 await update.message.reply_text(f"✅ تم قبول المعرف: <code>{input_val}</code>\n\n🗓 <b>الخطوة 6:</b> أرسل تاريخ بداية الدورة:", parse_mode="HTML")
             else:
                 coach_username = input_val.replace("@", "")
-                from sheets import find_user_by_username
+                
                 user_data = find_user_by_username(bot_token, coach_username)
                 if user_data:
                     context.user_data['temp_crs'].update({'coach_user': f"@{coach_username}", 'coach_id': user_data['id'], 'coach_name': user_data['name']})
@@ -1961,7 +1995,7 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
             lines = text.split('\n')
             success_count = 0
             failed_lines = []
-            from sheets import add_new_course
+            
             import uuid
 
             for line in lines:
@@ -2015,7 +2049,7 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
 #-----
         elif action == 'awaiting_sheet_link':
             import re, uuid
-            from sheets import client, add_new_course
+            
             
             # استخراج ID الشيت من الرابط بدقة
             match = re.search(r"/d/([a-zA-Z0-9-_]+)", text)
@@ -2076,7 +2110,7 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
         elif action == 'awaiting_new_welcome_text':
             period = context.user_data.get('edit_period')
             column_name = f"welcome_{period}"
-            from sheets import update_content_setting
+            
             if update_content_setting(bot_token, column_name, text):
                 await update.message.reply_text(f"✅ تم تحديث كليشة الترحيب <b>({period})</b> بنجاح!", reply_markup=get_admin_panel(), parse_mode="HTML")
                 context.user_data['action'] = None
@@ -2087,7 +2121,7 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
         # 1. استقبال اسم المؤسسة (تم دمجه في تسلسل الإدارة)
         # 1. استقبال اسم المؤسسة
         elif action == 'awaiting_institution_name':
-            from sheets import save_ai_setup
+           
             if save_ai_setup(bot_token, user.id, user.username, institution_name=text):
                 context.user_data['action'] = 'awaiting_ai_instructions'
                 await update.message.reply_text(f"✅ تم حفظ الاسم: <b>{text}</b>\n\nالآن أرسل <b>تعليمات الذكاء الاصطناعي</b> للمنصة:")
@@ -2099,7 +2133,7 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
 
         # 2. استقبال تعليمات AI
         elif action == 'awaiting_ai_instructions':
-            from sheets import save_ai_setup
+            
             if save_ai_setup(bot_token, user.id, user.username, ai_instructions=text):
                 context.user_data['action'] = None
                 await update.message.reply_text("🎊 <b>اكتملت التهيئة!</b> تم ضبط هوية البوت بنجاح.", reply_markup=get_admin_panel())
@@ -2237,14 +2271,14 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
             user_messages[user.id] = []
 
         # جلب قاعدة المعرفة من الشيت
-        from sheets import get_courses_knowledge_base
+       
         courses_knowledge = get_courses_knowledge_base(bot_token)
         
         # إضافة رسالة الطالب للذاكرة
         user_messages[user.id].append({"role": "user", "content": text})
         
         # --- [ الجزء الديناميكي الجديد: جلب الهوية من الشيت ] ---
-        from sheets import get_ai_setup
+        
         ai_info = get_ai_setup(bot_token)
         platform = ai_info.get('اسم_المؤسسة', 'منصة الادارة التعليمية') if ai_info else "منصة الادارة التعليمية"
         rules = ai_info.get('تعليمات_AI', 'أجب بذكاء ولباقة واستخدم الرموز التعبيرية 🎓') if ai_info else "أجب بذكاء ولباقة"
