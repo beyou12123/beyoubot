@@ -56,16 +56,42 @@ def get_student_menu():
     return InlineKeyboardMarkup(keyboard)
 
 
-
+#لوحة الأدمن 
 def get_admin_panel():
     """قائمة الأزرار الرئيسية للوحة تحكم الإدارة - النسخة المطورة بضبط الـ AI"""
     keyboard = [
-        [InlineKeyboardButton("📊 الإحصائيات الذكية", callback_data="admin_stats")],
-        [InlineKeyboardButton("📡 الإذاعة المستهدفة", callback_data="smart_broadcast")],
-        [InlineKeyboardButton("🛠 الإعدادات التقنية", callback_data="tech_settings")],
+        [InlineKeyboardButton("📊 الإحصائيات الذكية", callback_data="admin_stats"), 
+         InlineKeyboardButton("📡 الإذاعة المستهدفة", callback_data="smart_broadcast")],
+        [InlineKeyboardButton("🛠 الإعدادات وتجهيز النظام ", callback_data="tech_settings")], 
+        [InlineKeyboardButton("معلومات تجهيز النظام", callback_data="system_setup_information")],
+        [InlineKeyboardButton("📤 تصدير نسخة احتياطية", callback_data="export_data_json"),
+         InlineKeyboardButton("📥 رفع نسخة بيانات", callback_data="import_data_json")],
+
         [InlineKeyboardButton("❌ إغلاق", callback_data="close_panel")]
     ]
     return InlineKeyboardMarkup(keyboard)
+
+
+#لوحة الموظفين 
+def get_employee_panel():
+    """لوحة الشؤون التعليمية للموظفين والمدربين بناءً على الصلاحيات"""
+    # تم إسناد النص لمتغير لاستخدامه في رسائل التعديل لاحقاً
+    text = "👨‍🏫 <b>إدارة الشؤون التعليمية :</b>\nيمكنك إضافة مدربين جدد دورات جديدة او اقسام او مجموعات أو استعراض القائمة الحالية للحذف."
+    
+    keyboard = [
+        [InlineKeyboardButton("📁 إدارة الأقسام", callback_data="manage_cats"), 
+         InlineKeyboardButton("📚 إدارة الدورات", callback_data="manage_courses")],
+        [InlineKeyboardButton("المكتبة الشاملة", callback_data="manage_library"), 
+         InlineKeyboardButton("الأوسمة والإنجازات", callback_data="honors_achievements")],
+        [InlineKeyboardButton("إدارة المجموعات", callback_data="manage_group"), 
+         InlineKeyboardButton("الأسئلة الشائعة", callback_data="frequently_guestions")],
+        [InlineKeyboardButton("جداول المحاضرات", callback_data="schedules_lectures"), 
+         InlineKeyboardButton("🎟 الكوبونات", callback_data="manage_coupons")],
+        [InlineKeyboardButton("الكنترول", callback_data="manage_control")],
+        [InlineKeyboardButton("🔙 عودة", callback_data="main_menu")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
 
 
 # --- [ المعالجات الأساسية - أمر البداية ] ---
@@ -849,26 +875,43 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 
     elif data == "smart_broadcast":
         await query.edit_message_text("📡 <b>الإذاعة الذكية:</b>", 
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📢 للكل", callback_data="bc_all"), InlineKeyboardButton("🎓 لمشتركي دورة", callback_data="bc_course")]]), parse_mode="HTML")
-
-
-
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📢 للكل", callback_data="bc_all"), InlineKeyboardButton("🎓 لمشتركي دورة", callback_data="bc_course"), InlineKeyboardButton("🎓 لمشتركي مجموعة", callback_data="bc_group")]]), parse_mode="HTML")
 
 
     # --- [ إعدادات الكليشات الذكية ] ---
     elif data == "tech_settings":
         keyboard = [
             [InlineKeyboardButton("📝 كليشة الترحيب الذكية", callback_data="manage_welcome_texts")],
-            [InlineKeyboardButton("👨‍🏫 إدارة المدربين", callback_data="manage_coaches"),InlineKeyboardButton("👨‍🏫 إدارة الموظفين", callback_data="manage_personnel")],
-            [InlineKeyboardButton("🤖 ضبط الـ AI", callback_data="setup_ai_start"),InlineKeyboardButton("إدارة الفروع", callback_data="manage_branches")],
-            [InlineKeyboardButton("🎟 الكوبونات", callback_data="manage_coupons"),InlineKeyboardButton("📢 الإعلانات", callback_data="manage_ads")],
-            [InlineKeyboardButton("الإدارة المالية", callback_data="manage_financial"), InlineKeyboardButton("إدارة الفروع", callback_data="manage_branches")],
-            [InlineKeyboardButton("المهام الإدارية", callback_data="administrative_tasks"), InlineKeyboardButton("الكنترول", callback_data="manage_control")],
-            [InlineKeyboardButton("📊  استيراد البيانات من ملف Excel", callback_data="excel_import_start")], 
-            [InlineKeyboardButton("الإدارة التعليمية", callback_data="manage_educational")],
-            [InlineKeyboardButton("🔙 عودة", callback_data="back_to_admin")]
-            ]
-        await query.edit_message_text("🛠 <b>الإعدادات التقنية:</b>\nتحكم في نصوص النظام والترحيب الذكي من هنا.", 
+            
+    # مستوى أساسي: تجهيز النظام وإدارة البيانات
+                [InlineKeyboardButton("تجهيز قاعدة البيانات", callback_data="database_preparation")],
+    # إدارة الفروع والإدارة المالية
+                [InlineKeyboardButton("إدارة الفروع", callback_data="manage_branches")],
+                [InlineKeyboardButton("📊  استيراد البيانات من ملف Excel", callback_data="excel_import_start")],  
+                [InlineKeyboardButton("الإدارة المالية", callback_data="manage_financial")],                
+    # إدارة الموظفين والمدربين
+                [InlineKeyboardButton("👨‍🏫 إدارة الموظفين", callback_data="manage_personnel"),
+                InlineKeyboardButton("👨‍🏫 إدارة المدربين", callback_data="manage_coaches")],
+    # إدارة الأقسام والدورات
+                [InlineKeyboardButton("📁 إدارة الأقسام", callback_data="manage_cats"),
+                InlineKeyboardButton("📚 إدارة الدورات", callback_data="manage_courses")],
+                [InlineKeyboardButton("الكنترول", callback_data="manage_control")],               
+    # المكتبة والأوسمة
+                [InlineKeyboardButton("المكتبة الشاملة", callback_data="manage_library"),
+                InlineKeyboardButton("الأوسمة والإنجازات", callback_data="honors_achievements")],
+    # إدارة المجموعات والأسئلة الشائعة
+                [InlineKeyboardButton("إدارة المجموعات", callback_data="manage_group"),
+                InlineKeyboardButton("الأسئلة الشائعة", callback_data="frequently_guestions")],
+    # جداول المحاضرات وأكواد الخصم
+                [InlineKeyboardButton("جداول المحاضرات", callback_data="schedules_lectures"),
+                InlineKeyboardButton("أكواد الخصم", callback_data="discount_codes")],
+    # الكوبونات والإعلانات
+                [InlineKeyboardButton("🎟 الكوبونات", callback_data="manage_coupons"),
+                InlineKeyboardButton("📢 الإعلانات", callback_data="manage_ads")],
+    # المهام الإدارية والعودة
+               [InlineKeyboardButton("المهام الإدارية", callback_data="administrative_tasks"), InlineKeyboardButton("🔙 عودة", callback_data="back_to_admin")]
+               ]
+        await query.edit_message_text("👨‍🏫 <b>إدارة الشؤون التعليمية :</b>\nيمكنك إضافة مدربين جدد دورات جديدة او اقسام او مجموعات أو استعراض القائمة الحالية للحذف.", 
                                       reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
     elif data == "manage_welcome_texts":
@@ -886,21 +929,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         periods_ar = {"morning": "الصباحية", "noon": "الظهرية", "evening": "المسائية", "night": "الليلية"}
         await query.edit_message_text(f"✍️ <b>تعديل الرسالة {periods_ar[period]}:</b>\n\nأرسل الآن النص الجديد (يمكنك استخدام HTML):")
 # --------------------------------------------------------------------------
-#قسم الأزرار الاضافية الجديدة 
-    elif data == "manage_educational":
-        await query.edit_message_text(
-            "👨‍🏫 <b>إدارة الشؤون التعليمية :</b>\nيمكنك إضافة مدربين جدد دورات جديدة او اقسام او مجموعات أو استعراض القائمة الحالية للحذف.",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("📁 إدارة الأقسام", callback_data="manage_cats"), InlineKeyboardButton("📚 إدارة الدورات", callback_data="manage_courses")],
-                [InlineKeyboardButton("المكتبة الشاملة", callback_data="manage_library"), InlineKeyboardButton("الأوسمة والإنجازات", callback_data="honors_achievements")],
-                [InlineKeyboardButton("إدارة المجموعات", callback_data="manage_group"), InlineKeyboardButton("الأسئلة الشائعة", callback_data="frequently_guestions")],
-                [InlineKeyboardButton("جداول المحاضرات", callback_data="schedules_lectures"), InlineKeyboardButton("أكواد الخصم", callback_data="discount_codes")],
-                [InlineKeyboardButton("الإدارة المالية", callback_data="manage_financial"), InlineKeyboardButton("إدارة الفروع", callback_data="manage_branches")],
-                [InlineKeyboardButton("🎟 الكوبونات", callback_data="manage_coupons"), InlineKeyboardButton("📢 الإعلانات", callback_data="manage_ads")],
-                [InlineKeyboardButton("الكنترول", callback_data="manage_control")],
-                [InlineKeyboardButton("المهام الإدارية", callback_data="administrative_tasks"), InlineKeyboardButton("🔙 عودة", callback_data="tech_settings")]
-            ]), parse_mode="HTML"
-        )
+
 # --------------------------------------------------------------------------
 
 # --------------------------------------------------------------------------
@@ -1370,6 +1399,45 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             # إذا كان المالك (allowed_str فارغ غالباً)، اعرض الكل
             filtered = [c for c in all_courses if str(c['bot_id']) == str(bot_token)]
             
+# --------------------------------------------------------------------------
+    # معالج تصدير النسخة الاحتياطية بصيغة JSON
+    elif data == "export_data_json":
+        import json
+        from cache_manager import FACTORY_GLOBAL_CACHE
+        
+        await query.message.reply_text("⏳ جاري سحب بياناتك من نظام المزامنة...")
+        
+        # تجميع البيانات الخاصة بهذا البوت فقط من كافة الأوراق
+        backup_data = {}
+        for sheet_name, records in FACTORY_GLOBAL_CACHE["data"].items():
+            # فلترة الصفوف التي تخص هذا التوكن فقط
+            bot_records = [r for r in records if str(r.get("bot_id")) == str(bot_token)]
+            if bot_records:
+                backup_data[sheet_name] = bot_records
+        
+        if not backup_data:
+            await query.message.reply_text("⚠️ لا توجد بيانات مسجلة لتصديرها حالياً.")
+            return
+
+        # تحويل البيانات لملف JSON في الذاكرة
+        json_file = io.BytesIO(json.dumps(backup_data, indent=4, ensure_ascii=False).encode('utf-8'))
+        json_file.name = f"Backup_{bot_token[:5]}.json"
+        
+        await context.bot.send_document(
+            chat_id=query.message.chat_id,
+            document=json_file,
+            caption=f"✅ تم توليد النسخة الاحتياطية (JSON)\n📅 التاريخ: {get_system_time('date')}"
+        )
+
+    # معالج استيراد البيانات (تفعيل حالة الانتظار)
+    elif data == "import_data_json":
+        context.user_data['action'] = 'awaiting_json_backup'
+        await query.edit_message_text("📥 **نظام الاستيراد الذكي:**\nمن فضلك أرسل ملف النسخة الاحتياطية بصيغة `.json` الآن.")
+
+
+
+
+
 
 
 # --------------------------------------------------------------------------
@@ -1501,6 +1569,32 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
         bot_owner_id = 0 # قيمة افتراضية في حال فشل الجلب
         
     action = context.user_data.get('action')
+        if action == 'awaiting_json_backup' and doc.file_name.endswith('.json'):
+            import json
+            from sheets import ss, update_global_version
+            
+            file = await context.bot.get_file(doc.file_id)
+            content = await file.download_as_bytearray()
+            backup_data = json.loads(content.decode('utf-8'))
+            
+            msg = await update.message.reply_text("🔄 جاري فك التشفير ومزامنة الجداول...")
+            
+            for sheet_name, rows in backup_data.items():
+                try:
+                    sheet = ss.worksheet(sheet_name)
+                    # حذف البيانات القديمة للبوت قبل الرفع (اختياري حسب رغبتك)
+                    # ثم رفع البيانات الجديدة
+                    for r in rows:
+                        sheet.append_row(list(r.values()))
+                except: continue
+                
+            update_global_version(bot_token)
+            await msg.edit_text("✅ تم استعادة البيانات ومزامنة السيرفر بنجاح!")
+            context.user_data['action'] = None
+            return
+
+
+
 
 # --------------------------------------------------------------------------
 #معالجة المستندات 
