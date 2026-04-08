@@ -1569,6 +1569,10 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
         bot_owner_id = 0 # قيمة افتراضية في حال فشل الجلب
         
     action = context.user_data.get('action')
+    
+    # معالجة المستندات (التي تحتوي على ملف النسخة الاحتياطية)
+    if update.message.document:
+        doc = update.message.document
         if action == 'awaiting_json_backup' and doc.file_name.endswith('.json'):
             import json
             from sheets import ss, update_global_version
@@ -1586,13 +1590,13 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
                     # ثم رفع البيانات الجديدة
                     for r in rows:
                         sheet.append_row(list(r.values()))
-                except: continue
+                except: 
+                    continue
                 
             update_global_version(bot_token)
             await msg.edit_text("✅ تم استعادة البيانات ومزامنة السيرفر بنجاح!")
             context.user_data['action'] = None
             return
-
 
 
 
