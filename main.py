@@ -470,6 +470,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "open_admin_panel" or data == "open_admin_dashboard":
         await owner_dashboard(update, context)
         
+    elif data == "download_cache_files":
+        await download_bot_cache(update, context)
+
     elif data == "back_to_main":
         await query.answer()
         await query.edit_message_text(
@@ -681,6 +684,50 @@ admin_module_conv = ConversationHandler(
     },
     fallbacks=[CommandHandler('cancel', cancel)],
 )
+
+
+# --- دالة تحميل مرآة الكاش (توضع في main.py) ---
+async def download_bot_cache(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """إرسال ملفات الكاش (المرآة) للمطور للتأكد من المزامنة"""
+    # التحقق من أن المستخدم هو المطور
+    user_id = update.effective_user.id
+    if user_id != ADMIN_ID: return
+
+    # التعامل مع الضغطة من الزر الشفاف
+    query = update.callback_query
+    if query: await query.answer()
+
+    # المسار الافتراضي لمجلد الكاش
+    cache_dir = "./cache_data" # تأكد من مطابقة هذا الاسم للمجلد في سيرفرك
+    
+    if not os.path.exists(cache_dir):
+        msg = "❌ مجلد الكاش (المرآة) غير موجود حالياً في السيرفر."
+        if query: await query.edit_message_text(msg)
+        else: await update.message.reply_text(msg)
+        return
+
+    files = [f for f in os.listdir(cache_dir) if f.endswith('.json')]
+    
+    if not files:
+        msg = "⚠️ مجلد الكاش فارغ، لا توجد ملفات مرآة حالياً."
+        if query: await query.edit_message_text(msg)
+        else: await update.message.reply_text(msg)
+        return
+
+    # إرسال الملفات
+    for file_name in files:
+        file_path = os.path.join(cache_dir, file_name)
+        try:
+            with open(file_path, 'rb') as doc:
+                await context.bot.send_document(
+                    chat_id=ADMIN_ID,
+                    document=doc,
+                    caption=f"📄 مرآة الكاش: {file_name}"
+                )
+        except Exception as e:
+            print(f"❌ خطأ في إرسال ملف الكاش: {e}")
+
+
 
 # --- دالة تشغيل البوتات المصنوعة تلقائياً بنظام التتابع الآمن ---
 async def start_all_sub_bots():
