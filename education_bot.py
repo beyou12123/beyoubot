@@ -62,7 +62,7 @@ def get_admin_panel():
     keyboard = [
         [InlineKeyboardButton("📊 الإحصائيات الذكية", callback_data="admin_stats"), 
          InlineKeyboardButton("📡 الإذاعة المستهدفة", callback_data="smart_broadcast")],
-        [InlineKeyboardButton("🛠 الإعدادات وتجهيز النظام ", callback_data="tech_settings")], 
+        [InlineKeyboardButton("🛠 الإعدادات العامة وتجهيز النظام", callback_data="tech_settings")], 
         [InlineKeyboardButton("معلومات تجهيز النظام", callback_data="system_setup_information")],
         [InlineKeyboardButton("📤 تصدير نسخة احتياطية", callback_data="export_data_json"),
          InlineKeyboardButton("📥 رفع نسخة بيانات", callback_data="import_data_json")],
@@ -881,36 +881,43 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
     # --- [ إعدادات الكليشات الذكية ] ---
     elif data == "tech_settings":
         keyboard = [
-            [InlineKeyboardButton("📝 كليشة الترحيب الذكية", callback_data="manage_welcome_texts")],
-            
-    # مستوى أساسي: تجهيز النظام وإدارة البيانات
-                [InlineKeyboardButton("تجهيز قاعدة البيانات", callback_data="database_preparation")],
-    # إدارة الفروع والإدارة المالية
-                [InlineKeyboardButton("إدارة الفروع", callback_data="manage_branches")],
-                [InlineKeyboardButton("📊  استيراد البيانات من ملف Excel", callback_data="excel_import_start")],  
-                [InlineKeyboardButton("الإدارة المالية", callback_data="manage_financial")],                
-    # إدارة الموظفين والمدربين
-                [InlineKeyboardButton("👨‍🏫 إدارة الموظفين", callback_data="manage_personnel"),
-                InlineKeyboardButton("👨‍🏫 إدارة المدربين", callback_data="manage_coaches")],
-    # إدارة الأقسام والدورات
-                [InlineKeyboardButton("📁 إدارة الأقسام", callback_data="manage_cats"),
-                InlineKeyboardButton("📚 إدارة الدورات", callback_data="manage_courses")],
-                [InlineKeyboardButton("الكنترول", callback_data="manage_control")],               
-    # المكتبة والأوسمة
-                [InlineKeyboardButton("المكتبة الشاملة", callback_data="manage_library"),
-                InlineKeyboardButton("الأوسمة والإنجازات", callback_data="honors_achievements")],
-    # إدارة المجموعات والأسئلة الشائعة
-                [InlineKeyboardButton("إدارة المجموعات", callback_data="manage_group"),
-                InlineKeyboardButton("الأسئلة الشائعة", callback_data="frequently_guestions")],
-    # جداول المحاضرات وأكواد الخصم
-                [InlineKeyboardButton("جداول المحاضرات", callback_data="schedules_lectures"),
-                InlineKeyboardButton("أكواد الخصم", callback_data="discount_codes")],
-    # الكوبونات والإعلانات
-                [InlineKeyboardButton("🎟 الكوبونات", callback_data="manage_coupons"),
-                InlineKeyboardButton("📢 الإعلانات", callback_data="manage_ads")],
-    # المهام الإدارية والعودة
-               [InlineKeyboardButton("المهام الإدارية", callback_data="administrative_tasks"), InlineKeyboardButton("🔙 عودة", callback_data="back_to_admin")]
-               ]
+            [
+                InlineKeyboardButton("📝 كليشة الترحيب", callback_data="manage_welcome_texts"),
+                InlineKeyboardButton("تجهيز قاعدة البيانات", callback_data="database_preparation")
+            ],
+            [
+                InlineKeyboardButton("إدارة الفروع", callback_data="manage_branches"),
+                InlineKeyboardButton("الإدارة المالية", callback_data="manage_financial"),
+                InlineKeyboardButton("الكنترول", callback_data="manage_control")
+            ],
+            [
+               InlineKeyboardButton("📊  استيراد Excel", callback_data="excel_import_start"),
+               InlineKeyboardButton("📊  تصدير Excel", callback_data="excel_export_start")
+            ],
+            [InlineKeyboardButton("الأوسمة والإنجازات", callback_data="honors_achievements")], 
+            [
+                InlineKeyboardButton("👨‍🏫 إدارة الموظفين", callback_data="manage_personnel"),
+                InlineKeyboardButton("👨‍🏫 إدارة المدربين", callback_data="manage_coaches"), 
+                InlineKeyboardButton("المهام الإدارية", callback_data="administrative_tasks")
+            ],
+            [
+                InlineKeyboardButton("📁 إدارة الأقسام", callback_data="manage_cats"),
+                InlineKeyboardButton("جداول المحاضرات", callback_data="schedules_lectures"),
+                InlineKeyboardButton("📚 إدارة الدورات", callback_data="manage_courses")
+            ],
+            [
+                InlineKeyboardButton("إدارة المجموعات", callback_data="manage_group"),
+                InlineKeyboardButton("المكتبة الشاملة", callback_data="manage_library"),
+                InlineKeyboardButton("الأسئلة الشائعة", callback_data="frequently_guestions")
+            ],
+            [
+                InlineKeyboardButton("🎟 الكوبونات", callback_data="manage_coupons"),
+                InlineKeyboardButton("📢 الإعلانات", callback_data="manage_ads"),
+                InlineKeyboardButton("أكواد الخصم", callback_data="discount_codes")
+            ],
+            [InlineKeyboardButton("🔙 عودة", callback_data="back_to_admin")]
+        ]
+
         await query.edit_message_text("👨‍🏫 <b>إدارة الشؤون التعليمية :</b>\nيمكنك إضافة مدربين جدد دورات جديدة او اقسام او مجموعات أو استعراض القائمة الحالية للحذف.", 
                                       reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
