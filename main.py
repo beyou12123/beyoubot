@@ -554,6 +554,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
             else:
                 result_text = "⚠️ <b>النظام مهيأ بالفعل!</b>\nالجداول موجودة ومحدثة."
+            from cache_manager import fetch_full_factory_data; fetch_full_factory_data()
                 
         except Exception as e:
             print(f"❌ خطأ في التهيئة: {e}")
