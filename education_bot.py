@@ -199,7 +199,16 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # --- [ 4. فرز الرتب وإرسال الواجهة المناسبة ] ---
 
     # أ: رتبة المالك (الأدمن فوق النظام)
-    if user.id == bot_owner_id:
+    # --- [ 4. فرز الرتب وإرسال الواجهة المناسبة - نسخة صارمة لمنع التداخل ] ---
+    
+    # تحويل معرف المالك إلى رقم صحيح لضمان دقة المقارنة ومنع التداخل
+    try:
+        current_owner_id = int(bot_owner_id)
+    except:
+        current_owner_id = 0
+
+    # أ: رتبة المالك (الأولوية المطلقة - إذا تحقق هذا الشرط لن ينظر البوت لما بعده أبداً)
+    if user.id == current_owner_id:
         final_text = (
             f"<b>مرحباً بك يا دكتور {user.first_name} في مركز قيادة منصتك</b> 🎓\n\n"
             f"{msg}\n\n"
@@ -207,7 +216,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         reply_markup = get_admin_panel()
 
-    # ب: رتبة الموظف أو المدرب (يتم الفحص من شيت الصلاحيات)
+    # ب: رتبة الموظف أو المدرب (يتم الفحص فقط لمن ليس مالكاً ولديه صلاحية "دخول_النظام")
     elif check_user_permission(bot_token, user.id, "دخول_النظام"):
         final_text = (
             f"<b>مرحباً بك يا {user.first_name} في لوحة الإدارة التعليمية</b> 👨‍🏫\n\n"
@@ -216,7 +225,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         reply_markup = get_employee_panel()
 
-    # ج: رتبة الطالب (الافتراضية)
+    # ج: رتبة الطالب (الحالة الافتراضية النهائية لمن لا تنطبق عليه الشروط أعلاه)
     else:
         final_text = f"<b>{msg}</b>"
         reply_markup = get_student_menu()
@@ -227,7 +236,6 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(final_text, reply_markup=reply_markup, parse_mode="HTML")
     else:
         await update.message.reply_text(final_text, reply_markup=reply_markup, parse_mode="HTML")
-
 
 # --------------------------------------------------------------------------
 # --- [ معالج ضغطات الأزرار (Callback Query Handler) ] ---
