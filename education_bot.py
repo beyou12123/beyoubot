@@ -821,7 +821,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 
         
         # إجراء فحص المزامنة الصامت
-        smart_sync_check(bot_token)
+        
         
         # سحب الأقسام من الرام (RAM) مباشرة
         records = get_bot_data_from_cache(bot_token, "الأقسام")
@@ -884,7 +884,6 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             )
         else:
             await query.answer("⚠️ عذراً، تعذر العثور على بيانات هذا المدرب.", show_alert=True)
-
 
 
 
