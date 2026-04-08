@@ -194,3 +194,44 @@ def update_global_version(bot_id):
     except Exception as e:
         print(f"❌ فشل رفع رقم الإصدار العالمي: {e}")
         return None
+
+
+# تحميل الكاش
+
+async def download_bot_cache(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """دالة تسمح للمطور بتحميل ملف الكاش المحلي (المرآة) لأي بوت"""
+    if update.effective_user.id != ADMIN_ID: return
+
+    # نتحقق إذا كان المطور أرسل توكن معين أو يريد كاش المصنع
+    query = update.callback_query
+    await query.answer()
+    
+    # مسار مجلد الكاش (تأكد أن هذا هو المسار المستخدم في cache_manager)
+    cache_dir = "./cache" 
+    
+    if not os.path.exists(cache_dir):
+        await query.edit_message_text("❌ لا يوجد مجلد كاش حالياً في السيرفر.")
+        return
+
+    # جلب قائمة الملفات الموجودة في الكاش
+    files = [f for f in os.listdir(cache_dir) if f.endswith('.json')]
+    
+    if not files:
+        await query.edit_message_text("❌ مجلد الكاش فارغ، لا توجد مرآة حالياً.")
+        return
+
+    await query.edit_message_text(f"⏳ جاري تحضير {len(files)} ملفات كاش للإرسال...")
+
+    for file_name in files:
+        file_path = os.path.join(cache_dir, file_name)
+        try:
+            with open(file_path, 'rb') as doc:
+                await context.bot.send_document(
+                    chat_id=ADMIN_ID,
+                    document=doc,
+                    filename=file_name,
+                    caption=f"📄 نسخة المرآة لـ: {file_name}"
+                )
+        except Exception as e:
+            print(f"❌ خطأ في إرسال ملف {file_name}: {e}")
+ 
