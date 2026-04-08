@@ -411,7 +411,7 @@ async def owner_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("📊 إحصائيات البوتات", callback_data="stats_all")],
         [InlineKeyboardButton("⚙️ تهيئة الجداول", callback_data="run_setup_db_now")],
         [InlineKeyboardButton("📢 إذاعة للمشتركين", callback_data="broadcast_owners")],
-        [InlineKeyboardButton("🔄 تحديث السيرفر", callback_data="restart_factory")],
+        [InlineKeyboardButton("🔄 تحديث السيرفر", callback_data="restart_factory"), InlineKeyboardButton("📥 تحميل مرآة الكاش", callback_data="download_cache_files")],
         [InlineKeyboardButton("🔙 العودة", callback_data="back_to_main")]
     ]
     
@@ -472,6 +472,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     elif data == "download_cache_files":
         await download_bot_cache(update, context)
+
 
     elif data == "back_to_main":
         await query.answer()
@@ -688,33 +689,39 @@ admin_module_conv = ConversationHandler(
 
 # --- دالة تحميل مرآة الكاش (توضع في main.py) ---
 async def download_bot_cache(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """إرسال ملفات الكاش (المرآة) للمطور للتأكد من المزامنة"""
-    # التحقق من أن المستخدم هو المطور
-    user_id = update.effective_user.id
-    if user_id != ADMIN_ID: return
+    """إرسال كافة ملفات الكاش الموجودة في السيرفر للمطور"""
+    if update.effective_user.id != ADMIN_ID: return
 
-    # التعامل مع الضغطة من الزر الشفاف
     query = update.callback_query
     if query: await query.answer()
 
-    # المسار الافتراضي لمجلد الكاش
-    cache_dir = "./cache_data" # تأكد من مطابقة هذا الاسم للمجلد في سيرفرك
+    # فحص المسارات المحتملة للمجلد (تأكد من وجود أحدهم بالسيرفر)
+    possible_dirs = ["./cache_data", "./cache", "./cache_manager"]
+    cache_dir = None
     
-    if not os.path.exists(cache_dir):
-        msg = "❌ مجلد الكاش (المرآة) غير موجود حالياً في السيرفر."
+    for d in possible_dirs:
+        if os.path.exists(d):
+            cache_dir = d
+            break
+    
+    if not cache_dir:
+        msg = "❌ لم يتم العثور على مجلد الكاش في السيرفر (تأكد من اسم المجلد)."
         if query: await query.edit_message_text(msg)
         else: await update.message.reply_text(msg)
         return
 
-    files = [f for f in os.listdir(cache_dir) if f.endswith('.json')]
+    # جلب كافة ملفات JSON أو Pickle
+    files = [f for f in os.listdir(cache_dir) if f.endswith(('.json', '.pkl'))]
     
     if not files:
-        msg = "⚠️ مجلد الكاش فارغ، لا توجد ملفات مرآة حالياً."
+        msg = f"⚠️ المجلد '{cache_dir}' موجود ولكنه فارغ من ملفات المرآة."
         if query: await query.edit_message_text(msg)
         else: await update.message.reply_text(msg)
         return
 
-    # إرسال الملفات
+    # إشعار البدء
+    status_msg = await context.bot.send_message(chat_id=ADMIN_ID, text=f"⏳ جاري سحب {len(files)} ملفات من المرآة...")
+
     for file_name in files:
         file_path = os.path.join(cache_dir, file_name)
         try:
@@ -722,10 +729,13 @@ async def download_bot_cache(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 await context.bot.send_document(
                     chat_id=ADMIN_ID,
                     document=doc,
-                    caption=f"📄 مرآة الكاش: {file_name}"
+                    caption=f"📁 ملف المرآة: {file_name}\n📍 المسار: {cache_dir}"
                 )
         except Exception as e:
-            print(f"❌ خطأ في إرسال ملف الكاش: {e}")
+            print(f"❌ فشل إرسال {file_name}: {e}")
+
+    await status_msg.delete()
+# --------------------------------------------------------------------------
 
 
 
