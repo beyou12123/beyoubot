@@ -99,9 +99,8 @@ def ensure_bot_sync_row(bot_id, owner_id=None, developer_id=None):
 # ==========================================================================
 # 4. محرك السحب الشامل المطور (Comprehensive Fetch Engine)
 # ==========================================================================
-
 def fetch_full_factory_data():
-    """سحب بيانات المصنع كاملة وتحديث الرام والقرص"""
+    """سحب بيانات المصنع كاملة وتحديث الرام والقرص مع ضمان الحفظ الفوري لكل ورقة"""
     from sheets import ss, get_sheets_structure
 
     global FACTORY_GLOBAL_CACHE
@@ -117,7 +116,16 @@ def fetch_full_factory_data():
                 records = sheet.get_all_records()
                 FACTORY_GLOBAL_CACHE["data"][sheet_name] = records
                 
-                print(f"✅ سحب: {sheet_name} | سجلات: {len(records)}")
+                # --- [ التصحيح الجذري: الحفظ الفيزيائي الفوري لكل ورقة ] ---
+                # نضمن هنا كتابة الملف على القرص فور سحبه لضمان وجوده للتحميل
+                try:
+                    file_path = os.path.join(CACHE_DIR, f"{sheet_name}.json")
+                    with open(file_path, 'w', encoding='utf-8') as f:
+                        json.dump(records, f, ensure_ascii=False, indent=4)
+                    print(f"✅ سحب وحفظ: {sheet_name} | سجلات: {len(records)}")
+                except Exception as disk_err:
+                    print(f"⚠️ فشل الكتابة الفيزيائية للورقة {sheet_name}: {disk_err}")
+                
                 time.sleep(0.3) # حماية API جوجل
             except Exception as e:
                 logger.warning(f"⚠️ تخطي الورقة {sheet_name}: {e}")
@@ -132,7 +140,7 @@ def fetch_full_factory_data():
         except:
             print("⚠️ تعذر جلب الإصدارات.")
 
-        # تنفيذ الحفظ الفيزيائي فور انتهاء السحب
+        # تنفيذ الحفظ الفيزيائي الشامل (للمراجعة النهائية وخريطة الإصدارات)
         save_cache_to_disk()
 
         print("🎊 [المحرك]: اكتملت المزامنة الشاملة (رام + قرص).")
@@ -140,6 +148,7 @@ def fetch_full_factory_data():
     except Exception as e:
         logger.error(f"❌ خطأ حرج في المزامنة: {e}")
         return False
+
 
 # ==========================================================================
 # 5. دوال الواجهة (API Interface)
