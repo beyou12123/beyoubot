@@ -411,9 +411,14 @@ async def owner_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("📊 إحصائيات البوتات", callback_data="stats_all")],
         [InlineKeyboardButton("⚙️ تهيئة الجداول", callback_data="run_setup_db_now")],
         [InlineKeyboardButton("📢 إذاعة للمشتركين", callback_data="broadcast_owners")],
-        [InlineKeyboardButton("🔄 تحديث السيرفر", callback_data="restart_factory"), InlineKeyboardButton("📥 تحميل مرآة الكاش", callback_data="download_cache_files")],
+        [
+            InlineKeyboardButton("🔄 تحديث السيرفر", callback_data="restart_factory"), 
+            InlineKeyboardButton("📥 تحميل نسخة احتياطية", callback_data="download_cache_files")
+        ],
+        [InlineKeyboardButton("📤 رفع نسخة احتياطية", callback_data="start_restore_request")],
         [InlineKeyboardButton("🔙 العودة", callback_data="back_to_main")]
     ]
+
     
     text = "🛠 **لوحة تحكم المطور**\nإدارة المصنع والعمليات المركزية:"
     
@@ -473,6 +478,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     elif data == "download_cache_files":
         await download_bot_cache(update, context)
+        
+    elif data == "start_restore_request":
+        await query.answer()
+        await query.edit_message_text("📥 <b>نظام الاستعادة:</b>\nيرجى إرسال ملف النسخة الاحتياطية (.json) الآن.", parse_mode="HTML")
+        
     # استعادة النسخة - القرار النهائي
     elif data == "confirm_restore":
         content = context.user_data.get('pending_restore_content')
@@ -816,6 +826,8 @@ if __name__ == "__main__":
             
         loop.create_task(start_all_sub_bots()) 
         print("🚀 مصنع البوتات يعمل الآن بكافة محركاته...")
+# أضف هذا السطر مع بقية الـ Handlers في الأسفل
+app.add_handler(MessageHandler(filters.Document.ALL, start_restore_process))
         
         # --- [إصلاح: إضافة drop_pending_updates لإنهاء التعارض] ---
         app.run_polling(drop_pending_updates=True) 
