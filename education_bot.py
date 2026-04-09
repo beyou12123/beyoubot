@@ -579,26 +579,36 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 
 # --------------------------------------------------------------------------
 
- # معالجة قرار المالك (موافقة/رفض انضمام كادر)
+    # 1. معالجة ضغطة "اعتماد" القادمة من المالك
     elif data.startswith("approve_reg_"):
         parts = data.split("_")
-        role = parts[2] # coach أو staff
-        candidate_id = parts[3]
+        role = parts[2]
+        candidate_id = int(parts[3]) # هذا هو المعرف الذي أرسلته أنت في الزر
         
-        # تخزين بيانات المرشح مؤقتاً لاختيار الفرع
-        context.user_data['pending_approve'] = {'id': candidate_id, 'role': role}
+        # 🚨 النقطة الجوهرية: سحب البيانات من ذاكرة "المرشح" وليس "المالك"
+        candidate_context = context.application.user_data.get(candidate_id)
         
-        # جلب الفروع من الذاكرة المركزية RAM
-        from cache_manager import FACTORY_GLOBAL_CACHE
-        all_records = FACTORY_GLOBAL_CACHE.get("data", {}).get("إدارة_الفروع", [])
-        branches = [r for r in all_records if str(r.get("bot_id")) == str(bot_token)]
-        
-        if not branches:
-            await query.edit_message_text("⚠️ لا توجد فروع مسجلة. يرجى إضافة فرع أولاً لاعتماد الكادر.")
+        if candidate_context and 'reg_data' in candidate_context:
+            # نقل البيانات لذاكرة المالك مؤقتاً لإتمام عملية اختيار الفرع
+            context.user_data['reg_data'] = candidate_context['reg_data']
+            context.user_data['pending_approve'] = {'role': role, 'id': candidate_id}
+            context.user_data['candidate_username'] = candidate_context['reg_data'].get('username', 'بدون')
+        else:
+            # إذا لم يجد البيانات (بسبب ريستارت أو مسح الذاكرة)
+            await query.answer("⚠️ عذراً، تعذر استعادة بيانات المرشح من الذاكرة. اطلب منه التسجيل مجدداً.", show_alert=True)
             return
 
-        keyboard = [[InlineKeyboardButton(f"🏢 {b.get('اسم_الفرع')}", callback_data=f"final_save_reg_{b.get('معرف_الفرع')}")] for b in branches]
-        await query.edit_message_text("🎯 <b>خطوة أخيرة:</b> اختر الفرع الذي سيتبع له هذا الكادر:", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+        # 2. عرض قائمة الفروع المحدثة من الكاش (نظام 1001001)
+        from cache_manager import FACTORY_GLOBAL_CACHE
+        bot_branches = [r for r in FACTORY_GLOBAL_CACHE.get("data", {}).get("إدارة_الفروع", []) if str(r.get("bot_id")) == str(bot_token)]
+        
+        if not bot_branches:
+            await query.edit_message_text("⚠️ لا توجد فروع مسجلة. أضف فرعاً أولاً من الإعدادات.")
+            return
+
+        # بناء أزرار الفروع
+        keyboard = [[InlineKeyboardButton(f"🏢 {b.get('اسم_الفرع')}", callback_data=f"final_save_reg_{b.get('معرف_الفرع')}")] for b in bot_branches]
+        await query.edit_message_text("🎯 <b>بيانات المرشح جاهزة:</b> اختر الفرع لإتمام الاعتماد:", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
     elif data.startswith("reject_reg_"):
         candidate_id = data.replace("reject_reg_", "")
