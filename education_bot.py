@@ -196,8 +196,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         msg = config.get("welcome_night", "أهلاً بالمثابر.. العظماء يصنعون مستقبلهم في هدوء الليل.")
 
-    # --- [ 4. فرز الرتب وإرسال الواجهة المناسبة ] ---
-    # --- [ 4. فرز الرتب وإرسال الواجهة المناسبة - نسخة صارمة وشاملة لمنع التداخل ] ---
+    # --- [ 4. فرز الرتب وإرسال الواجهة المناسبة - نسخة صارمة ومعززة ضد الانهيار ] ---
     
     # تحويل معرف المالك إلى رقم صحيح لضمان دقة المقارنة ومنع التداخل
     try:
@@ -214,10 +213,11 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         reply_markup = get_admin_panel()
 
-    # ب: رتبة الموظف أو المدرب (التحقق المترابط)
-    # 1. التحقق أولاً من عمود "الصلاحيات" في ورقة "إدارة_الموظفين"
-    # 2. التحقق ثانياً من صلاحية "تحديث_السيرفر" أو أي مفتاح نشط في ورقة الهيكل التنظيمي لضمان وجود سجل
-    elif check_user_permission(bot_token, user.id, "الصلاحيات") or check_user_permission(bot_token, user.id, "صلاحية_الأقسام"):
+    # ب: رتبة الموظف أو المدرب (التحقق المترابط بنظام الفحص الآمن لمنع توقف البوت)
+    # 1. التحقق من عمود "الصلاحيات" في ورقة "إدارة_الموظفين"
+    # 2. أو التحقق من عمود "صلاحية_الأقسام" في ورقة "الهيكل_التنظيمي_والصلاحيات"
+    elif (check_user_permission(bot_token, user.id, "الصلاحيات") == True) or \
+         (check_user_permission(bot_token, user.id, "صلاحية_الأقسام") == True):
         final_text = (
             f"<b>مرحباً بك يا {user.first_name} في لوحة الإدارة التعليمية</b> 👨‍🏫\n\n"
             f"{msg}\n\n"
@@ -231,12 +231,14 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup = get_student_menu()
 
     # --- [ 5. تنفيذ الإرسال النهائي ] ---
-    if query:
-        await query.answer()
-        await query.edit_message_text(final_text, reply_markup=reply_markup, parse_mode="HTML")
-    else:
-        await update.message.reply_text(final_text, reply_markup=reply_markup, parse_mode="HTML")
-
+    try:
+        if query:
+            await query.answer()
+            await query.edit_message_text(final_text, reply_markup=reply_markup, parse_mode="HTML")
+        else:
+            await update.message.reply_text(final_text, reply_markup=reply_markup, parse_mode="HTML")
+    except Exception as e:
+        logger.error(f"❌ خطأ في الإرسال النهائي لـ start_handler: {e}")
 
 # --------------------------------------------------------------------------
 # --- [ معالج ضغطات الأزرار (Callback Query Handler) ] ---
