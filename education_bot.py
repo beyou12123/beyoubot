@@ -197,9 +197,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg = config.get("welcome_night", "أهلاً بالمثابر.. العظماء يصنعون مستقبلهم في هدوء الليل.")
 
     # --- [ 4. فرز الرتب وإرسال الواجهة المناسبة ] ---
-
-    # أ: رتبة المالك (الأدمن فوق النظام)
-    # --- [ 4. فرز الرتب وإرسال الواجهة المناسبة - نسخة صارمة لمنع التداخل ] ---
+    # --- [ 4. فرز الرتب وإرسال الواجهة المناسبة - نسخة صارمة وشاملة لمنع التداخل ] ---
     
     # تحويل معرف المالك إلى رقم صحيح لضمان دقة المقارنة ومنع التداخل
     try:
@@ -207,7 +205,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except:
         current_owner_id = 0
 
-    # أ: رتبة المالك (الأولوية المطلقة - إذا تحقق هذا الشرط لن ينظر البوت لما بعده أبداً)
+    # أ: رتبة المالك (الأولوية المطلقة - السيادة الكاملة على النظام)
     if user.id == current_owner_id:
         final_text = (
             f"<b>مرحباً بك يا دكتور {user.first_name} في مركز قيادة منصتك</b> 🎓\n\n"
@@ -216,8 +214,10 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         reply_markup = get_admin_panel()
 
-    # ب: رتبة الموظف أو المدرب (يتم الفحص فقط لمن ليس مالكاً ولديه صلاحية "دخول_النظام")
-    elif check_user_permission(bot_token, user.id, "دخول_النظام"):
+    # ب: رتبة الموظف أو المدرب (التحقق المترابط)
+    # 1. التحقق أولاً من عمود "الصلاحيات" في ورقة "إدارة_الموظفين"
+    # 2. التحقق ثانياً من صلاحية "تحديث_السيرفر" أو أي مفتاح نشط في ورقة الهيكل التنظيمي لضمان وجود سجل
+    elif check_user_permission(bot_token, user.id, "الصلاحيات") or check_user_permission(bot_token, user.id, "صلاحية_الأقسام"):
         final_text = (
             f"<b>مرحباً بك يا {user.first_name} في لوحة الإدارة التعليمية</b> 👨‍🏫\n\n"
             f"{msg}\n\n"
@@ -236,6 +236,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(final_text, reply_markup=reply_markup, parse_mode="HTML")
     else:
         await update.message.reply_text(final_text, reply_markup=reply_markup, parse_mode="HTML")
+
 
 # --------------------------------------------------------------------------
 # --- [ معالج ضغطات الأزرار (Callback Query Handler) ] ---

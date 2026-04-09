@@ -2205,6 +2205,15 @@ def get_all_coaches_list(bot_token):
     return coaches
 
 # --------------------------------------------------------------------------
+def check_scope_access(allowed_string, target_id):
+    """التحقق من All أو قائمة معرفات (ID1,ID2)"""
+    if not allowed_string: return False
+    # إذا كانت القيمة All يفتح الجميع فوراً
+    if str(allowed_string).strip().lower() == "all":
+        return True
+    # تحويل النص إلى قائمة معرفات والتحقق من الـ ID المطلوب
+    allowed_list = [i.strip() for i in str(allowed_string).split(",")]
+    return str(target_id) in allowed_list
 
 # --------------------------------------------------------------------------
 
