@@ -608,30 +608,39 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         except: pass
 
     # التنفيذ النهائي والحفظ (تم الدمج ليعمل للمدرب والموظف معاً)
+    # التنفيذ النهائي والحفظ (تم الدمج والتدقيق لمنع التهنيج وضمان استعادة البيانات)
     elif data.startswith("final_save_reg_"):
         branch_id = data.replace("final_save_reg_", "")
         pending = context.user_data.get('pending_approve')
-        reg_info = context.user_data.get('reg_data') # البيانات من الذاكرة المؤقتة
+        reg_info = context.user_data.get('reg_data') # البيانات المستعادة من الذاكرة المؤقتة
         
+        # 🛡️ حماية ضد التهنيج: إذا فُقدت البيانات من الرام (بسبب ريستارت أو تأخير)
         if not pending or not reg_info:
-            await query.answer("⚠️ حدث خطأ في استعادة البيانات.")
+            await query.edit_message_text(
+                "⚠️ <b>انتهت صلاحية الجلسة:</b>\nعذراً، فُقدت البيانات المؤقتة. يرجى إعادة الضغط على زر (✅ اعتماد) من رسالة الطلب الأصلية لبدء العملية مجدداً.",
+                parse_mode="HTML"
+            )
             return
 
+        # جلب تفاصيل الفرع من الذاكرة المركزية RAM لضمان جلب الاسم الصحيح
         from cache_manager import FACTORY_GLOBAL_CACHE
         br_records = FACTORY_GLOBAL_CACHE.get("data", {}).get("إدارة_الفروع", [])
-        branch = next((b for b in br_records if str(b.get("معرف_الفرع")) == branch_id), {})
+        # تنظيف المعرف من أي علامات نصية لضمان المطابقة البرمجية
+        branch = next((b for b in br_records if str(b.get("معرف_الفرع")).replace("'", "").strip() == branch_id.strip()), {})
 
+        # استعادة اليوزرنيم المحفوظ أو وضع قيمة افتراضية
         candidate_username = context.user_data.get('candidate_username', 'بدون')
         from sheets import add_new_coach_advanced, add_new_employee_advanced, update_global_version
         
         success = False
         role_type = pending['role']
+        candidate_id = pending['id']
 
         if role_type == "coach":
-            # حفظ في ورقة المدربين
+            # حفظ في ورقة المدربين (15 عموداً)
             success = add_new_coach_advanced(
                 bot_token=bot_token,
-                coach_id=pending['id'],
+                coach_id=candidate_id,
                 name=reg_info['name'],
                 specialty=reg_info['info'],
                 phone=reg_info['phone'],
@@ -641,10 +650,10 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
                 username=candidate_username
             )
         else:
-            # حفظ في ورقة الموظفين (41 عموداً)
+            # حفظ في ورقة الموظفين (41 عموداً بمطابقة تامة للمخطط)
             success = add_new_employee_advanced(
                 bot_token=bot_token,
-                employee_id=pending['id'],
+                employee_id=candidate_id,
                 name=reg_info['name'],
                 job_title=reg_info['info'],
                 phone=reg_info['phone'],
@@ -656,16 +665,26 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 
         if success:
             role_ar = "المدرب" if role_type == "coach" else "الموظف"
-            await query.edit_message_text(f"✅ تم اعتماد {role_ar} بنجاح وربطه بفرع: {branch.get('اسم_الفرع')}")
+            branch_display = branch.get('اسم_الفرع', 'الرئيسي')
+            await query.edit_message_text(f"✅ تم اعتماد {role_ar} بنجاح وربطه بفرع: {branch_display}")
+            
+            # تحديث نبضة النظام العالمية للمزامنة اللحظية
             update_global_version(bot_token)
+            
             try:
-                await context.bot.send_message(chat_id=pending['id'], text="🎊 مبروك! تم قبول طلبك واعتمادك رسمياً في المنصة.")
+                # إشعار الكادر بالقبول النهائي عبر معرفه الرقمي ID
+                await context.bot.send_message(
+                    chat_id=candidate_id, 
+                    text=f"🎊 <b>مبروك!</b> تم قبول طلب انضمامك واعتمادك رسمياً كمـ ({role_ar}) في المنصة التعليمية.\n🏢 الفرع: {branch_display}",
+                    parse_mode="HTML"
+                )
             except: pass
-            # تنظيف الذاكرة
+            
+            # تنظيف الذاكرة المؤقتة بعد النجاح لضمان عدم تداخل الطلبات المستقبيلة
             context.user_data.pop('pending_approve', None)
             context.user_data.pop('reg_data', None)
         else:
-            await query.answer("❌ فشل الحفظ في الشيت، تأكد من اتصال الجداول.")
+            await query.answer("❌ فشل الحفظ في الشيت، يرجى التأكد من صلاحيات الوصول وتوفر الأعمدة.", show_alert=True)
 
 # --------------------------------------------------------------------------
     elif data == "setup_ai_start":
@@ -1159,7 +1178,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             ],
             [InlineKeyboardButton("الأوسمة والإنجازات", callback_data="honors_achievements")], 
             [
-                InlineKeyboardButton("👨‍🏫 صلاحيات الموظفين", callback_data="manage_personnel"),
+                InlineKeyboardButton("👨‍🏫 الصلاحيات", callback_data="manage_personnel"),
                 InlineKeyboardButton("تكويد الكادر", callback_data="manage_coaches"), 
                 InlineKeyboardButton("المهام الإدارية", callback_data="administrative_tasks")
             ],
