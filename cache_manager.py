@@ -219,28 +219,52 @@ def smart_sync_check(bot_id):
     LAST_CHECK_TIME = current_time
     print(f"🔍 [المزامنة الصامتة]: تحديث بيانات المصنع...")
     return fetch_full_factory_data()
+# --------------------------------------------------------------------------
+
 
 def update_global_version(bot_id):
-    """رفع رقم الإصدار وتحديث المرآة فوراً"""
-    from sheets import ss
+    """رفع رقم الإصدار وتحديث المرآة فوراً مع البحث المرن عن المعرف"""
+    from sheets import ss, safe_api_call
     try:
+        if 'ss' not in globals() or ss is None:
+            from sheets import connect_to_google
+            connect_to_google()
+            
         sync_sheet = ss.worksheet("نظام_المزامنة")
-        cell = sync_sheet.find(str(bot_id), in_column=1)
+        # جلب كافة البيانات للبحث المرن وتوفير طلبات البحث المتكررة
+        data = sync_sheet.get_all_values()
         
-        if cell:
-            current_v = int(sync_sheet.cell(cell.row, 2).value or 0)
+        target_row = None
+        search_id = str(bot_id).strip()
+        
+        # البحث عن المعرف في العمود الأول (سواء كان توكن كامل أو آيدي رقمي)
+        for i, row in enumerate(data):
+            if row[0].strip() == search_id or search_id.startswith(row[0].strip()):
+                target_row = i + 1
+                break
+        
+        if target_row:
+            # جلب الإصدار الحالي من العمود الثاني
+            try:
+                current_v = int(data[target_row-1][1] or 0)
+            except:
+                current_v = 0
+                
             new_v = current_v + 1
             
-            sync_sheet.update_cell(cell.row, 2, new_v)
-            sync_sheet.update_cell(cell.row, 3, get_system_time())
+            # التحديث باستخدام safe_api_call لمنع الحظر 429
+            safe_api_call(sync_sheet.update_cell, target_row, 2, new_v)
+            safe_api_call(sync_sheet.update_cell, target_row, 3, get_system_time())
             
-            FACTORY_GLOBAL_CACHE["versions"][str(bot_id)] = new_v
-            
-            # تحديث القرص لضمان أن 'التحميل' سيعطي أحدث نسخة
+            # تحديث الرام والقرص فوراً
+            FACTORY_GLOBAL_CACHE["versions"][search_id] = new_v
             save_cache_to_disk()
             
-            print(f"🔄 [نظام المزامنة]: الإصدار الجديد لـ {bot_id} هو {new_v}")
+            print(f"🔄 [نظام المزامنة]: تم تحديث الصف {target_row} للإصدار {new_v}")
             return new_v
+        else:
+            print(f"⚠️ [نظام المزامنة]: لم يتم العثور على سجل للبوت {search_id} لتحديث إصداره.")
+            return None
     except Exception as e:
         logger.error(f"❌ فشل رفع الإصدار: {e}")
         return None
