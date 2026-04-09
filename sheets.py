@@ -1462,7 +1462,7 @@ def add_question_to_bank(bot_token, data):
         sheet = ss.worksheet("بنك_الأسئلة")
         row = [
             str(bot_token),                    # 1. bot_id
-            data.get('branch_id', '001'),      # 2. معرف_الفرع
+            data.get('branch_id', '1001001'),      # 2. معرف_الفرع
             data.get('quiz_id', 'GENERAL'),    # 3. معرف_الاختبار
             data.get('course_id'),             # 4. معرف_الدورة
             data.get('group_id', 'ALL'),       # 5. معرف_المجموعة
@@ -1501,7 +1501,7 @@ def create_auto_quiz(bot_token, data):
         # الترتيب بناءً على الـ 16 عموداً التي حددتها
         row = [
             str(bot_token),                    # 1
-            data.get('branch_id', '001'),      # 2
+            data.get('branch_id', '1001001'),      # 2
             data.get('quiz_id'),               # 3
             data.get('course_id'),             # 4
             data.get('target_groups', 'ALL'),  # 5. المجموعات_المستهدفة
@@ -1751,7 +1751,7 @@ def save_discount_code_full(bot_token, data):
         # الترتيب الذي تطلبه ورقتك حرفياً:
         row = [
             str(bot_token),             # 1. bot_id
-            "001",                      # 2. معرف_الفرع
+            "1001001",                      # 2. معرف_الفرع
             data['final_code'],         # 3. معرف_الخصم (الكود)
             "نسبة مئوية",               # 4. نوع_الخصم
             data['desc'],               # 5. الوصف (مثل: خصم عيد)
@@ -2045,7 +2045,7 @@ def record_student_submission(bot_token, data):
         # الالتزام الحرفي بأسماء الأعمدة الـ 18 المذكورة في الوثيقة
         row = [
             str(bot_token),                # bot_id
-            data.get('branch_id', '001 '), # معرف_الفرع (مع المسافة حسب طلبك)
+            data.get('branch_id', '1001001 '), # معرف_الفرع (مع المسافة حسب طلبك)
             f"EXEC{str(uuid.uuid4().int)[:5]}", # معرف_التنفيذ
             data['hw_id'],                 # معرف_الواجب
             data['student_id'],            # معرف_الطالب
@@ -2237,26 +2237,37 @@ def check_scope_access(allowed_string, target_id):
     return str(target_id) in allowed_list
 
 # --------------------------------------------------------------------------
-# --- 1. دالة توليد معرف فرع تلقائي ذكي من الكاش ---
+# --- 1. دالة توليد معرف فرع تلقائي ذكي يبدأ من 1001001 ---
 def get_next_branch_id(bot_token):
     try:
-        # البحث في الذاكرة المركزية RAM حصراً
+        # البحث في الذاكرة المركزية RAM حصراً لضمان السرعة
         from cache_manager import FACTORY_GLOBAL_CACHE
         records = FACTORY_GLOBAL_CACHE.get("data", {}).get("إدارة_الفروع", [])
         
-        # تصفية الفروع التابعة لهذا البوت فقط
+        # تصفية الفروع التابعة لهذا البوت فقط لعدم تداخل الفروع بين العملاء
         bot_branches = [r for r in records if str(r.get("bot_id")) == str(bot_token)]
         
-        if not bot_branches: return "001"
+        # إذا كان هذا أول فرع يتم إنشاؤه لهذا البوت
+        if not bot_branches: 
+            return "1001001"
         
         ids = []
         for r in bot_branches:
-            bid = str(r.get("معرف_الفرع", "")).strip()
-            if bid.isdigit(): ids.append(int(bid))
+            # تنظيف المعرف من علامات الاقتباس أو المسافات
+            bid = str(r.get("معرف_الفرع", "")).replace("'", "").strip()
+            if bid.isdigit(): 
+                ids.append(int(bid))
         
-        if not ids: return "001"
-        return str(max(ids) + 1).zfill(3)
-    except: return "001"
+        if not ids: 
+            return "1001001"
+            
+        # جلب أكبر رقم حالي وإضافة 1 (بدون zfill لكي لا يعود للصفر)
+        return str(max(ids) + 1)
+        
+    except Exception as e:
+        print(f"⚠️ خطأ في توليد ID الفرع: {e}")
+        return "1001001" # القيمة الآمنة للبدء في حال حدوث أي خطأ
+
 
 
 # --- 2. دالة إضافة الفرع النهائية المعتمدة ---
