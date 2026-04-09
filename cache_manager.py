@@ -220,8 +220,6 @@ def smart_sync_check(bot_id):
     print(f"🔍 [المزامنة الصامتة]: تحديث بيانات المصنع...")
     return fetch_full_factory_data()
 # --------------------------------------------------------------------------
-
-
 def update_global_version(bot_id):
     """تحديث الإصدار في نظام_المزامنة باستخدام المطابقة المباشرة للمصفوفة لضمان الدقة"""
     from sheets import ss, safe_api_call
@@ -232,20 +230,23 @@ def update_global_version(bot_id):
             connect_to_google()
 
         sync_sheet = ss.worksheet("نظام_المزامنة")
-        # جلب العمود الأول بالكامل (معرفات البوتات) والعمود الثاني (الإصدارات)
+        # جلب العمود الأول بالكامل (معرفات البوتات) لضمان المطابقة النصية الدقيقة
         all_ids = sync_sheet.col_values(1)
         
         search_id = str(bot_id).strip()
         target_row = None
 
-        # البحث عن الصف المناسب بمطابقة النص حرفياً
+        # البحث عن الصف المناسب بمطابقة النص حرفياً لتجنب مشاكل التنسيق في شيت
         for index, row_id in enumerate(all_ids):
             if str(row_id).strip() == search_id:
                 target_row = index + 1
                 break
 
+        # تعريف الوقت الحالي في أعلى الكتلة لاستخدامه في الحالتين (تحديث أو إضافة)
+        now_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
         if target_row:
-            # جلب القيمة الحالية من الخلية مباشرة للتأكد
+            # جلب القيمة الحالية من الخلية مباشرة للتأكد من الرقم الأخير
             current_val = sync_sheet.cell(target_row, 2).value
             try:
                 current_v = int(current_val) if current_val else 0
@@ -253,27 +254,38 @@ def update_global_version(bot_id):
                 current_v = 0
                 
             new_v = current_v + 1
-            now_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-            # تحديث الخلايا في جوجل شيت
+            # تحديث الخلايا في جوجل شيت باستخدام الوسيط الآمن safe_api_call لمنع الحظر
             safe_api_call(sync_sheet.update_cell, target_row, 2, new_v)
             safe_api_call(sync_sheet.update_cell, target_row, 3, now_time)
 
-            # تحديث الذاكرة المركزية RAM
+            # تحديث الذاكرة المركزية RAM لضمان استجابة البوت الفورية بالبيانات الجديدة
             FACTORY_GLOBAL_CACHE["versions"][search_id] = new_v
             
-            # حفظ الكاش فيزيائياً على القرص
+            # حفظ الكاش فيزيائياً على القرص لضمان بقاء البيانات عند إعادة التشغيل
             save_cache_to_disk()
 
             print(f"🔄 [نظام المزامنة]: تم تحديث التوكن بنجاح في الصف {target_row} إلى الإصدار {new_v}")
             return new_v
         else:
-            print(f"⚠️ [نظام المزامنة]: التوكن {search_id} غير موجود في الشيت.")
-            return None
+            # 🆕 التسجيل التلقائي: إذا لم يجد التوكن يقوم بإضافته فوراً في نظام المزامنة
+            # الترتيب المعتمد: [bot_id, رقم_الإصدار, آخر_تحديث, الحالة, ID_المالك, ID_المطور]
+            new_row = [search_id, 1, now_time, "نشط", "تلقائي", str(DEVELOPER_ID)]
+            safe_api_call(sync_sheet.append_row, new_row)
+            
+            # تحديث الذاكرة والقرص للبوت الجديد لضمان مزامنته فوراً
+            new_v = 1
+            FACTORY_GLOBAL_CACHE["versions"][search_id] = new_v
+            save_cache_to_disk()
+            
+            print(f"✨ [نظام المزامنة]: تم تسجيل توكن جديد تلقائياً: {search_id}")
+            return new_v
             
     except Exception as e:
         logger.error(f"❌ فشل رفع الإصدار: {e}")
         return None
+
+
 
 # ==========================================================================
 # 6. دالة التحميل الذكي (تُستدعى من main.py)
