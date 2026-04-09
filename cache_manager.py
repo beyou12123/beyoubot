@@ -32,7 +32,7 @@ if not os.path.exists(CACHE_DIR):
 # مستودع الذاكرة المركزية للمصنع كامل (RAM)
 FACTORY_GLOBAL_CACHE = {
     "data": {},      # بيانات الـ 37 ورقة
-    "versions": {}   # أرقام الإصدارات
+    "versions": {},   # أرقام الإصدارات
     "temp_registration_tokens": {} # تخزين روابط الموظفين والمدربين الموّلدة لحظياً
    
 }
