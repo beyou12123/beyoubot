@@ -176,7 +176,7 @@ def fetch_full_factory_data():
                 except Exception as disk_err:
                     print(f"⚠️ فشل الكتابة الفيزيائية للورقة {sheet_name}: {disk_err}")
                 
-                time.sleep(0.3) # حماية API جوجل
+                time.sleep(1.8) # حماية API جوجل
             except Exception as e:
                 logger.warning(f"⚠️ تخطي الورقة {sheet_name}: {e}")
 
