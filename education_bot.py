@@ -577,8 +577,6 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         )
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 عودة", callback_data="manage_coaches")]]), parse_mode="HTML")
 
-
-        
 # --------------------------------------------------------------------------
 
  # معالجة قرار المالك (موافقة/رفض انضمام كادر)
@@ -1906,7 +1904,6 @@ async def activation_monitor(context: ContextTypes.DEFAULT_TYPE):
 
 # --------------------------------------------------------------------------
 
-
 # --------------------------------------------------------------------------
 # --- [ معالج الرسائل النصية (Message Handler) ] ---
 # --------------------------------------------------------------------------
@@ -1914,31 +1911,86 @@ async def activation_monitor(context: ContextTypes.DEFAULT_TYPE):
 async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """معالجة كافة الرسائل النصية والربط مع محرك g4f لخدمة الطلاب مع بقاء مهام المسؤول كاملة"""
     
-    if not update.message: return
+    if not update.message: return # تم الإبقاء على فحص الرسالة الأساسي
     
     # تنظيف النص من المسافات فور وصوله
     text = update.message.text.strip() if update.message.text else ""
     user = update.effective_user
     bot_token = context.bot.token
+    action = context.user_data.get('action') # الحالة الحالية للمستخدم
     
-    # محاولة جلب الإعدادات ومعرف المسؤول
+    # تصحيح: نقل جلب الإعدادات للأعلى لضمان توفر bot_owner_id لكافة الأقسام
     try:
-
         config = get_bot_config(bot_token)
         bot_owner_id = int(config.get("admin_ids", 0))
     except Exception as e:
         print(f"⚠️ Error getting config: {e}")
-        bot_owner_id = 0 # قيمة افتراضية في حال فشل الجلب
-        
-    action = context.user_data.get('action')
-    
+        bot_owner_id = 0 
+
+    # 🛑 [حماية المسار]: إذا كان المستخدم في أي مرحلة تسجيل، نعالج النص هنا ثم نخرج بـ return فوراً
+    registration_actions = [
+        'awaiting_reg_full_name', 'awaiting_reg_phone', 
+        'awaiting_reg_specialty', 'awaiting_reg_job_title', 
+        'awaiting_reg_email'
+    ]
+
+    if action in registration_actions:
+        # --- 1. مرحلة الاسم الكامل ---
+        if action == 'awaiting_reg_full_name':
+            context.user_data['reg_data'] = {'name': text}
+            context.user_data['action'] = 'awaiting_reg_phone'
+            await update.message.reply_text("📱 ممتاز يا أستاذ، يرجى إرسال <b>رقم الهاتف</b> للتواصل:", parse_mode="HTML")
+            return # يمنع الذهاب للذكاء الاصطناعي
+        elif action == 'awaiting_reg_phone':
+            context.user_data['reg_data']['phone'] = text
+            role = context.user_data.get('reg_role')
+            if role == "coach":
+                context.user_data['action'] = 'awaiting_reg_specialty'
+                await update.message.reply_text("🎓 يرجى إرسال <b>مجال التخصص</b> (تخصص واحد فقط):", parse_mode="HTML")
+            else:
+                context.user_data['action'] = 'awaiting_reg_job_title'
+                await update.message.reply_text("💼 يرجى إرسال <b>المسمى الوظيفي</b> الخاص بك:", parse_mode="HTML")
+            return
+
+        elif action in ['awaiting_reg_specialty', 'awaiting_reg_job_title']:
+            context.user_data['reg_data']['info'] = text
+            context.user_data['action'] = 'awaiting_reg_email'
+            await update.message.reply_text("📧 وأخيراً، يرجى إرسال <b>البريد الإلكتروني</b> الرسمي:", parse_mode="HTML")
+            return
+
+        elif action == 'awaiting_reg_email':
+            reg = context.user_data['reg_data']
+            reg['email'] = text
+            role = context.user_data.get('reg_role')
+            role_ar = "مدرب" if role == "coach" else "موظف"
+            
+            # إرسال البيانات للمالك (أنت) - المتغير bot_owner_id متاح الآن هنا
+            info_msg = (
+                f"🚨 <b>طلب انضمام {role_ar} جديد:</b>\n\n"
+                f"👤 الاسم: {reg['name']}\n"
+                f"📱 الهاتف: {reg['phone']}\n"
+                f"🎓 التخصص/الوظيفة: {reg['info']}\n"
+                f"📧 البريد: {reg['email']}\n"
+                f"🆔 الآيدي: <code>{user.id}</code>\n"
+                f"🔗 اليوزر: @{user.username or 'بدون'}\n\n"
+                f"هل تريد اعتماد هذا الكادر في المؤسسة؟"
+            )
+            keyboard = [
+                [InlineKeyboardButton("✅ نعم، اعتماد", callback_data=f"approve_reg_{role}_{user.id}"),
+                 InlineKeyboardButton("❌ رفض", callback_data=f"reject_reg_{user.id}")]
+            ]
+            await context.bot.send_message(chat_id=bot_owner_id, text=info_msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+            
+            await update.message.reply_text("✅ <b>تم إرسال بياناتك بنجاح.</b>\nسيتم إشعارك فور موافقة الإدارة على طلبك.")
+            context.user_data['action'] = None
+            return
+
     # معالجة المستندات (التي تحتوي على ملف النسخة الاحتياطية)
     if update.message.document:
         doc = update.message.document
         if action == 'awaiting_json_backup' and doc.file_name.endswith('.json'):
             import json
             import io
-
             
             file = await context.bot.get_file(doc.file_id)
             content = await file.download_as_bytearray()
@@ -1949,18 +2001,15 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
             for sheet_name, rows in backup_data.items():
                 try:
                     sheet = ss.worksheet(sheet_name)
-                    # حذف البيانات القديمة للبوت قبل الرفع (اختياري حسب رغبتك)
-                    # ثم رفع البيانات الجديدة
                     for r in rows:
                         sheet.append_row(list(r.values()))
                 except: 
                     continue
                 
-            update_global_version(bot_token)
+            update_global_version(bot_token) # تحديث الإصدار لضمان المزامنة
             await msg.edit_text("✅ تم استعادة البيانات ومزامنة السيرفر بنجاح!")
             context.user_data['action'] = None
             return
-
 
 
 # --------------------------------------------------------------------------
@@ -2042,56 +2091,7 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
             
            
 # --------------------------------------------------------------------------
-         # --- [ تسلسل طلب انضمام كادر جديد ] ---
-        elif action == 'awaiting_reg_full_name':
-            context.user_data['reg_data'] = {'name': text}
-            context.user_data['action'] = 'awaiting_reg_phone'
-            await update.message.reply_text("📱 ممتاز، يرجى إرسال <b>رقم الهاتف</b> للتواصل:", parse_mode="HTML")
-            return
 
-        elif action == 'awaiting_reg_phone':
-            context.user_data['reg_data']['phone'] = text
-            role = context.user_data.get('reg_role')
-            if role == "coach":
-                context.user_data['action'] = 'awaiting_reg_specialty'
-                await update.message.reply_text("🎓 يرجى إرسال <b>مجال التخصص</b> (تخصص واحد فقط):", parse_mode="HTML")
-            else:
-                context.user_data['action'] = 'awaiting_reg_job_title'
-                await update.message.reply_text("💼 يرجى إرسال <b>المسمى الوظيفي</b> الخاص بك:", parse_mode="HTML")
-            return
-
-        elif action in ['awaiting_reg_specialty', 'awaiting_reg_job_title']:
-            context.user_data['reg_data']['info'] = text
-            context.user_data['action'] = 'awaiting_reg_email'
-            await update.message.reply_text("📧 وأخيراً، يرجى إرسال <b>البريد الإلكتروني</b> الرسمي:", parse_mode="HTML")
-            return
-
-        elif action == 'awaiting_reg_email':
-            reg = context.user_data['reg_data']
-            reg['email'] = text
-            role = context.user_data.get('reg_role')
-            role_ar = "مدرب" if role == "coach" else "موظف"
-            
-            # إرسال البيانات للمالك (أنت)
-            info_msg = (
-                f"🚨 <b>طلب انضمام {role_ar} جديد:</b>\n\n"
-                f"👤 الاسم: {reg['name']}\n"
-                f"📱 الهاتف: {reg['phone']}\n"
-                f"🎓 التخصص/الوظيفة: {reg['info']}\n"
-                f"📧 البريد: {reg['email']}\n"
-                f"🆔 الآيدي: <code>{user.id}</code>\n"
-                f"🔗 اليوزر: @{user.username or 'بدون'}\n\n"
-                f"هل تريد اعتماد هذا الكادر في المؤسسة؟"
-            )
-            keyboard = [
-                [InlineKeyboardButton("✅ نعم، اعتماد", callback_data=f"approve_reg_{role}_{user.id}"),
-                 InlineKeyboardButton("❌ رفض", callback_data=f"reject_reg_{user.id}")]
-            ]
-            await context.bot.send_message(chat_id=bot_owner_id, text=info_msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
-            
-            await update.message.reply_text("✅ <b>تم إرسال بياناتك بنجاح.</b>\nسيتم إشعارك فور موافقة الإدارة على طلبك.")
-            context.user_data['action'] = None
-            return
 # --------------------------------------------------------------------------
 
 # --------------------------------------------------------------------------
@@ -2124,8 +2124,6 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
             await validate_dsc_max(update, context)
             return
 
-   
-    
     
         # إضافة قسم جديد
         if action == 'awaiting_cat_name':
@@ -2253,42 +2251,6 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
             context.user_data['action'] = None
             return
 
-        # تسلسل إضافة مدرب
-        elif action == 'await_coach_name':
-            context.user_data['temp_coach'] = {'name': text}
-            context.user_data['action'] = 'await_coach_spec'
-            await update.message.reply_text("🎓 <b>الخطوة 2:</b> أرسل تخصص المدرب:", parse_mode="HTML")
-            return
-
-        elif action == 'await_coach_spec':
-            context.user_data['temp_coach']['spec'] = text
-            context.user_data['action'] = 'await_coach_phone'
-            await update.message.reply_text("📞 <b>الخطوة 3:</b> أرسل رقم هاتف المدرب:")
-            return
-
-        elif action == 'await_coach_phone':
-            context.user_data['temp_coach']['phone'] = text
-            context.user_data['action'] = 'await_coach_id'
-            await update.message.reply_text("🆔 <b>الخطوة 4:</b> أرسل المعرف الرقمي (ID) للمدرب:", parse_mode="HTML")
-            return
-
-        elif action == 'await_coach_id':
-            context.user_data['temp_coach']['id'] = text
-            c = context.user_data['temp_coach']
-            summary = (
-                f"📝 <b>مراجعة بيانات المدرب:</b>\n"
-                f"━━━━━━━━━━━━━━\n"
-                f"👨‍🏫 الاسم: {c['name']}\n"
-                f"🎓 التخصص: {c['spec']}\n"
-                f"📞 الهاتف: {c['phone']}\n"
-                f"🆔 المعرف: <code>{c['id']}</code>\n"
-                f"━━━━━━━━━━━━━━\n"
-                f"<b>هل تريد حفظ المدرب في القاعدة؟</b>"
-            )
-            keyboard = [[InlineKeyboardButton("✅ نعم، احفظ", callback_data="confirm_save_coach")], [InlineKeyboardButton("❌ إلغاء", callback_data="manage_coaches")]]
-            await update.message.reply_text(summary, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
-            context.user_data['action'] = None
-            return
 
 # --------------------------------------------------------------------------
         # --- [ محرك معالجة الإضافة الجماعية للدورات ] ---
