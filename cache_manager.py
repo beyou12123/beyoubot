@@ -223,48 +223,54 @@ def smart_sync_check(bot_id):
 
 
 def update_global_version(bot_id):
-    """رفع رقم الإصدار وتحديث المرآة فوراً مع البحث المرن عن المعرف"""
+    """تحديث الإصدار في نظام_المزامنة باستخدام المطابقة المباشرة للمصفوفة لضمان الدقة"""
     from sheets import ss, safe_api_call
     try:
+        # التأكد من الاتصال
         if 'ss' not in globals() or ss is None:
             from sheets import connect_to_google
             connect_to_google()
-            
+
         sync_sheet = ss.worksheet("نظام_المزامنة")
-        # جلب كافة البيانات للبحث المرن وتوفير طلبات البحث المتكررة
-        data = sync_sheet.get_all_values()
+        # جلب العمود الأول بالكامل (معرفات البوتات) والعمود الثاني (الإصدارات)
+        all_ids = sync_sheet.col_values(1)
         
-        target_row = None
         search_id = str(bot_id).strip()
-        
-        # البحث عن المعرف في العمود الأول (سواء كان توكن كامل أو آيدي رقمي)
-        for i, row in enumerate(data):
-            if row[0].strip() == search_id or search_id.startswith(row[0].strip()):
-                target_row = i + 1
+        target_row = None
+
+        # البحث عن الصف المناسب بمطابقة النص حرفياً
+        for index, row_id in enumerate(all_ids):
+            if str(row_id).strip() == search_id:
+                target_row = index + 1
                 break
-        
+
         if target_row:
-            # جلب الإصدار الحالي من العمود الثاني
+            # جلب القيمة الحالية من الخلية مباشرة للتأكد
+            current_val = sync_sheet.cell(target_row, 2).value
             try:
-                current_v = int(data[target_row-1][1] or 0)
+                current_v = int(current_val) if current_val else 0
             except:
                 current_v = 0
                 
             new_v = current_v + 1
-            
-            # التحديث باستخدام safe_api_call لمنع الحظر 429
+            now_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+            # تحديث الخلايا في جوجل شيت
             safe_api_call(sync_sheet.update_cell, target_row, 2, new_v)
-            safe_api_call(sync_sheet.update_cell, target_row, 3, get_system_time())
-            
-            # تحديث الرام والقرص فوراً
+            safe_api_call(sync_sheet.update_cell, target_row, 3, now_time)
+
+            # تحديث الذاكرة المركزية RAM
             FACTORY_GLOBAL_CACHE["versions"][search_id] = new_v
-            save_cache_to_disk()
             
-            print(f"🔄 [نظام المزامنة]: تم تحديث الصف {target_row} للإصدار {new_v}")
+            # حفظ الكاش فيزيائياً على القرص
+            save_cache_to_disk()
+
+            print(f"🔄 [نظام المزامنة]: تم تحديث التوكن بنجاح في الصف {target_row} إلى الإصدار {new_v}")
             return new_v
         else:
-            print(f"⚠️ [نظام المزامنة]: لم يتم العثور على سجل للبوت {search_id} لتحديث إصداره.")
+            print(f"⚠️ [نظام المزامنة]: التوكن {search_id} غير موجود في الشيت.")
             return None
+            
     except Exception as e:
         logger.error(f"❌ فشل رفع الإصدار: {e}")
         return None
