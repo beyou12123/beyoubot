@@ -691,6 +691,17 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         context.user_data['action'] = 'awaiting_institution_name'
         await query.edit_message_text("🤖 <b>إعداد الهوية الذكية:</b>\nيرجى إرسال اسم المنصة التعليمية الآن:")
 
+
+
+# المزامنة
+    elif data == "manual_cache_sync":
+        await query.edit_message_text("⏳ <b>جاري سحب البيانات  وتحديث الذاكرة المركزية...</b>", parse_mode="HTML")
+        from cache_manager import fetch_full_factory_data
+        if fetch_full_factory_data(): # استدعاء الدالة الموجودة في ملفك
+            await query.message.reply_text("✅ <b>تمت المزامنة بنجاح!</b>\nالبوت الآن يقرأ أحدث البيانات  مباشرة.", parse_mode="HTML")
+        else:
+            await query.message.reply_text("❌ فشلت المزامنة، يرجى التحقق من سجل الأخطاء.")
+ 
 # --------------------------------------------------------------------------
     # عرض قائمة المدربين كأزرار
     elif data == "list_coaches":
@@ -1165,6 +1176,9 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         keyboard = [
             [
                 InlineKeyboardButton("📝 كليشة الترحيب", callback_data="manage_welcome_texts"),
+                InlineKeyboardButton("🔄 مزامنة الجداول", callback_data="manual_cache_sync")
+            ],
+            [
                 InlineKeyboardButton("تجهيز قاعدة البيانات", callback_data="database_preparation")
             ],
             [
