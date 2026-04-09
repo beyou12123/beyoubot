@@ -2216,6 +2216,77 @@ def check_scope_access(allowed_string, target_id):
     return str(target_id) in allowed_list
 
 # --------------------------------------------------------------------------
+# --- 1. دالة توليد معرف فرع تلقائي ذكي من الكاش ---
+def get_next_branch_id(bot_token):
+    try:
+        smart_sync_check(bot_token)
+        records = get_bot_data_from_cache(bot_token, "إدارة_الفروع")
+        if not records: return "001"
+        
+        ids = []
+        for r in records:
+            bid = str(r.get("معرف_الفرع", "")).strip()
+            if bid.isdigit(): ids.append(int(bid))
+        
+        if not ids: return "001"
+        return str(max(ids) + 1).zfill(3)
+    except: return "001"
+
+# --- 2. دالة إضافة الفرع النهائية المعتمدة ---
+def add_new_branch_db(bot_token, branch_name, country, manager, currency):
+    try:
+        if 'ss' not in globals() or ss is None: connect_to_google()
+        worksheet = ss.worksheet("إدارة_الفروع")
+        
+        new_id = get_next_branch_id(bot_token)
+        # الترتيب: bot_id | معرف_الفرع | اسم_الفرع | الدولة | المدير_المسؤول | العملة | ملاحظات
+        new_row = [
+            str(bot_token), new_id, str(branch_name), 
+            str(country), str(manager), str(currency), 
+            f"تمت الإضافة في: {get_system_time('full')}"
+        ]
+        
+        safe_api_call(worksheet.append_row, new_row)
+        update_global_version(bot_token)
+        return True, new_id
+    except Exception as e:
+        return False, str(e)
+# --- 3. دالة حذف فرع من الشيت بناءً على معرفه وتوكن البوت ---
+def delete_branch_db(bot_token, branch_id):
+    try:
+        if 'ss' not in globals() or ss is None: connect_to_google()
+        worksheet = ss.worksheet("إدارة_الفروع")
+        all_rows = worksheet.get_all_values()
+        
+        for i, row in enumerate(all_rows):
+            # التأكد من مطابقة التوكن (العمود 1) والمعرف (العمود 2)
+            if row[0] == str(bot_token) and row[1] == str(branch_id):
+                worksheet.delete_rows(i + 1)
+                update_global_version(bot_token)
+                return True
+        return False
+    except Exception as e:
+        logger.error(f"❌ خطأ حذف فرع: {e}")
+        return False
+
+# --- 4. دالة تعديل بيانات الفرع (تحديث خلية محددة) ---
+def update_branch_field_db(bot_token, branch_id, col_name, new_value):
+    try:
+        if 'ss' not in globals() or ss is None: connect_to_google()
+        worksheet = ss.worksheet("إدارة_الفروع")
+        all_rows = worksheet.get_all_values()
+        headers = all_rows[0]
+        col_index = headers.index(col_name) + 1
+        
+        for i, row in enumerate(all_rows):
+            if row[0] == str(bot_token) and row[1] == str(branch_id):
+                worksheet.update_cell(i + 1, col_index, str(new_value))
+                update_global_version(bot_token)
+                return True
+        return False
+    except Exception as e:
+        logger.error(f"❌ خطأ تعديل فرع: {e}")
+        return False
 
 # --------------------------------------------------------------------------
 

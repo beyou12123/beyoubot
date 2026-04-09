@@ -60,6 +60,7 @@ from sheets import (
     get_newly_activated_students,
     update_global_version,
     find_user_by_username,
+    add_new_branch_db,
     update_content_setting,
     client,
     save_ai_setup,
@@ -275,8 +276,8 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         course_id = data.replace("d_ch_", "")
         from educational_manager import process_dsc_check
         await process_dsc_check(update, context, course_id)
+        
 
-       
     elif data == "dsc_continue":
         from educational_manager import process_dsc_ask_desc
         await process_dsc_ask_desc(update, context)
@@ -1056,6 +1057,91 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         periods_ar = {"morning": "الصباحية", "noon": "الظهرية", "evening": "المسائية", "night": "الليلية"}
         await query.edit_message_text(f"✍️ <b>تعديل الرسالة {periods_ar[period]}:</b>\n\nأرسل الآن النص الجديد (يمكنك استخدام HTML):")
 # --------------------------------------------------------------------------
+    elif data == "manage_branches":
+        keyboard = [
+            [InlineKeyboardButton("🏢 عرض قائمة الفروع", callback_data="list_branches")],
+            [InlineKeyboardButton("➕ إضافة فرع جديد", callback_data="add_branch_start")],
+            [InlineKeyboardButton("🔙 عودة", callback_data="tech_settings")]
+        ]
+        await query.edit_message_text(
+            "🏢 <b>إدارة فروع المنصة:</b>\n\nيمكنك استعراض الفروع الحالية أو إضافة فرع جديد للنظام.",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
+        )
+
+    # بدء عملية الإضافة عند الضغط على الزر الجديد
+    elif data == "add_branch_start":
+        context.user_data['action'] = 'awaiting_branch_name'
+        await query.edit_message_text("🏢 <b>إضافة فرع جديد:</b>\n\nيرجى إرسال <b>اسم الفرع</b> الآن:", parse_mode="HTML")
+
+    # عرض قائمة الفروع من الكاش
+    elif data == "list_branches":
+        from sheets import get_all_branches
+        branches = get_all_branches(bot_token)
+        
+        if not branches:
+            await query.edit_message_text(
+                "⚠️ لا توجد فروع مسجلة حالياً.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 عودة", callback_data="manage_branches")]])
+            )
+            return
+
+        keyboard = [[InlineKeyboardButton(f"🏢 {b['name']}", callback_data=f"view_br_{b['id']}")] for b in branches]
+        keyboard.append([InlineKeyboardButton("🔙 عودة", callback_data="manage_branches")])
+        
+        await query.edit_message_text("📋 <b>قائمة الفروع المسجلة:</b>", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+    # عرض تفاصيل فرع محدد (بعد الضغط على اسمه من القائمة)
+    elif data.startswith("view_br_"):
+        branch_id = data.replace("view_br_", "")
+        smart_sync_check(bot_token)
+        branches = get_bot_data_from_cache(bot_token, "إدارة_الفروع")
+        branch = next((b for b in branches if str(b.get("معرف_الفرع")) == branch_id), None)
+        
+        if branch:
+            text = (
+                f"🏢 <b>تفاصيل الفرع:</b>\n━━━━━━━━━━━━━━\n"
+                f"🆔 المعرف: <code>{branch.get('معرف_الفرع')}</code>\n"
+                f"🏢 الاسم: {branch.get('اسم_الفرع')}\n"
+                f"🌍 الدولة: {branch.get('الدولة')}\n"
+                f"👤 المدير: {branch.get('المدير_المسؤول')}\n"
+                f"💰 العملة: {branch.get('العملة')}\n"
+            )
+            keyboard = [
+                [InlineKeyboardButton("📝 تعديل الاسم", callback_data=f"edit_br_name_{branch_id}")],
+                [InlineKeyboardButton("🗑️ حذف الفرع", callback_data=f"conf_del_br_{branch_id}")],
+                [InlineKeyboardButton("🔙 عودة للقائمة", callback_data="list_branches")]
+            ]
+            await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+    # تأكيد الحذف
+    elif data.startswith("conf_del_br_"):
+        b_id = data.replace("conf_del_br_", "")
+        keyboard = [
+            [InlineKeyboardButton("✅ نعم، احذف نهائياً", callback_data=f"exec_del_br_{b_id}")],
+            [InlineKeyboardButton("❌ تراجع", callback_data=f"view_br_{b_id}")]
+        ]
+        await query.edit_message_text("⚠️ <b>تحذير:</b> هل أنت متأكد من حذف هذا الفرع؟ لا يمكن التراجع.", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+    # التنفيذ الفعلي للحذف
+    elif data.startswith("exec_del_br_"):
+        b_id = data.replace("exec_del_br_", "")
+        if delete_branch_db(bot_token, b_id):
+            await query.answer("🗑️ تم حذف الفرع بنجاح", show_alert=True)
+            await start_handler(update, context) # العودة للرئيسية
+        else:
+            await query.answer("❌ فشل الحذف")
+
+    # بدء تعديل الاسم
+    elif data.startswith("edit_br_name_"):
+        b_id = data.replace("edit_br_name_", "")
+        context.user_data['edit_br_id'] = b_id
+        context.user_data['action'] = 'awaiting_new_branch_name'
+        await query.edit_message_text("📝 أرسل الآن <b>الاسم الجديد</b> للفرع:")
+
+
+
+
 
 # --------------------------------------------------------------------------
 
@@ -2148,6 +2234,49 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
                 context.user_data['action'] = None
                 await update.message.reply_text("🎊 <b>اكتملت التهيئة!</b> تم ضبط هوية البوت بنجاح.", reply_markup=get_admin_panel())
             return
+# --------------------------------------------------------------------------
+
+        # --- [ تسلسل إضافة فرع جديد ] ---
+        elif action == 'awaiting_branch_name':
+            context.user_data['temp_br'] = {'name': text}
+            context.user_data['action'] = 'awaiting_branch_country'
+            await update.message.reply_text(f"🌍 تم تسجيل الاسم: <b>{text}</b>\nالآن أرسل <b>اسم الدولة</b> أو موقع الفرع:")
+            return
+
+        elif action == 'awaiting_branch_country':
+            context.user_data['temp_br']['country'] = text
+            context.user_data['action'] = 'awaiting_branch_manager'
+            await update.message.reply_text(f"👤 من هو <b>المدير المسؤول</b> عن هذا الفرع؟")
+            return
+
+        elif action == 'awaiting_branch_manager':
+            context.user_data['temp_br']['manager'] = text
+            context.user_data['action'] = 'awaiting_branch_currency'
+            await update.message.reply_text(f"💰 ما هي <b>العملة</b> المعتمدة للفرع؟ (مثلاً: SAR أو USD):")
+            return
+
+        elif action == 'awaiting_branch_currency':
+            br = context.user_data.get('temp_br')
+            success, b_id = add_new_branch_db(bot_token, br['name'], br['country'], br['manager'], text)
+            if success:
+                await update.message.reply_text(f"✅ <b>تم إنشاء الفرع بنجاح!</b>\n🆔 المعرف: <code>{b_id}</code>\n🏢 الاسم: {br['name']}\n👤 المدير: {br['manager']}", reply_markup=get_admin_panel(), parse_mode="HTML")
+            else:
+                await update.message.reply_text(f"❌ فشل الحفظ: {b_id}")
+            context.user_data.pop('temp_br', None)
+            context.user_data['action'] = None
+            return
+           
+                  # --- [ معالجة تعديل اسم الفرع ] ---
+        elif action == 'awaiting_new_branch_name':
+            b_id = context.user_data.get('edit_br_id')
+            if update_branch_field_db(bot_token, b_id, "اسم_الفرع", text):
+                await update.message.reply_text(f"✅ تم تحديث اسم الفرع إلى: <b>{text}</b>", reply_markup=get_admin_panel(), parse_mode="HTML")
+            else:
+                await update.message.reply_text("❌ فشل تحديث البيانات.")
+            context.user_data['action'] = None
+            return
+
+          
 # --------------------------------------------------------------------------
         # تسلسل إضافة سؤال يدوي - استقبال نص السؤال
         elif action == 'awaiting_q_text':
