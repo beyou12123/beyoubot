@@ -2219,12 +2219,17 @@ def check_scope_access(allowed_string, target_id):
 # --- 1. دالة توليد معرف فرع تلقائي ذكي من الكاش ---
 def get_next_branch_id(bot_token):
     try:
-        smart_sync_check(bot_token)
-        records = get_bot_data_from_cache(bot_token, "إدارة_الفروع")
-        if not records: return "001"
+        # البحث في الذاكرة المركزية RAM حصراً
+        from cache_manager import FACTORY_GLOBAL_CACHE
+        records = FACTORY_GLOBAL_CACHE.get("data", {}).get("إدارة_الفروع", [])
+        
+        # تصفية الفروع التابعة لهذا البوت فقط
+        bot_branches = [r for r in records if str(r.get("bot_id")) == str(bot_token)]
+        
+        if not bot_branches: return "001"
         
         ids = []
-        for r in records:
+        for r in bot_branches:
             bid = str(r.get("معرف_الفرع", "")).strip()
             if bid.isdigit(): ids.append(int(bid))
         
@@ -2232,25 +2237,43 @@ def get_next_branch_id(bot_token):
         return str(max(ids) + 1).zfill(3)
     except: return "001"
 
+
 # --- 2. دالة إضافة الفرع النهائية المعتمدة ---
 def add_new_branch_db(bot_token, branch_name, country, manager, currency):
     try:
+        from cache_manager import FACTORY_GLOBAL_CACHE, save_cache_to_disk
+        new_id = get_next_branch_id(bot_token)
+        current_time = get_system_time('full')
+        
+        # [الخطوة 1]: الحقن المباشر في الذاكرة المركزية RAM
+        new_record = {
+            "bot_id": str(bot_token),
+            "معرف_الفرع": new_id,
+            "اسم_الفرع": str(branch_name),
+            "الدولة": str(country),
+            "المدير_المسؤول": str(manager),
+            "العملة": str(currency),
+            "ملاحظات": f"إضافة فورية: {current_time}"
+        }
+        if "إدارة_الفروع" not in FACTORY_GLOBAL_CACHE["data"]:
+            FACTORY_GLOBAL_CACHE["data"]["إدارة_الفروع"] = []
+        FACTORY_GLOBAL_CACHE["data"]["إدارة_الفروع"].append(new_record)
+        save_cache_to_disk() # حفظ نسخة فيزيائية فورية
+        
+        # [الخطوة 2]: الكتابة في جوجل شيت مع حماية التنسيق '001
         if 'ss' not in globals() or ss is None: connect_to_google()
         worksheet = ss.worksheet("إدارة_الفروع")
-        
-        new_id = get_next_branch_id(bot_token)
-        # الترتيب: bot_id | معرف_الفرع | اسم_الفرع | الدولة | المدير_المسؤول | العملة | ملاحظات
-        new_row = [
-            str(bot_token), new_id, str(branch_name), 
-            str(country), str(manager), str(currency), 
-            f"تمت الإضافة في: {get_system_time('full')}"
-        ]
-        
+        new_row = [str(bot_token), f"'{new_id}", str(branch_name), str(country), str(manager), str(currency), current_time]
         safe_api_call(worksheet.append_row, new_row)
+        
+        # [الخطوة 3]: تحديث نظام المزامنة (الإصدار والوقت)
         update_global_version(bot_token)
         return True, new_id
     except Exception as e:
         return False, str(e)
+
+
+
 # --- 3. دالة حذف فرع من الشيت بناءً على معرفه وتوكن البوت ---
 def delete_branch_db(bot_token, branch_id):
     try:

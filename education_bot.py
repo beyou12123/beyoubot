@@ -1076,27 +1076,32 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 
     # عرض قائمة الفروع من الكاش
     elif data == "list_branches":
-        from sheets import get_all_branches
-        branches = get_all_branches(bot_token)
+        # جلب البيانات من الذاكرة المركزية RAM حصراً لسرعة الاستجابة ومنع حظر جوجل
+        from cache_manager import FACTORY_GLOBAL_CACHE
+        all_records = FACTORY_GLOBAL_CACHE.get("data", {}).get("إدارة_الفروع", [])
+        
+        # تصفية الفروع التابعة لهذا البوت فقط من مصفوفة الذاكرة
+        branches = [r for r in all_records if str(r.get("bot_id")) == str(bot_token)]
         
         if not branches:
             await query.edit_message_text(
-                "⚠️ لا توجد فروع مسجلة حالياً.",
+                "⚠️ لا توجد فروع مسجلة في الذاكرة حالياً.",
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 عودة", callback_data="manage_branches")]])
             )
             return
 
-        keyboard = [[InlineKeyboardButton(f"🏢 {b['name']}", callback_data=f"view_br_{b['id']}")] for b in branches]
+        # بناء قائمة الأزرار باستخدام أسماء ومعرفات الفروع من الرام مباشرة
+        keyboard = [[InlineKeyboardButton(f"🏢 {b.get('اسم_الفرع')}", callback_data=f"view_br_{b.get('معرف_الفرع')}")] for b in branches]
         keyboard.append([InlineKeyboardButton("🔙 عودة", callback_data="manage_branches")])
         
-        await query.edit_message_text("📋 <b>قائمة الفروع المسجلة:</b>", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+        await query.edit_message_text("📋 <b>قائمة الفروع (من الذاكرة المركزية):</b>", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
     # عرض تفاصيل فرع محدد (بعد الضغط على اسمه من القائمة)
     elif data.startswith("view_br_"):
         branch_id = data.replace("view_br_", "")
-        smart_sync_check(bot_token)
-        branches = get_bot_data_from_cache(bot_token, "إدارة_الفروع")
-        branch = next((b for b in branches if str(b.get("معرف_الفرع")) == branch_id), None)
+        from cache_manager import FACTORY_GLOBAL_CACHE
+        records = FACTORY_GLOBAL_CACHE.get("data", {}).get("إدارة_الفروع", [])
+        branch = next((b for b in records if str(b.get("معرف_الفرع")) == branch_id and str(b.get("bot_id")) == str(bot_token)), None)
         
         if branch:
             text = (
