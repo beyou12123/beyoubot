@@ -177,6 +177,32 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text(text, parse_mode="HTML")
             return
 
+    # معالجة روابط الانضمام اللحظية للمدربين والموظفين
+    if context.args and context.args[0].startswith("reg_"):
+        token = context.args[0].replace("reg_", "")
+        from cache_manager import FACTORY_GLOBAL_CACHE
+        
+        if token in FACTORY_GLOBAL_CACHE.get("temp_registration_tokens", {}):
+            role = FACTORY_GLOBAL_CACHE["temp_registration_tokens"][token]
+            # حذف الكود فوراً لضمان استخدامه مرة واحدة فقط
+            del FACTORY_GLOBAL_CACHE["temp_registration_tokens"][token]
+            
+            context.user_data['reg_role'] = role
+            context.user_data['action'] = 'awaiting_reg_full_name'
+            
+            role_text = "كادرنا التعليمي (مدرب)" if role == "coach" else "كادرنا الإداري (موظف)"
+            await update.message.reply_text(
+                f"👋 <b>أهلاً بك!</b> نتشرف بانضمامك إلى {role_text}.\n\n"
+                f"يرجى إرسال <b>اسمك الثلاثي</b> باللغة العربية للبدء:"
+            , parse_mode="HTML")
+            return
+        else:
+            await update.message.reply_text("⚠️ معذرة، هذا الرابط غير صالح أو تم استخدامه مسبقاً.")
+            return
+
+
+
+
     # --- [ 2. نظام الإحالة (Referral System) ] ---
     if context.args and context.args[0].startswith("ref_"):
         inviter_id = context.args[0].replace("ref_", "")
@@ -515,16 +541,134 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 
 
 # --------------------------------------------------------------------------
-    # --- 3. إدارة شؤون المدربين ---
+    # --- 3. إدارة شؤون المدربين والموظفين (نسخة روابط الانضمام اللحظية) ---
     elif data == "manage_coaches":
-        await query.edit_message_text(
-            "👨‍🏫 <b>إدارة شؤون المدربين:</b>\nيمكنك إضافة مدربين جدد أو استعراض القائمة الحالية للحذف.",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("➕ إضافة مدرب جديد", callback_data="start_add_coach")],
-                [InlineKeyboardButton("📋 عرض قائمة المدربين", callback_data="list_coaches")],
-                [InlineKeyboardButton("🔙 عودة للوحة التحكم", callback_data="back_to_admin")]
-            ]), parse_mode="HTML"
+        text = (
+            "👨‍🏫 <b>إدارة الكادر التعليمي والإداري:</b>\n\n"
+            "يمكنك توليد روابط انضمام فريدة صالحة لمرة واحدة لإضافة المدربين أو الموظفين آلياً إلى النظام."
         )
+        keyboard = [
+            [InlineKeyboardButton("➕ توليد رابط مدرب جديد", callback_data="gen_reg_coach")],
+            [InlineKeyboardButton("➕ توليد رابط موظف جديد", callback_data="gen_reg_staff")],
+            [InlineKeyboardButton("📋 عرض قائمة المدربين الحالية", callback_data="list_coaches")],
+            [InlineKeyboardButton("🔙 عودة للوحة التحكم", callback_data="tech_settings")]
+        ]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+    # منطق توليد روابط الانضمام اللحظية (مدربين وموظفين)
+    elif data in ["gen_reg_coach", "gen_reg_staff"]:
+        import secrets
+        from cache_manager import FACTORY_GLOBAL_CACHE
+        
+        role = "coach" if data == "gen_reg_coach" else "staff"
+        token = secrets.token_hex(4).upper() # توليد كود فريد قصير
+        
+        # تخزين الكود مع الرتبة في الذاكرة المركزية RAM
+        FACTORY_GLOBAL_CACHE["temp_registration_tokens"][token] = role
+        
+        bot_info = await context.bot.get_me()
+        reg_link = f"https://t.me/{bot_info.username}?start=reg_{token}"
+        
+        role_name = "مدرب" if role == "coach" else "موظف"
+        text = (
+            f"✅ <b>تم توليد رابط انضمام ({role_name}) جديد:</b>\n\n"
+            f"<code>{reg_link}</code>\n\n"
+            f"⚠️ <b>ملاحظة:</b> هذا الرابط صالح للاستخدام مرة واحدة فقط وسيختفي من الذاكرة بمجرد استخدامه."
+        )
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 عودة", callback_data="manage_coaches")]]), parse_mode="HTML")
+
+
+        
+# --------------------------------------------------------------------------
+
+ # معالجة قرار المالك (موافقة/رفض انضمام كادر)
+    elif data.startswith("approve_reg_"):
+        parts = data.split("_")
+        role = parts[2] # coach أو staff
+        candidate_id = parts[3]
+        
+        # تخزين بيانات المرشح مؤقتاً لاختيار الفرع
+        context.user_data['pending_approve'] = {'id': candidate_id, 'role': role}
+        
+        # جلب الفروع من الذاكرة المركزية RAM
+        from cache_manager import FACTORY_GLOBAL_CACHE
+        all_records = FACTORY_GLOBAL_CACHE.get("data", {}).get("إدارة_الفروع", [])
+        branches = [r for r in all_records if str(r.get("bot_id")) == str(bot_token)]
+        
+        if not branches:
+            await query.edit_message_text("⚠️ لا توجد فروع مسجلة. يرجى إضافة فرع أولاً لاعتماد الكادر.")
+            return
+
+        keyboard = [[InlineKeyboardButton(f"🏢 {b.get('اسم_الفرع')}", callback_data=f"final_save_reg_{b.get('معرف_الفرع')}")] for b in branches]
+        await query.edit_message_text("🎯 <b>خطوة أخيرة:</b> اختر الفرع الذي سيتبع له هذا الكادر:", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+    elif data.startswith("reject_reg_"):
+        candidate_id = data.replace("reject_reg_", "")
+        await query.edit_message_text("❌ تم رفض الطلب بنجاح.")
+        try:
+            await context.bot.send_message(chat_id=candidate_id, text="⚠️ نعتذر منك، تم رفض طلب انضمامك للكادر حالياً.")
+        except: pass
+
+    # التنفيذ النهائي والحفظ (تم الدمج ليعمل للمدرب والموظف معاً)
+    elif data.startswith("final_save_reg_"):
+        branch_id = data.replace("final_save_reg_", "")
+        pending = context.user_data.get('pending_approve')
+        reg_info = context.user_data.get('reg_data') # البيانات من الذاكرة المؤقتة
+        
+        if not pending or not reg_info:
+            await query.answer("⚠️ حدث خطأ في استعادة البيانات.")
+            return
+
+        from cache_manager import FACTORY_GLOBAL_CACHE
+        br_records = FACTORY_GLOBAL_CACHE.get("data", {}).get("إدارة_الفروع", [])
+        branch = next((b for b in br_records if str(b.get("معرف_الفرع")) == branch_id), {})
+
+        candidate_username = context.user_data.get('candidate_username', 'بدون')
+        from sheets import add_new_coach_advanced, add_new_employee_advanced, update_global_version
+        
+        success = False
+        role_type = pending['role']
+
+        if role_type == "coach":
+            # حفظ في ورقة المدربين
+            success = add_new_coach_advanced(
+                bot_token=bot_token,
+                coach_id=pending['id'],
+                name=reg_info['name'],
+                specialty=reg_info['info'],
+                phone=reg_info['phone'],
+                branch_id=branch_id,
+                branch_name=branch.get('اسم_الفرع', 'الرئيسي'),
+                email=reg_info['email'],
+                username=candidate_username
+            )
+        else:
+            # حفظ في ورقة الموظفين (41 عموداً)
+            success = add_new_employee_advanced(
+                bot_token=bot_token,
+                employee_id=pending['id'],
+                name=reg_info['name'],
+                job_title=reg_info['info'],
+                phone=reg_info['phone'],
+                branch_id=branch_id,
+                branch_name=branch.get('اسم_الفرع', 'الرئيسي'),
+                email=reg_info['email'],
+                username=candidate_username
+            )
+
+        if success:
+            role_ar = "المدرب" if role_type == "coach" else "الموظف"
+            await query.edit_message_text(f"✅ تم اعتماد {role_ar} بنجاح وربطه بفرع: {branch.get('اسم_الفرع')}")
+            update_global_version(bot_token)
+            try:
+                await context.bot.send_message(chat_id=pending['id'], text="🎊 مبروك! تم قبول طلبك واعتمادك رسمياً في المنصة.")
+            except: pass
+            # تنظيف الذاكرة
+            context.user_data.pop('pending_approve', None)
+            context.user_data.pop('reg_data', None)
+        else:
+            await query.answer("❌ فشل الحفظ في الشيت، تأكد من اتصال الجداول.")
+
 # --------------------------------------------------------------------------
     elif data == "setup_ai_start":
         context.user_data['action'] = 'awaiting_institution_name'
@@ -1017,8 +1161,8 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             ],
             [InlineKeyboardButton("الأوسمة والإنجازات", callback_data="honors_achievements")], 
             [
-                InlineKeyboardButton("👨‍🏫 إدارة الموظفين", callback_data="manage_personnel"),
-                InlineKeyboardButton("👨‍🏫 إدارة المدربين", callback_data="manage_coaches"), 
+                InlineKeyboardButton("👨‍🏫 صلاحيات الموظفين", callback_data="manage_personnel"),
+                InlineKeyboardButton("تكويد الكادر", callback_data="manage_coaches"), 
                 InlineKeyboardButton("المهام الإدارية", callback_data="administrative_tasks")
             ],
             [
@@ -1898,7 +2042,63 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
             
            
 # --------------------------------------------------------------------------
-     
+         # --- [ تسلسل طلب انضمام كادر جديد ] ---
+        elif action == 'awaiting_reg_full_name':
+            context.user_data['reg_data'] = {'name': text}
+            context.user_data['action'] = 'awaiting_reg_phone'
+            await update.message.reply_text("📱 ممتاز، يرجى إرسال <b>رقم الهاتف</b> للتواصل:", parse_mode="HTML")
+            return
+
+        elif action == 'awaiting_reg_phone':
+            context.user_data['reg_data']['phone'] = text
+            role = context.user_data.get('reg_role')
+            if role == "coach":
+                context.user_data['action'] = 'awaiting_reg_specialty'
+                await update.message.reply_text("🎓 يرجى إرسال <b>مجال التخصص</b> (تخصص واحد فقط):", parse_mode="HTML")
+            else:
+                context.user_data['action'] = 'awaiting_reg_job_title'
+                await update.message.reply_text("💼 يرجى إرسال <b>المسمى الوظيفي</b> الخاص بك:", parse_mode="HTML")
+            return
+
+        elif action in ['awaiting_reg_specialty', 'awaiting_reg_job_title']:
+            context.user_data['reg_data']['info'] = text
+            context.user_data['action'] = 'awaiting_reg_email'
+            await update.message.reply_text("📧 وأخيراً، يرجى إرسال <b>البريد الإلكتروني</b> الرسمي:", parse_mode="HTML")
+            return
+
+        elif action == 'awaiting_reg_email':
+            reg = context.user_data['reg_data']
+            reg['email'] = text
+            role = context.user_data.get('reg_role')
+            role_ar = "مدرب" if role == "coach" else "موظف"
+            
+            # إرسال البيانات للمالك (أنت)
+            info_msg = (
+                f"🚨 <b>طلب انضمام {role_ar} جديد:</b>\n\n"
+                f"👤 الاسم: {reg['name']}\n"
+                f"📱 الهاتف: {reg['phone']}\n"
+                f"🎓 التخصص/الوظيفة: {reg['info']}\n"
+                f"📧 البريد: {reg['email']}\n"
+                f"🆔 الآيدي: <code>{user.id}</code>\n"
+                f"🔗 اليوزر: @{user.username or 'بدون'}\n\n"
+                f"هل تريد اعتماد هذا الكادر في المؤسسة؟"
+            )
+            keyboard = [
+                [InlineKeyboardButton("✅ نعم، اعتماد", callback_data=f"approve_reg_{role}_{user.id}"),
+                 InlineKeyboardButton("❌ رفض", callback_data=f"reject_reg_{user.id}")]
+            ]
+            await context.bot.send_message(chat_id=bot_owner_id, text=info_msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+            
+            await update.message.reply_text("✅ <b>تم إرسال بياناتك بنجاح.</b>\nسيتم إشعارك فور موافقة الإدارة على طلبك.")
+            context.user_data['action'] = None
+            return
+# --------------------------------------------------------------------------
+
+# --------------------------------------------------------------------------
+
+# --------------------------------------------------------------------------
+
+    
 # --------------------------------------------------------------------------
     # --- [ الجزء الخاص بالمسؤول - إدارة المحتوى والدورات ] ---
     if user.id == bot_owner_id:
