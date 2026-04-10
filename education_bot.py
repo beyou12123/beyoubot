@@ -146,13 +146,11 @@ def get_coach_panel():
     ]
     return InlineKeyboardMarkup(keyboard)
 
-
 # --- [ المعالجات الأساسية - أمر البداية المطوّر ] ---
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """معالجة أمر /start برسائل ترحيبية ذكية ودعم نظام الإحالة والأدوار (مالك، موظف، مدرب، طالب)"""
     from datetime import datetime
 
-    
     user = update.effective_user
     bot_token = context.bot.token
     query = update.callback_query
@@ -200,9 +198,6 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("⚠️ معذرة، هذا الرابط غير صالح أو تم استخدامه مسبقاً.")
             return
 
-
-
-
     # --- [ 2. نظام الإحالة (Referral System) ] ---
     if context.args and context.args[0].startswith("ref_"):
         inviter_id = context.args[0].replace("ref_", "")
@@ -241,18 +236,18 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup = get_admin_panel()
 
     # ب: رتبة الموظف أو المدرب (التحقق المترابط بنظام الفحص الآمن لمنع توقف البوت)
-    # 1. التحقق من عمود "الصلاحيات" في ورقة "إدارة_الموظفين"
-    # 2. أو التحقق من عمود "صلاحية_الأقسام" في ورقة "الهيكل_التنظيمي_والصلاحيات"
-    # ب: رتبة الموظف أو المدرب (التحقق المترابط بنظام الفحص الآمن لمنع توقف البوت)
     elif (check_user_permission(bot_token, user.id, "الصلاحيات") == True) or \
          (check_user_permission(bot_token, user.id, "صلاحية_الأقسام") == True):
         
         # --- [ الإصلاح المستهدف: الفرز بين المدرب والموظف بناءً على العمود 42 ] ---
-        from cache_manager import sync_manager
-        employees_data = sync_manager.get_sheet_data("إدارة_الموظفين")
-        user_row = next((row for row in employees_data if len(row) > 3 and str(row[3]) == str(user.id)), None)
+        from cache_manager import FACTORY_GLOBAL_CACHE
+        # جلب البيانات من الكاش مباشرة (أكثر أماناً وأسرع)
+        employees_data = FACTORY_GLOBAL_CACHE["data"].get("إدارة_الموظفين", [])
         
-        # التأكد من الرتبة في العمود 42 (الفهرس 41)
+        # البحث عن صف المستخدم: المعرف موجود في العمود 3 (فهرس 2)
+        user_row = next((row for row in employees_data if len(row) > 2 and str(row[2]) == str(user.id)), None)
+        
+        # التأكد من الرتبة في العمود 42 (فهرس 41)
         if user_row and len(user_row) >= 42 and str(user_row[41]).strip() == "مدرب":
             final_text = (
                 f"<b>مرحباً بك يا كابتن {user.first_name} في غرفتك الأكاديمية</b> 👨‍🏫\n\n"
@@ -269,7 +264,6 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             reply_markup = get_employee_panel()
 
-
     # ج: رتبة الطالب (الحالة الافتراضية النهائية لمن لا تنطبق عليه الشروط أعلاه)
     else:
         final_text = f"<b>{msg}</b>"
@@ -284,6 +278,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(final_text, reply_markup=reply_markup, parse_mode="HTML")
     except Exception as e:
         logger.error(f"❌ خطأ في الإرسال النهائي لـ start_handler: {e}")
+
 
 # --------------------------------------------------------------------------
 # --- [ معالج ضغطات الأزرار (Callback Query Handler) ] ---
