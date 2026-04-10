@@ -98,7 +98,7 @@ def get_admin_panel():
         [InlineKeyboardButton("📊 الإحصائيات الذكية", callback_data="admin_stats"), 
          InlineKeyboardButton("📡 الإذاعة المستهدفة", callback_data="smart_broadcast")],
         [InlineKeyboardButton("🛠 الإعدادات العامة وتجهيز النظام", callback_data="tech_settings")], 
-        [InlineKeyboardButton("معلومات تجهيز النظام", callback_data="system_setup_information")],
+        [InlineKeyboardButton("معلومات تجهيز النظام", callback_data="system_setup_information"), InlineKeyboardButton("🤖 ضبط الـ AI", callback_data="setup_ai_start")],
         [InlineKeyboardButton("📥 تحميل نسخة احتياطية ", callback_data="export_data_json"),
          InlineKeyboardButton("📤 رفع نسخة بيانات", callback_data="import_data_json")],
 
@@ -527,7 +527,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             return
 
         keyboard = [[InlineKeyboardButton(f"📖 {c['اسم_الدورة']}", callback_data=f"sel_course_groups_{c['معرف_الدورة']}")] for c in bot_courses]
-        keyboard.append([InlineKeyboardButton("🔙 عودة", callback_data="manage_educational")])
+        keyboard.append([InlineKeyboardButton("🔙 عودة", callback_data="main_menu")])
         
         await query.edit_message_text("🎯 **اختر الدورة المراد إدارة مجموعاتها:**", reply_markup=InlineKeyboardMarkup(keyboard))
 
@@ -640,14 +640,15 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         branch_name = branch.get('اسم_الفرع', 'الرئيسي')
 
         # استعادة اليوزرنيم المحفوظ أو وضع قيمة افتراضية
-        candidate_username = context.user_data.get('candidate_username', 'بدون')
+                # 🚨 التصحيح: سحب اليوزرنيم من قاموس بيانات المرشح المستعادة
+        candidate_username = reg_info.get('username', 'بدون')
         
         # 🟢 التعبئة الآلية للرتبة: تحويل نوع الطلب لوسم عربي (مدرب/موظف) للعمود 42
         role_type_ar = "مدرب" if pending['role'] == "coach" else "موظف"
 
         from sheets import add_new_employee_advanced, update_global_version
         
-        # تنفيذ الحفظ الموحد في ورقة "إدارة_الموظفين" حصراً (المحرك الجديد بـ 43 عموداً)
+        # تنفيذ الحفظ الموحد في ورقة "إدارة_الموظفين" (المحرك الجديد بـ 43 عموداً)
         success = add_new_employee_advanced(
             bot_token=bot_token,
             employee_id=pending['id'],     # ID التيليجرام (العمود 3)
@@ -658,14 +659,15 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             branch_name=branch_name,       # اسم الفرع المجلوب آلياً (العمود 43)
             role_tag=role_type_ar,         # الرتبة المحددة آلياً (العمود 42)
             email=reg_info['email'],       # البريد (العمود 21)
-            username=candidate_username    # اليوزرنيم (العمود 41)
+            username=candidate_username    # ✅ اليوزرنيم الحقيقي (العمود 41)
         )
+
 
         if success:
             await query.edit_message_text(
                 f"✅ تم اعتماد <b>{role_type_ar}</b> بنجاح!\n"
                 f"🏢 الفرع: {branch_name}\n"
-                f"🆔 تم توليد معرف مهني (100) وحفظه في ورقة الموظفين.", 
+                f"🆔 تم توليد معرف مهني (100) وحفظه في قسم الموظفين.", 
                 parse_mode="HTML"
             )
             
@@ -685,13 +687,14 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             context.user_data.pop('pending_approve', None)
             context.user_data.pop('reg_data', None)
         else:
-            await query.answer("❌ فشل الحفظ، تأكد من تحديث هيكل ورقة إدارة_الموظفين لـ 43 عموداً.", show_alert=True)
+            await query.answer("❌ فشل الحفظ، تأكد من تحديث هيكل قسم إدارة_الموظفين لـ 43 عموداً.", show_alert=True)
  
 # --------------------------------------------------------------------------
+#ضبط الذكاء الاصطناعي 
     elif data == "setup_ai_start":
         context.user_data['action'] = 'awaiting_institution_name'
         await query.edit_message_text("🤖 <b>إعداد الهوية الذكية:</b>\nيرجى إرسال اسم المنصة التعليمية الآن:")
-
+# --------------------------------------------------------------------------
 
 
 # المزامنة
@@ -856,6 +859,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         await query.edit_message_text("🔗 أرسل رابط Google Sheet المفتوح للمشاركة:")
 
 # --------------------------------------------------------------------------
+# إضافة مدرب
     elif data == "start_add_coach":
         context.user_data['action'] = 'await_coach_name'
         await query.edit_message_text("✍️ <b>الخطوة 1:</b> أرسل اسم المدرب الثلاثي:", parse_mode="HTML")
@@ -1168,16 +1172,24 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 العودة", callback_data="manage_courses")]]), parse_mode="HTML")
 
     elif data == "smart_broadcast":
-        await query.edit_message_text("📡 <b>الإذاعة الذكية:</b>", 
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📢 للكل", callback_data="bc_all"), InlineKeyboardButton("🎓 لمشتركي دورة", callback_data="bc_course"), InlineKeyboardButton("🎓 لمشتركي مجموعة", callback_data="bc_group")]]), parse_mode="HTML")
-
+        await query.edit_message_text("📡 <b>الإذاعة الذكية:</b>\n\n"
+                                   "💡 هذه هي الإذاعة الذكية حيث يمكنك إرسال رسائل جماعية إلى مشتركيك.\n"
+                                   "📊 يمكنك إرسال رسائل إلى جميع المشتركين أو إلى مشتركي دورة معينة أو مجموعة معينة.\n"
+                                   "🔍 يمكنك استخدم الإذاعة الذكية لترسل رسائل ترويجية أو إعلامية أو تعليمية إلى مشتركيك.\n\n"
+                                   "🔝اختر خيارًا لإرسال رسالتك:",
+            reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("📢 للكل", callback_data="bc_all"), 
+             InlineKeyboardButton("🎓 لمشتركي دورة", callback_data="bc_course"), 
+             InlineKeyboardButton("🎓 لمشتركي مجموعة", callback_data="bc_group")],
+            [InlineKeyboardButton("🔙 العودة", callback_data="main_menu")]
+        ]), parse_mode="HTML")
 
     # --- [ لوحة المفاتيح الذكية للآدمن ] ---
     elif data == "tech_settings":
         keyboard = [
             [
                 InlineKeyboardButton("📝 كليشة الترحيب", callback_data="manage_welcome_texts"),
-                InlineKeyboardButton("🔄 مزامنة الجداول", callback_data="manual_cache_sync")
+                InlineKeyboardButton("🔄 المزامنة", callback_data="manual_cache_sync")
             ],
             [
                 InlineKeyboardButton("تجهيز قاعدة البيانات", callback_data="database_preparation")
@@ -1452,7 +1464,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         # تخزين معرف الدورة لبدء تسلسل الأسئلة
         context.user_data['temp_q'] = {'course_id': course_id}
         context.user_data['action'] = 'awaiting_q_text'
-        await query.edit_message_text("✍️ <b>الخطوة 2:</b> أرسل الآن <b>نص السؤال</b> الذي تود إضافته:")
+        await query.edit_message_text("✍️ <b>الخطوة 2:</b> أرسل الآن <b>نص السؤال</b> الذي تود إضافته:",parse_mode="HTML")
      # معالجة اختيار الإجابة الصحيحة
     elif data.startswith("set_q_ans_"):
         ans = data.replace("set_q_ans_", "")
@@ -1481,7 +1493,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         ]
         await query.edit_message_text(summary, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
-    # التنفيذ الفعلي للحفظ في الشيت
+    # التنفيذ الفعلي للحفظ في القاعدة
     elif data == "exec_save_question":
 
         import uuid
@@ -1495,12 +1507,12 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             await q_bank_manager_ui(update, context)
             context.user_data.pop('temp_q', None)
         else:
-            await query.answer("❌ فشل الحفظ في الشيت")
+            await query.answer("❌ فشل الحفظ في القاعدة")
 
     elif data == "exec_create_quiz_final":
 
         quiz_data = context.user_data.get('temp_quiz')
-        # تحويل القائمة لنص لحفظها في الشيت
+        # تحويل القائمة لنص لحفظها في القاعدة
         quiz_data['target_groups'] = ",".join(quiz_data['target_groups'])
         quiz_data['coach_id'] = str(user_id)
         
@@ -1510,7 +1522,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             await manage_control_ui(update, context)
             context.user_data.pop('temp_quiz', None)
         else:
-            await query.answer("❌ فشل الحفظ في الشيت.")
+            await query.answer("❌ فشل الحفظ في القاعدة.")
 
 
     # 3. بدء تفعيل/إنشاء الاختبارات (اختيار الدورة)
@@ -1535,7 +1547,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         quiz_id = data.replace("q_toggle_vis_", "")
 
         
-        # 1. تغيير الحالة في الشيت (TRUE <-> FALSE)
+        # 1. تغيير الحالة في القاعدة (TRUE <-> FALSE)
         new_status = toggle_quiz_visibility(bot_token, quiz_id)
         
         # 2. إرسال تنبيه سريع للمستخدم بالحالة الجديدة
@@ -1574,7 +1586,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
                 [InlineKeyboardButton("➕ إضافة مهمة فردية", callback_data="single_missions"), InlineKeyboardButton("➕ إضافة مهمة لمجموعة", callback_data="single_group")],
                 [InlineKeyboardButton("➕ إضافة مهمة لدورة", callback_data="single_course"), InlineKeyboardButton("➕ إضافة مهمة جماعية", callback_data="single_all")],
                 [InlineKeyboardButton("عرض جميع المهام", callback_data="single_show")],
-                [InlineKeyboardButton("🔙 عودة", callback_data="manage_educational")]
+                [InlineKeyboardButton("🔙 عودة", callback_data="tech_settings")]
             ]), parse_mode="HTML"
         )
 
@@ -1599,7 +1611,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         parts = data.split("_")
         teacher_id = parts[2]
         # جلب الاسم من دالة جلب المدربين السابقة
-        
+        ###$$$$$$############ تم حذف دالة get_all_coaches مو ملف sheets.py
         coaches = get_all_coaches(bot_token)
         teacher_name = next((c['name'] for c in coaches if str(c['id']) == str(teacher_id)), "مدرب")
         
@@ -1704,7 +1716,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         target_crs_id = parts[4]
         
         
-        # تحديث القائمة في الشيت (إضافة/حذف ID الدورة)
+        # تحديث القائمة في القاعدة (إضافة/حذف ID الدورة)
         toggle_scope_id(bot_token, emp_id, "الدورات_المسموحة", target_crs_id)
         
         # إعادة تحديث الواجهة لإظهار الصح والخطأ الجديد
@@ -1870,7 +1882,7 @@ def get_permissions_keyboard(bot_token, employee_id, current_perms):
 async def handle_permission_toggle(query, bot_token, employee_id, col_name):
     
     
-    # 1. تحديث القيمة في الشيت
+    # 1. تحديث القيمة في القاعدة
     new_status = toggle_employee_permission(bot_token, employee_id, col_name)
     
     # 2. جلب الصلاحيات المحدثة لإعادة رسم الكيبورد
@@ -1926,7 +1938,7 @@ async def activation_monitor(context: ContextTypes.DEFAULT_TYPE):
             )
             await context.bot.send_message(chat_id=student['user_id'], text=msg, parse_mode="HTML")
             
-            # تحديث الشيت لكي لا يرسل الرسالة مرة أخرى
+            # تحديث القاعدة لكي لا يرسل الرسالة مرة أخرى
             sheet = ss.worksheet("قاعدة_بيانات_الطلاب")
             sheet.update_cell(student['row'], 21, f"تم الإشعار: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
         except Exception as e:
@@ -1992,9 +2004,11 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
             await update.message.reply_text("📧 وأخيراً، يرجى إرسال <b>البريد الإلكتروني</b> الرسمي:", parse_mode="HTML")
             return
 
+
         elif action == 'awaiting_reg_email':
             reg = context.user_data['reg_data']
             reg['email'] = text
+            reg['username'] = user.username or "بدون" 
             role = context.user_data.get('reg_role')
             role_ar = "مدرب" if role == "coach" else "موظف"
             
@@ -2030,7 +2044,7 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
             content = await file.download_as_bytearray()
             backup_data = json.loads(content.decode('utf-8'))
             
-            msg = await update.message.reply_text("🔄 جاري فك التشفير ومزامنة الجداول...")
+            msg = await update.message.reply_text("🔄 جاري فك التشفير والمزامنة...")
             
             for sheet_name, rows in backup_data.items():
                 try:
@@ -2177,7 +2191,7 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
             context.user_data['action'] = None
             
             
-            # جلب الصلاحيات الحالية من الشيت لعرض الأزرار بشكل صحيح
+            # جلب الصلاحيات الحالية من القاعدة لعرض الأزرار بشكل صحيح
             current_perms = get_employee_permissions(bot_token, emp_id)
             
             await update.message.reply_text(
@@ -2348,7 +2362,7 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
             import re, uuid
             
             
-            # استخراج ID الشيت من الرابط بدقة
+            # استخراج ID القاعدة من الرابط بدقة
             match = re.search(r"/d/([a-zA-Z0-9-_]+)", text)
             if not match:
                 await update.message.reply_text("❌ رابط غير صحيح. أرسل رابط شيت صالح.")
@@ -2424,7 +2438,7 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
                 await update.message.reply_text(f"✅ تم حفظ الاسم: <b>{text}</b>\n\nالآن أرسل <b>تعليمات الذكاء الاصطناعي</b> للمنصة:")
             else:
                 # إذا فشل الحفظ، البوت سيخبرك بدلاً من التهنيج
-                await update.message.reply_text("❌ عذراً دكتور، فشل الحفظ في الشيت. تأكد من وجود ورقة 'الذكاء_الإصطناعي'.")
+                await update.message.reply_text("❌ عذراً دكتور، فشل الحفظ في القاعدة. تأكد من وجود قسم 'الذكاء_الإصطناعي'.")
             return
 
 
@@ -2483,28 +2497,28 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
         elif action == 'awaiting_q_text':
             context.user_data['temp_q']['text'] = text
             context.user_data['action'] = 'awaiting_q_a'
-            await update.message.reply_text("🔘 <b>الخطوة 3:</b> أرسل <b>الخيار (A)</b>:")
+            await update.message.reply_text("🔘 <b>الخطوة 3:</b> أرسل <b>الخيار (A)</b>:",parse_mode="HTML")
             return
 
         # استقبال الخيار A
         elif action == 'awaiting_q_a':
             context.user_data['temp_q']['a'] = text
             context.user_data['action'] = 'awaiting_q_b'
-            await update.message.reply_text("🔘 <b>الخطوة 4:</b> أرسل <b>الخيار (B)</b>:")
+            await update.message.reply_text("🔘 <b>الخطوة 4:</b> أرسل <b>الخيار (B)</b>:",parse_mode="HTML")
             return
 
         # استقبال الخيار B
         elif action == 'awaiting_q_b':
             context.user_data['temp_q']['b'] = text
             context.user_data['action'] = 'awaiting_q_c'
-            await update.message.reply_text("🔘 <b>الخطوة 5:</b> أرسل <b>الخيار (C)</b>:")
+            await update.message.reply_text("🔘 <b>الخطوة 5:</b> أرسل <b>الخيار (C)</b>:",parse_mode="HTML")
             return
 
         # استقبال الخيار C
         elif action == 'awaiting_q_c':
             context.user_data['temp_q']['c'] = text
             context.user_data['action'] = 'awaiting_q_d'
-            await update.message.reply_text("🔘 <b>الخطوة 6:</b> أرسل <b>الخيار (D)</b>:")
+            await update.message.reply_text("🔘 <b>الخطوة 6:</b> أرسل <b>الخيار (D)</b>:",parse_mode="HTML")
             return
 
         # استقبال الخيار D وطلب الإجابة الصحيحة
@@ -2543,7 +2557,7 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
         elif action == 'awaiting_quiz_title':
             context.user_data['temp_quiz']['quiz_id'] = text
             context.user_data['action'] = 'awaiting_quiz_q_count'
-            await update.message.reply_text("🔢 <b>الخطوة 4:</b> كم <b>عدد الأسئلة</b> التي تريد سحبها من البنك لهذا الاختبار؟")
+            await update.message.reply_text("🔢 <b>الخطوة 4:</b> كم <b>عدد الأسئلة</b> التي تريد سحبها من البنك لهذا الاختبار؟",parse_mode="HTML")
             return
 
         elif action == 'awaiting_quiz_q_count':
@@ -2552,13 +2566,13 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
                 return
             context.user_data['temp_quiz']['q_count'] = text
             context.user_data['action'] = 'awaiting_quiz_pass'
-            await update.message.reply_text("🎯 <b>الخطوة 5:</b> حدد <b>درجة النجاح</b> (مثلاً: 50):")
+            await update.message.reply_text("🎯 <b>الخطوة 5:</b> حدد <b>درجة النجاح</b> (مثلاً: 50):",parse_mode="HTML")
             return
 
         elif action == 'awaiting_quiz_pass':
             context.user_data['temp_quiz']['pass_score'] = text
             context.user_data['action'] = 'awaiting_quiz_time'
-            await update.message.reply_text("⏱ <b>الخطوة 6:</b> حدد <b>مدة الاختبار الكلية</b> بالدقائق:")
+            await update.message.reply_text("⏱ <b>الخطوة 6:</b> حدد <b>مدة الاختبار الكلية</b> بالدقائق:",parse_mode="HTML")
             return
 
         elif action == 'awaiting_quiz_time':
@@ -2605,19 +2619,19 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
                 await update.message.reply_text(response)
                 return
 
-        # 2. إدارة ذاكرة المحادثة وجلب البيانات من الشيت
+        # 2. إدارة ذاكرة المحادثة وجلب البيانات من القاعدة
         global user_messages
         if user.id not in user_messages:
             user_messages[user.id] = []
 
-        # جلب قاعدة المعرفة من الشيت
+        # جلب قاعدة المعرفة من القاعدة
        
         courses_knowledge = get_courses_knowledge_base(bot_token)
         
         # إضافة رسالة الطالب للذاكرة
         user_messages[user.id].append({"role": "user", "content": text})
         
-        # --- [ الجزء الديناميكي الجديد: جلب الهوية من الشيت ] ---
+        # --- [ الجزء الديناميكي الجديد: جلب الهوية من القاعدة ] ---
         
         ai_info = get_ai_setup(bot_token)
         platform = ai_info.get('اسم_المؤسسة', 'منصة الادارة التعليمية') if ai_info else "منصة الادارة التعليمية"
@@ -2684,7 +2698,7 @@ async def run_bot(token, owner_id):
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_contact_message))
     
     # 2. إعداد مراقب التفعيل (يُوضع هنا بعد تعريف الـ application)
-    # سيقوم بفحص الشيت كل 60 ثانية وإرسال رسائل للطلاب المفعلين
+    # سيقوم بفحص القاعدة كل 60 ثانية وإرسال رسائل للطلاب المفعلين
     job_queue = application.job_queue
     job_queue.run_repeating(activation_monitor, interval=60, first=10)
     

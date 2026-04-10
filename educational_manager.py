@@ -489,7 +489,7 @@ async def show_lectures_logic(update, context):
         await query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
         
     else:
-        # --- [ ج: مسار الموظف - بناءً على الصلاحيات المقيدة في الشيت ] ---
+        # --- [ ج: مسار الموظف - بناءً على الصلاحيات المقيدة في القاعدة ] ---
         allowed_courses = get_employee_allowed_courses(bot_token, user_id)
         
         if allowed_courses:
@@ -615,7 +615,7 @@ async def validate_dsc_max(update, context):
         await update.message.reply_text(summary, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 العودة", callback_data="discount_codes")]]), parse_mode="HTML")
         context.user_data['action'] = None
     else:
-        await update.message.reply_text("❌ حدث خطأ أثناء الحفظ في الشيت.")
+        await update.message.reply_text("❌ حدث خطأ أثناء الحفظ في القاعدة.")
 
 
 # --------------------------------------------------------------------------
