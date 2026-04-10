@@ -114,15 +114,15 @@ def get_employee_panel():
     text = "👨‍🏫 <b>إدارة الشؤون التعليمية :</b>\nيمكنك إضافة مدربين جدد دورات جديدة او اقسام او مجموعات أو استعراض القائمة الحالية للحذف."
     
     keyboard = [
-        [InlineKeyboardButton("📁 إدارة الأقسام", callback_data="manage_cats_employee"), 
-         InlineKeyboardButton("📚 إدارة الدورات", callback_data="manage_courses_employee")],
-        [InlineKeyboardButton("المكتبة الشاملة", callback_data="manage_library_employee"), 
-         InlineKeyboardButton("الأوسمة والإنجازات", callback_data="honors_achievements_employee")],
-        [InlineKeyboardButton("إدارة المجموعات", callback_data="manage_group_employee"), 
-         InlineKeyboardButton("الأسئلة الشائعة", callback_data="frequently_guestions_employee")],
-        [InlineKeyboardButton("جداول المحاضرات", callback_data="schedules_lectures_employee"), 
-         InlineKeyboardButton("🎟 الكوبونات", callback_data="manage_coupons_employee")],
-        [InlineKeyboardButton("الكنترول", callback_data="manage_control_employee")],
+        [InlineKeyboardButton("📁 إدارة الأقسام", callback_data="manage_cats"), 
+         InlineKeyboardButton("📚 إدارة الدورات", callback_data="manage_courses")],
+        [InlineKeyboardButton("المكتبة الشاملة", callback_data="manage_library"), 
+         InlineKeyboardButton("الأوسمة والإنجازات", callback_data="honors_achievements")],
+        [InlineKeyboardButton("إدارة المجموعات", callback_data="manage_group"), 
+         InlineKeyboardButton("الأسئلة الشائعة", callback_data="frequently_guestions")],
+        [InlineKeyboardButton("جداول المحاضرات", callback_data="schedules_lectures"), 
+         InlineKeyboardButton("🎟 الكوبونات", callback_data="manage_coupons")],
+        [InlineKeyboardButton("الكنترول", callback_data="manage_control")],
         [InlineKeyboardButton("🔙 عودة", callback_data="main_menu")]
     ]
     return InlineKeyboardMarkup(keyboard)
@@ -134,14 +134,14 @@ def get_coach_panel():
     text = "👨‍🏫 <b>غرفة الإدارة الأكاديمية (المدرب):</b>\nمرحباً بك! يمكنك إدارة مجموعاتك، متابعة طلابك، وتصحيح الواجبات من هنا."
     
     keyboard = [
-        [InlineKeyboardButton("👥 مجموعاتي الدراسية", callback_data="manage_group_coach"), 
+        [InlineKeyboardButton("👥 مجموعاتي الدراسية", callback_data="manage_group"), 
          InlineKeyboardButton("📚 دوراتي المتاحة", callback_data="manage_courses")],
-        [InlineKeyboardButton("📅 جدول المحاضرات", callback_data="schedules_lectures_coach"), 
-         InlineKeyboardButton("📖 المكتبة التعليمية", callback_data="manage_library_coach")],
-        [InlineKeyboardButton("📑 تصحيح الواجبات", callback_data="hw_view_submissions_coach"), 
-         InlineKeyboardButton("📝 بنك الأسئلة", callback_data="manage_q_bank_coach")],
-        [InlineKeyboardButton("🏆 الأوسمة والتقييمات", callback_data="honors_achievements_coach"), 
-         InlineKeyboardButton("🎮 غرفة الكنترول", callback_data="manage_control_coach")],
+        [InlineKeyboardButton("📅 جدول المحاضرات", callback_data="schedules_lectures"), 
+         InlineKeyboardButton("📖 المكتبة التعليمية", callback_data="manage_library")],
+        [InlineKeyboardButton("📑 تصحيح الواجبات", callback_data="hw_view_submissions"), 
+         InlineKeyboardButton("📝 بنك الأسئلة", callback_data="manage_q_bank")],
+        [InlineKeyboardButton("🏆 الأوسمة والتقييمات", callback_data="honors_achievements"), 
+         InlineKeyboardButton("🎮 غرفة الكنترول", callback_data="manage_control")],
         [InlineKeyboardButton("🔙 عودة للقائمة", callback_data="main_menu")]
     ]
     return InlineKeyboardMarkup(keyboard)
@@ -243,14 +243,32 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ب: رتبة الموظف أو المدرب (التحقق المترابط بنظام الفحص الآمن لمنع توقف البوت)
     # 1. التحقق من عمود "الصلاحيات" في ورقة "إدارة_الموظفين"
     # 2. أو التحقق من عمود "صلاحية_الأقسام" في ورقة "الهيكل_التنظيمي_والصلاحيات"
+    # ب: رتبة الموظف أو المدرب (التحقق المترابط بنظام الفحص الآمن لمنع توقف البوت)
     elif (check_user_permission(bot_token, user.id, "الصلاحيات") == True) or \
          (check_user_permission(bot_token, user.id, "صلاحية_الأقسام") == True):
-        final_text = (
-            f"<b>مرحباً بك يا {user.first_name} في لوحة الإدارة التعليمية</b> 👨‍🏫\n\n"
-            f"{msg}\n\n"
-            f"لديك صلاحيات الموظفين المعتمدة، يمكنك البدء بالإدارة من الأزرار أدناه:"
-        )
-        reply_markup = get_employee_panel()
+        
+        # --- [ الإصلاح المستهدف: الفرز بين المدرب والموظف بناءً على العمود 42 ] ---
+        from cache_manager import sync_manager
+        employees_data = sync_manager.get_sheet_data("إدارة_الموظفين")
+        user_row = next((row for row in employees_data if len(row) > 3 and str(row[3]) == str(user.id)), None)
+        
+        # التأكد من الرتبة في العمود 42 (الفهرس 41)
+        if user_row and len(user_row) >= 42 and str(user_row[41]).strip() == "مدرب":
+            final_text = (
+                f"<b>مرحباً بك يا كابتن {user.first_name} في غرفتك الأكاديمية</b> 👨‍🏫\n\n"
+                f"{msg}\n\n"
+                f"يمكنك متابعة طلابك وتصحيح الواجبات من الأزرار أدناه:"
+            )
+            reply_markup = get_coach_panel()
+        else:
+            # القيمة الافتراضية إذا لم يكن مدرباً فهو موظف إداري كما في منطقك الأصلي
+            final_text = (
+                f"<b>مرحباً بك يا {user.first_name} في لوحة الإدارة التعليمية</b> 💼\n\n"
+                f"{msg}\n\n"
+                f"لديك صلاحيات الموظفين المعتمدة، يمكنك البدء بالإدارة من الأزرار أدناه:"
+            )
+            reply_markup = get_employee_panel()
+
 
     # ج: رتبة الطالب (الحالة الافتراضية النهائية لمن لا تنطبق عليه الشروط أعلاه)
     else:
@@ -1342,9 +1360,26 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
     # --- [ قسم إدارة الكنترول والاختبارات ] ---
     
     # 1. الدخول لغرفة الكنترول الرئيسية
-    elif data == "manage_control":
+    # --- [ الخطوة الثانية: معالجة الدخول والعودة الذكية ] ---
+
+    # 1. توحيد الدخول إلى الكنترول للرتب الثلاث
+    elif data in ["manage_control", "manage_control_employee", "manage_control_coach"]:
         from educational_manager import manage_control_ui
         await manage_control_ui(update, context)
+
+    # 2. تفعيل مفتاح العودة للوحة الموظفين
+    elif data == "get_employee_panel":
+        # استدعاء الدالة التي قمنا بتجهيزها مسبقاً للوحة الموظف
+        text = "👨‍🏫 <b>إدارة الشؤون التعليمية :</b>\nيمكنك إضافة مدربين جدد دورات جديدة او اقسام او مجموعات أو استعراض القائمة الحالية للحذف."
+        await query.edit_message_text(text, reply_markup=get_employee_panel(), parse_mode="HTML")
+
+    # 3. تفعيل مفتاح العودة للوحة المدربين
+    elif data == "get_coach_panel":
+        # استدعاء الدالة التي قمنا بتجهيزها مسبقاً للوحة المدرب
+        text = "👨‍🏫 <b>غرفة الإدارة الأكاديمية (المدرب):</b>\nمرحباً بك! يمكنك إدارة مجموعاتك، متابعة طلابك، وتصحيح الواجبات من هنا."
+        await query.edit_message_text(text, reply_markup=get_coach_panel(), parse_mode="HTML")
+
+        
 #إنشاء الاختبارات الآلية 
     elif data == "manage_quizzes":
         from educational_manager import quiz_create_start_ui
@@ -1379,12 +1414,8 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             await query.answer("⚠️ يرجى اختيار مجموعة واحدة على الأقل!", show_alert=True)
             return
         context.user_data['action'] = 'awaiting_quiz_title'
-        await query.edit_message_text("🏷 <b>الخطوة 3:</b> أرسل <b>عنواناً للاختبار</b> (مثلاً: اختبار نهاية الفصل الأول):")
-
-
-
-
-
+        await query.edit_message_text("🏷 <b>الخطوة 3:</b> أرسل <b>عنواناً للاختبار</b> (مثلاً: اختبار نهاية الفصل الأول):",parse_mode="HTML")
+# --------------------------------------------------------------------------
 
 
     # 2. الدخول لبنك الأسئلة

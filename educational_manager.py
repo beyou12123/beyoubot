@@ -188,21 +188,60 @@ async def confirm_delete_group_ui(update, context, group_id):
 # --------------------------------------------------------------------------
 #ادارة الاختبارات والاسئلة 
 async def manage_control_ui(update, context):
-    """واجهة الكنترول التعليمي الرئيسية"""
+    """واجهة الكنترول التعليمي الرئيسية - النسخة الديناميكية المعتمدة على الكاش"""
     query = update.callback_query
+    user_id = update.effective_user.id
+    bot_token = context.bot.token
+    
+    # 1. استدعاء السينك مانجر للوصول للبيانات اللحظية
+    from cache_manager import sync_manager
+    from sheets import get_bot_config
+    
+    # جلب إعدادات البوت لمعرفة ID المالك
+    config = get_bot_config(bot_token)
+    bot_owner_id = int(config.get("admin_ids", 0))
+
+    # 2. تحديد وجهة زر العودة الافتراضية (للأمان)
+    back_callback = "main_menu" 
+
+    # 3. فحص الرتبة (التسلسل الهرمي باستغلال الكاش)
+    if user_id == bot_owner_id:
+        # المالك يعود لإعدادات النظام
+        back_callback = "tech_settings"
+    else:
+        # استخراج بيانات ورقة إدارة الموظفين من الكاش
+        employees_data = sync_manager.get_sheet_data("إدارة_الموظفين")
+        
+        if employees_data:
+            # البحث عن صف الموظف بناءً على user_id (نفترض الـ ID في العمود 4 - فهرس 3)
+            # ونبحث عن الرتبة في العمود 42 (فهرس 41)
+            user_row = next((row for row in employees_data if str(row[3]) == str(user_id)), None)
+            
+            if user_row and len(user_row) >= 42:
+                user_role = str(user_row[41]).strip() # العمود 42: الرتبة
+                
+                if user_role == "مدرب":
+                    back_callback = "get_coach_panel"
+                elif user_role == "موظف":
+                    back_callback = "get_employee_panel"
+
+    # 4. بناء لوحة المفاتيح بالزر الديناميكي
     keyboard = [
         [InlineKeyboardButton("📝 إدارة الاختبارات", callback_data="manage_quizzes"),
          InlineKeyboardButton("📚 بنك الأسئلة", callback_data="manage_q_bank")],
         [InlineKeyboardButton("📝 سجل الإجابات", callback_data="view_exam_logs"),
          InlineKeyboardButton("📑 إدارة الواجبات", callback_data="manage_homeworks")],
-        [InlineKeyboardButton("🔙 عودة", callback_data="manage_educational")]
+        [InlineKeyboardButton("🔙 عودة", callback_data=back_callback)] # هنا الزر الذكي
     ]
+
     await query.edit_message_text(
         "🎮 <b>مرحباً بك في غرفة الكنترول التعليمي:</b>\n"
         "من هنا يمكنك التحكم في الاختبارات، بنك الأسئلة، وتصحيح الواجبات.",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="HTML"
     )
+
+
 
 async def q_bank_manager_ui(update, context):
     """واجهة إدارة بنك الأسئلة (إضافة/عرض/حذف/تعديل)"""
