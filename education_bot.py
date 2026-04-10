@@ -617,10 +617,10 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             await context.bot.send_message(chat_id=candidate_id, text="⚠️ نعتذر منك، تم رفض طلب انضمامك للكادر حالياً.")
         except: pass
 
-    # التنفيذ النهائي والحفظ (تم الدمج ليعمل للمدرب والموظف معاً)
-    # التنفيذ النهائي والحفظ (تم الدمج والتدقيق لمنع التهنيج وضمان استعادة البيانات)
+# --------------------------------------------------------------------------
+    # التنفيذ النهائي والحفظ (المحرك الموحد المطور لـ 43 عموداً - دمج المدربين والموظفين)
     elif data.startswith("final_save_reg_"):
-        branch_id = data.replace("final_save_reg_", "")
+        branch_id_selected = data.replace("final_save_reg_", "").strip()
         pending = context.user_data.get('pending_approve')
         reg_info = context.user_data.get('reg_data') # البيانات المستعادة من الذاكرة المؤقتة
         
@@ -632,60 +632,51 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             )
             return
 
-        # جلب تفاصيل الفرع من الذاكرة المركزية RAM لضمان جلب الاسم الصحيح
+        # 🚀 الربط الآلي: جلب تفاصيل الفرع من الذاكرة المركزية RAM لضمان جلب الاسم الصحيح
         from cache_manager import FACTORY_GLOBAL_CACHE
         br_records = FACTORY_GLOBAL_CACHE.get("data", {}).get("إدارة_الفروع", [])
-        # تنظيف المعرف من أي علامات نصية لضمان المطابقة البرمجية
-        branch = next((b for b in br_records if str(b.get("معرف_الفرع")).replace("'", "").strip() == branch_id.strip()), {})
+        # تنظيف المعرف لضمان مطابقة دقيقة للأرقام النقية (نظام 1001001)
+        branch = next((b for b in br_records if str(b.get("معرف_الفرع")).replace("'", "").strip() == branch_id_selected), {})
+        branch_name = branch.get('اسم_الفرع', 'الرئيسي')
 
         # استعادة اليوزرنيم المحفوظ أو وضع قيمة افتراضية
         candidate_username = context.user_data.get('candidate_username', 'بدون')
-        from sheets import add_new_coach_advanced, add_new_employee_advanced, update_global_version
         
-        success = False
-        role_type = pending['role']
-        candidate_id = pending['id']
+        # 🟢 التعبئة الآلية للرتبة: تحويل نوع الطلب لوسم عربي (مدرب/موظف) للعمود 42
+        role_type_ar = "مدرب" if pending['role'] == "coach" else "موظف"
 
-        if role_type == "coach":
-            # حفظ في ورقة المدربين (15 عموداً)
-            success = add_new_coach_advanced(
-                bot_token=bot_token,
-                coach_id=candidate_id,
-                name=reg_info['name'],
-                specialty=reg_info['info'],
-                phone=reg_info['phone'],
-                branch_id=branch_id,
-                branch_name=branch.get('اسم_الفرع', 'الرئيسي'),
-                email=reg_info['email'],
-                username=candidate_username
-            )
-        else:
-            # حفظ في ورقة الموظفين (41 عموداً بمطابقة تامة للمخطط)
-            success = add_new_employee_advanced(
-                bot_token=bot_token,
-                employee_id=candidate_id,
-                name=reg_info['name'],
-                job_title=reg_info['info'],
-                phone=reg_info['phone'],
-                branch_id=branch_id,
-                branch_name=branch.get('اسم_الفرع', 'الرئيسي'),
-                email=reg_info['email'],
-                username=candidate_username
-            )
+        from sheets import add_new_employee_advanced, update_global_version
+        
+        # تنفيذ الحفظ الموحد في ورقة "إدارة_الموظفين" حصراً (المحرك الجديد بـ 43 عموداً)
+        success = add_new_employee_advanced(
+            bot_token=bot_token,
+            employee_id=pending['id'],     # ID التيليجرام (العمود 3)
+            name=reg_info['name'],         # الاسم الكامل (العمود 5)
+            job_title=reg_info['info'],    # التخصص أو المسمى (العمود 11 و 12)
+            phone=reg_info['phone'],       # الهاتف (العمود 18)
+            branch_id=branch_id_selected,  # معرف الفرع الرقمي (العمود 2)
+            branch_name=branch_name,       # اسم الفرع المجلوب آلياً (العمود 43)
+            role_tag=role_type_ar,         # الرتبة المحددة آلياً (العمود 42)
+            email=reg_info['email'],       # البريد (العمود 21)
+            username=candidate_username    # اليوزرنيم (العمود 41)
+        )
 
         if success:
-            role_ar = "المدرب" if role_type == "coach" else "الموظف"
-            branch_display = branch.get('اسم_الفرع', 'الرئيسي')
-            await query.edit_message_text(f"✅ تم اعتماد {role_ar} بنجاح وربطه بفرع: {branch_display}")
+            await query.edit_message_text(
+                f"✅ تم اعتماد <b>{role_type_ar}</b> بنجاح!\n"
+                f"🏢 الفرع: {branch_name}\n"
+                f"🆔 تم توليد معرف مهني (100) وحفظه في ورقة الموظفين.", 
+                parse_mode="HTML"
+            )
             
             # تحديث نبضة النظام العالمية للمزامنة اللحظية
             update_global_version(bot_token)
             
             try:
-                # إشعار الكادر بالقبول النهائي عبر معرفه الرقمي ID
+                # إشعار الكادر بالقبول النهائي وتحديد دوره وفرعه
                 await context.bot.send_message(
-                    chat_id=candidate_id, 
-                    text=f"🎊 <b>مبروك!</b> تم قبول طلب انضمامك واعتمادك رسمياً كمـ ({role_ar}) في المنصة التعليمية.\n🏢 الفرع: {branch_display}",
+                    chat_id=pending['id'], 
+                    text=f"🎊 <b>مبروك!</b> تم قبول طلب انضمامك واعتمادك رسمياً كمـ ({role_type_ar}) في المنصة.\n🏢 الفرع المخصص: {branch_name}",
                     parse_mode="HTML"
                 )
             except: pass
@@ -694,8 +685,8 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             context.user_data.pop('pending_approve', None)
             context.user_data.pop('reg_data', None)
         else:
-            await query.answer("❌ فشل الحفظ في الشيت، يرجى التأكد من صلاحيات الوصول وتوفر الأعمدة.", show_alert=True)
-
+            await query.answer("❌ فشل الحفظ، تأكد من تحديث هيكل ورقة إدارة_الموظفين لـ 43 عموداً.", show_alert=True)
+ 
 # --------------------------------------------------------------------------
     elif data == "setup_ai_start":
         context.user_data['action'] = 'awaiting_institution_name'
