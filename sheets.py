@@ -47,7 +47,7 @@ coupons_sheet = None            # 11. الكوبونات
 courses_sheet = None            # 12. الدورات_التدريبية
 faq_sheet = None                # 13. الأسئلة_الشائعة
 meta_sheet = None               # 14. _meta (الإصدار والتحقق)
-coaches_sheet = None            # 15. ورقة المدربين (الإضافة الجديدة)
+
 lectures_sheet = None        # ورقة جدول_المحاضرات (إضافة جديدة)
 
 # معرف ملف Google Sheet الخاص بمصنع البوتات
@@ -86,7 +86,6 @@ def get_sheets_structure():
         {"name": "الأقسام", "cols": ["bot_id","معرف_القسم","اسم_القسم","الحالة","ترتيب_العرض","تاريخ_الإنشاء","معرف_الفرع","ملاحظات"]},
         {"name": "الكوبونات", "cols": ["bot_id", "معرف_الفرع", "معرف_الكوبون","معرف_الطالب","قيمة_الخصم","نوع_الخصم","الحد_الأقصى_للاستخدام","حالة_الكوبون","تاريخ_الإنشاء","تاريخ_الانتهاء","ملاحظات"]},
         {"name": "الدورات_التدريبية", "cols": ["bot_id", "معرف_الفرع", "معرف_الدورة", "اسم_الدورة", "الوصف", "تاريخ_البداية", "تاريخ_النهاية", "نوع_الدورة", "سعر_الدورة", "الحد_الأقصى", "المتطلبات", "اسم_الموظف", "معرف_الموظف", "معرف_الحملة_التسويقية", "معرف_المدرب", "ID_المدرب", "اسم_المدرب", "معرف_القسم"]},
-        {"name": "المدربين", "cols": ["bot_id","معرف_الفرع ","ID", "اسم_المدرب", "التخصص", "رقم_الهاتف", "البريد_الإلكتروني", "السيرة_الذاتية", "رابط_الصورة", "الحالة", "اسم_الفرع", "عدد_الدورات_الحالية", "تاريخ_التعاقد", "ملاحظات", "اسم_المستخدم"], "color": {"red": 0.88, "green": 0.95, "blue": 0.88}},
         {"name": "إدارة_الحملات_الإعلانية", "cols": ["bot_id", "معرف_الفرع","معرف_الدورة", "معرف_الحملة","المنصة","تاريخ_البداية","تاريخ_النهاية","الميزانية","عدد_المسجلين","الحالة","ID_المسوق"] },
         {"name": "أكواد_الخصم", "cols": ["bot_id", "معرف_الفرع", "معرف_الخصم","نوع_الخصم","الوصف","قيمة_الخصم","الحد_الأقصى_للاستخدام","عدد_الاستخدامات","تاريخ_البداية","تاريخ_الانتهاء","الحالة","معرف_الدورة","اسم_الموظف","معرف_الحملة_التسويقية","ملاحظات"]},
         {"name": "الأسئلة_الشائعة", "cols": ["bot_id" ,"معرف_الفرع", "معرف_القسم","معرف_الدورة","اسم_الدورة", "محتوى_السؤال_مع_الإجابة","الحالة","ترتيب_العرض","تاريخ_الإنشاء","معرف_الفرع","اسم_الفرع","ملاحظات"]},
@@ -248,7 +247,7 @@ def connect_to_google():
     global client, ss, users_sheet, bots_sheet, content_sheet, logs_sheet
     global stats_sheet, payments_sheet, students_db_sheet, registrations_logs_sheet
     global departments_sheet, discount_codes_sheet, coupons_sheet, courses_sheet 
-    global faq_sheet, meta_sheet, coaches_sheet, lectures_sheet
+    global faq_sheet, meta_sheet, lectures_sheet
 
     config = get_config()
     if not config: return False
@@ -278,7 +277,6 @@ def connect_to_google():
         courses_sheet = safe_get_sheet("الدورات_التدريبية")
         faq_sheet = safe_get_sheet("الأسئلة_الشائعة")
         meta_sheet = safe_get_sheet("_meta")
-        coaches_sheet = safe_get_sheet("المدربين") 
         lectures_sheet = safe_get_sheet("جدول_المحاضرات")
 
         print("✅ تم الاتصال بجوجل بنجاح. الجداول بانتظار التهيئة اليدوية ⚙️")
@@ -1072,44 +1070,6 @@ def add_new_coach_advanced(bot_token, coach_id, name, specialty, phone, branch_i
 
 
 # --------------------------------------------------------------------------
-#جلب بيانات المدربين
-def get_all_coaches(bot_token):
-    """جلب قائمة المدربين المخصصين لهذا البوت من ورقة المدربين"""
-    try:
-        # تأكد أن اسم الورقة في المتغير هو coaches_sheet أو جلبها بالاسم
-        # coaches_sheet = client.open_by_key(SPREADSHEET_ID).worksheet("المدربين")
-        if coaches_sheet is None: return []
-        all_rows = coaches_sheet.get_all_values()
-        coaches = []
-        for row in all_rows[1:]:
-            # العمود 9 هو bot_id (Index 8) والعمود 1 هو ID_المدرب (Index 0) والعمود 2 هو الاسم (Index 1)
-            # التعديل: التوكن في العمود 1 (Index 0)، الـ ID في 3 (Index 2)، الاسم في 4 (Index 3)
-            if len(row) >= 1 and row[0] == bot_token:
-                coaches.append({
-                    "id": row[2],    # ID_المدرب
-                    "name": row[3]   # اسم_المدرب
-                })
-
-        return coaches
-    except Exception as e:
-        print(f"❌ Error fetching coaches: {e}")
-        return []
- 
-def delete_coach_from_sheet(bot_token, coach_id):
-    """حذف مدرب من الشيت بناءً على الـ ID وتوكن البوت"""
-    try:
-        if coaches_sheet is None: return False
-        all_rows = coaches_sheet.get_all_values()
-        for i, row in enumerate(all_rows):
-           
-            # التعديل: ID المدرب في Index 2، والتوكن في Index 0
-            if len(row) >= 3 and str(row[2]) == str(coach_id) and row[0] == bot_token:
-                coaches_sheet.delete_rows(i + 1)
-                return True
-        return False
-    except Exception as e:
-        print(f"❌ Error deleting coach: {e}")
-        return False
 
 # --------------------------------------------------------------------------
 # دالة جلب إعدادات الذكاء الاصطناعي (تم توحيد المسمى لـ setup)
@@ -2344,7 +2304,7 @@ def update_branch_field_db(bot_token, branch_id, col_name, new_value):
         return False
 
 # --------------------------------------------------------------------------
-
+# اضافة مدرب او موظف 
 def generate_emp_id():
     """توليد رقم عشوائي مهني من 10 أرقام يبدأ بـ 100"""
     return int(f"100{random.randint(1000000, 9999999)}")

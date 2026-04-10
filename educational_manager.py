@@ -219,8 +219,9 @@ async def manage_control_ui(update, context):
             
             if user_row and len(user_row) >= 42:
                 user_role = str(user_row[41]).strip() # العمود 42: الرتبة
-                
-                if user_role == "مدرب":
+                if user_role == "مدير النظام":
+                    back_callback = "get_admin_panel"
+                elif user_role == "مدرب":
                     back_callback = "get_coach_panel"
                 elif user_role == "موظف":
                     back_callback = "get_employee_panel"

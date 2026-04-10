@@ -703,10 +703,26 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             await query.answer("❌ فشل الحفظ، تأكد من تحديث هيكل قسم إدارة_الموظفين لـ 43 عموداً.", show_alert=True)
  
 # --------------------------------------------------------------------------
+    # عودة المالك ومدير النظام
+    elif data in ["back_to_admin", "get_admin_panel"]:
+        text = f"<b>{current_msg}</b>\n\nمرحباً بك مجدداً في لوحة القيادة 🎓"
+        await query.edit_message_text(text, reply_markup=get_admin_panel(), parse_mode="HTML")
+
+    # عودة الموظف
+    elif data == "get_employee_panel":
+        text = f"<b>{current_msg}</b>\n\n👨‍🏫 <b>قسم الشؤون التعليمية:</b> ابدأ الإدارة الآن."
+        await query.edit_message_text(text, reply_markup=get_employee_panel(), parse_mode="HTML")
+
+    # عودة المدرب
+    elif data == "get_coach_panel":
+        text = f"<b>{current_msg}</b>\n\n👨‍🏫 <b>الغرفة الأكاديمية:</b> مهامك بانتظارك أيها المدرب."
+        await query.edit_message_text(text, reply_markup=get_coach_panel(), parse_mode="HTML")
+
+
 #ضبط الذكاء الاصطناعي 
     elif data == "setup_ai_start":
         context.user_data['action'] = 'awaiting_institution_name'
-        await query.edit_message_text("🤖 <b>إعداد الهوية الذكية:</b>\nيرجى إرسال اسم المنصة التعليمية الآن:")
+        await query.edit_message_text("🤖 <b>إعداد الهوية الذكية:</b>\nيرجى إرسال اسم المنصة التعليمية الآن:",parse_mode="HTML")
 # --------------------------------------------------------------------------
 
 
