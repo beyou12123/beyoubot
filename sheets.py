@@ -75,7 +75,7 @@ def get_sheets_structure():
         {"name": "الهيكل_التنظيمي_والصلاحيات", "cols": ["bot_id", "معرف_الفرع", "ID_الموظف_أو_المدرب", "صلاحية_الأقسام", "صلاحية_الدورات", "صلاحية_المدربين", "صلاحية_الموظفين", "صلاحية_الإحصائيات", "صلاحية_الإذاعة", "صلاحية_الرسائل_الخاصة", "صلاحية_الكوبونات", "صلاحية_أكواد_الخصم", "الدورات_المسموحة", "المجموعات_المسموحة", "تحديث_السيرفر"]}, 
         {"name": "المستخدمين", "cols": ["ID المستخدم","اسم المستخدم","تاريخ التسجيل","الحالة","نوع الاشتراك","عدد البوتات","آخر نشاط","اللغة","مصدر التسجيل","معرف إحالة","رصيد"], "color": {"red": 0.85, "green": 0.92, "blue": 0.83}},
         {"name": "البوتات_المصنوعة", "cols": ["ID المالك","نوع البوت","اسم البوت","التوكن","حالة التشغيل","bot_id","username_bot","تاريخ الإنشاء","آخر تشغيل","عدد المستخدمين","عدد الرسائل","الحالة التقنية","webhook_url","api_type","plan","expiration_date","is_active","errors_log","تاريخ_آخر_تجديد","سعر_الاشتراك","رصيد_البوت","الحد_الأقصى_للطلاب","الحد_الأقصى_للدوات","الحد_الأقصى_للاقسام", "ميزة_الذكاء_الاصطناعي", "ميزة_رفع_وتصدير_البيانات_اكسل" ,"معرف_الفاتورة","متوسط_زمن_الاستجابة","استخدام_CPU","استخدام_الذاكرة","المستخدمون_النشطون_يومياً","المستخدمون_النشطون_شهرياً","معدل_الاحتفاظ","تاريخ_آخر_تحديث_للتوكن","حالة_التوكن","حالة_الدفع","طريقة_الدفع","دورة_الفوترة","إصدار_البوت","بيئة_التشغيل","إعادة_تشغيل_تلقائي","نموذج_الذكاء_الاصطناعي","استهلاك_التوكنات_AI","تكلفة_AI"], "color": {"red":0.81,"green":0.88,"blue":0.95} }, 
-        {"name": "إعدادات_المحتوى", "cols": ["bot_id","الرسالة الترحيبية","القوانين","رد التوقف","auto_reply","ai_enabled","welcome_enabled","buttons","banned_words","admin_ids","language","theme","delay_response","broadcast_enabled","custom_commands", "welcome_morning", "welcome_noon", "welcome_evening", "welcome_night"], "color": {"red": 1.0, "green": 0.95, "blue": 0.8}},
+        {"name": "إعدادات_المحتوى", "cols": ["bot_id","الرسالة الترحيبية","القوانين","رد التوقف","auto_reply","ai_enabled","welcome_enabled","buttons","banned_words","admin_ids","language","theme","delay_response","broadcast_enabled","custom_commands", "welcome_morning", "welcome_noon", "welcome_evening", "welcome_night", "اسم_المؤسسة", "تعليمات_AI", "ref_points_join", "ref_points_purchase", "min_points_redeem", "currency_unit", "homework_grade", "subscription_price", "ai_provider", "maintenance_mode", "max_daily_ai_questions", "backup_channel_id", "bot_status_msg", "trial_end_action", "timezone", "ai_memory_limit"], "color": {"red": 1.0, "green": 0.95, "blue": 0.8}},
         {"name": "الإحصائيات", "cols": ["bot_id","daily_users","messages_count","new_users","blocked_users","date"], "color": {"red": 0.92, "green": 0.82, "blue": 0.86}},
         {"name": "السجلات", "cols": ["bot_id","type","message","time"], "color": {"red": 0.93, "green": 0.93, "blue": 0.93}},
         {"name": "_meta", "cols": ["key", "value", "updated_at"], "color": {"red": 1, "green": 0.8, "blue": 0.8}}, 
@@ -108,6 +108,7 @@ def get_sheets_structure():
         {"name": "سجل_ساعات_العمل", "cols": ["bot_id","معرف_الفرع ","معرف_الموظف", "وقت_تسجيل_الدخول", "وقت_تسجيل_الخروج", "نوع_النشاط", "ملاحظات"] },
         {"name": "كشوف_المرتبات", "cols": ["bot_id","معرف_الفرع ","الشهر", "معرف_الموظف", "الراتب_الأساسي", "الحوافز", "الخصومات", "صافي_الراتب", "حالة_الصرف"] },
         
+
     
 
         
@@ -2368,7 +2369,44 @@ def add_new_employee_advanced(bot_token, employee_id, name, job_title, phone, br
         return False
 
 # --------------------------------------------------------------------------
+#جلب بيانات المدربين
+def get_all_coaches(bot_token):
+    """جلب قائمة المدربين المخصصين لهذا البوت من ورقة المدربين"""
+    try:
+        # تأكد أن اسم الورقة في المتغير هو coaches_sheet أو جلبها بالاسم
+        # coaches_sheet = client.open_by_key(SPREADSHEET_ID).worksheet("المدربين")
+        if coaches_sheet is None: return []
+        all_rows = coaches_sheet.get_all_values()
+        coaches = []
+        for row in all_rows[1:]:
+            # العمود 9 هو bot_id (Index 8) والعمود 1 هو ID_المدرب (Index 0) والعمود 2 هو الاسم (Index 1)
+            # التعديل: التوكن في العمود 1 (Index 0)، الـ ID في 3 (Index 2)، الاسم في 4 (Index 3)
+            if len(row) >= 1 and row[0] == bot_token:
+                coaches.append({
+                    "id": row[2],    # ID_المدرب
+                    "name": row[3]   # اسم_المدرب
+                })
 
+        return coaches
+    except Exception as e:
+        print(f"❌ Error fetching coaches: {e}")
+        return []
+ 
+def delete_coach_from_sheet(bot_token, coach_id):
+    """حذف مدرب من الشيت بناءً على الـ ID وتوكن البوت"""
+    try:
+        if coaches_sheet is None: return False
+        all_rows = coaches_sheet.get_all_values()
+        for i, row in enumerate(all_rows):
+           
+            # التعديل: ID المدرب في Index 2، والتوكن في Index 0
+            if len(row) >= 3 and str(row[2]) == str(coach_id) and row[0] == bot_token:
+                coaches_sheet.delete_rows(i + 1)
+                return True
+        return False
+    except Exception as e:
+        print(f"❌ Error deleting coach: {e}")
+        return False
 # --------------------------------------------------------------------------
 
 # --------------------------------------------------------------------------
