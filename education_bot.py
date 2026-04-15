@@ -77,7 +77,6 @@ model = genai.GenerativeModel('gemini-1.5-flash')
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
 # --- [ القوائم الرئيسية للمنصة - أزرار واجهة المستخدم ] ---
-
 def get_student_menu():
     keyboard = [
         [InlineKeyboardButton("📚 استعراض الدورات", callback_data="view_categories")],
@@ -315,7 +314,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         course_id = data.replace("d_ch_", "")
         from educational_manager import process_dsc_check
         await process_dsc_check(update, context, course_id)
-        
+    #>>>>>>>>>>>>>>>>    
 
     elif data == "dsc_continue":
         from educational_manager import process_dsc_ask_desc
@@ -331,7 +330,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         disc_id = data.replace("view_disc_", "")
         from educational_manager import view_discount_details_ui
         await view_discount_details_ui(update, context, disc_id)
-
+#>>>>>>>>>>>>>>>>
     # 7. معالج حذف الكود
     elif data.startswith("confirm_del_disc_"):
         disc_id = data.replace("confirm_del_disc_", "")
@@ -350,7 +349,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
     # 8. زر العودة للقائمة الرئيسية (تم تصحيح الشرط هنا لضمان تسلسل elif)
     elif data == "main_menu":
         await start_handler(update, context)
-
+#>>>>>>>>>>>>>>>>
     # معالج اربح معنا (تم ربطه بـ elif لضمان الاستجابة)
     elif data == "referral_system":
         # ملاحظة: تم إزالة query.answer() المكررة هنا لأنها تم استدعاؤها في بداية الدالة
@@ -392,7 +391,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         ]
 
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
-
+#>>>>>>>>>>>>>>>>
 
     # معالج تعطيل/تفعيل الكود مؤقتاً
     elif data.startswith("dsc_tog_"):
@@ -414,7 +413,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
                 await view_discount_details_ui(update, context, disc_id)
         except Exception as e:
             await query.answer("❌ فشل تحديث الحالة.")
-
+#>>>>>>>>>>>>>>>>
 #استبدل النقاط 
     # أضف هذا الشرط داخل دالة contact_callback_handler في education_bot.py
     elif data == "redeem_store":
@@ -470,13 +469,15 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             await query.edit_message_text(f"✅ تم شراء الدورة بنجاح!\nرصيدك المتبقي: {new_balance} نقطة.\nيمكنك الآن البدء بالدراسة من القائمة الرئيسية.")
         else:
             await query.answer("❌ فشلت العملية، تأكد من رصيدك.", show_alert=True)
+#>>>>>>>>>>>>>>>>
 # ربط الدورات بالنقاط
-    elif data == "my_profile":
-        await query.answer()
 
-        # جلب الدورات التي تسجل فيها الطالب من ورقة سجل_التسجيلات
-        reg_sheet = ss.worksheet("سجل_التسجيلات")
-        all_regs = reg_sheet.get_all_records()
+    # --- [ ملفي الدراسي - عرض الدورات المشترك بها ] ---
+    elif data == "my_profile":
+        from cache_manager import FACTORY_GLOBAL_CACHE
+        
+        # جلب البيانات من الكاش لسرعة استجابة فائقة
+        all_regs = FACTORY_GLOBAL_CACHE["data"].get("سجل_التسجيلات", [])
         
         # تصفية الدورات الخاصة بهذا الطالب في هذا البوت
         student_courses = [
@@ -485,24 +486,149 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         ]
 
         if not student_courses:
-            text = "👤 <b>ملفك الدراسي</b>\n\nأنت غير مشترك في أي دورة حالياً. يمكنك استخدام نقاطك لفتح دورة جديدة!"
-            keyboard = [[InlineKeyboardButton("💰 اربح نقاط", callback_data="referral_system")]]
+            text = (
+                "👤 <b>ملفك الدراسي</b>\n\n"
+                "⚠️ أنت غير مشترك في أي دورة تعليمية حالياً.\n"
+                "💡 يمكنك استعراض الدورات المتاحة والاشتراك بها."
+            )
+            keyboard = [
+                [InlineKeyboardButton("📚 استعراض الدورات", callback_data="view_categories")],
+                [InlineKeyboardButton("💰 اربح دورات مجانية", callback_data="referral_system")]
+            ]
         else:
-            text = "👤 <b>ملفك الدراسي</b>\n\nإليك الدورات التي تمتلك حق الوصول إليها:"
+            text = (
+                "👤 <b>ملفك الدراسي</b>\n\n"
+                "إليك قائمة بالدورات التي تمتلك حق الوصول إليها:\n"
+                "👇 انقر على اسم الدورة لفتح المحتوى التعليمي"
+            )
             keyboard = []
             for reg in student_courses:
-                c_name = reg.get('اسم_الدورة')
+                c_name = reg.get('اسم_الدورة', 'دورة غير مسمى')
                 c_id = reg.get('معرف_الدورة')
                 keyboard.append([InlineKeyboardButton(f"📖 {c_name}", callback_data=f"open_content_{c_id}")])
 
-        keyboard.append([InlineKeyboardButton("🔙 العودة", callback_data="main_menu")])
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+        keyboard.append([InlineKeyboardButton("🔙 العودة للقائمة الرئيسية", callback_data="main_menu")])
+        
+        try:
+            await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+        except Exception as e:
+            await query.answer("جاري عرض ملفك الدراسي...")
+            await query.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
-    # معالج فتح محتوى الدورة
+    # --- [ محرك فتح محتوى الدورة ] ---
     elif data.startswith("open_content_"):
         course_id = data.replace("open_content_", "")
         from course_engine import show_course_content_ui
+        # استدعاء الواجهة البرمجية لعرض الدروس (الموجودة في ملف course_engine.py)
         await show_course_content_ui(update, context, course_id)
+
+# --------------------------------------------------------------------------
+    # --- [ معالج استعراض الأقسام للطالب ] ---
+    elif data == "view_categories":
+        # جلب الأقسام من الكاش لسرعة الاستجابة
+        from sheets import get_all_categories
+        categories = get_all_categories(bot_token)
+        
+        if not categories:
+            await query.edit_message_text(
+                "⚠️ <b>تنبيه:</b> لا توجد أقسام تعليمية متاحة حالياً.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 عودة", callback_data="main_menu")]]),
+                parse_mode="HTML"
+            )
+            return
+
+        # بناء قائمة الأقسام كأزرار
+        keyboard = []
+        for cat in categories:
+            keyboard.append([InlineKeyboardButton(f"📁 {cat['name']}", callback_data=f"std_view_cat_{cat['id']}")])
+        
+        keyboard.append([InlineKeyboardButton("🔙 العودة للقائمة الرئيسية", callback_data="main_menu")])
+        
+        await query.edit_message_text(
+            "📚 <b>المكتبة التعليمية:</b>\nاختر القسم الذي ترغب في استعراض دوراته:",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
+        )
+
+    # --- [ معالج عرض دورات قسم محدد للطالب ] ---
+    elif data.startswith("std_view_cat_"):
+        cat_id = data.replace("std_view_cat_", "")
+        from sheets import get_courses_by_category
+        
+        courses = get_courses_by_category(bot_token, cat_id)
+        
+        if not courses:
+            await query.edit_message_text(
+                "⚠️ لا توجد دورات متاحة في هذا القسم حالياً.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 عودة للأقسام", callback_data="view_categories")]]),
+                parse_mode="HTML"
+            )
+            return
+
+        keyboard = []
+        for crs in courses:
+            keyboard.append([InlineKeyboardButton(f"📘 {crs['name']}", callback_data=f"std_course_info_{crs['id']}")])
+        
+        keyboard.append([InlineKeyboardButton("🔙 عودة للأقسام", callback_data="view_categories")])
+        
+        await query.edit_message_text(
+            "📖 <b>الدورات المتاحة:</b>\nاختر دورة لمعرفة التفاصيل والتسجيل:",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
+        )
+
+# --------------------------------------------------------------------------
+    # --- [ معالج الدعم الفني ] ---
+    elif data == "contact_admin":
+        # جلب إعدادات البوت لمعرفة هوية الإدارة
+        from sheets import get_bot_config
+        config = get_bot_config(bot_token)
+        
+        # تحويل معرف المالك إلى نص نظيف
+        admin_id = str(config.get("admin_ids", "")).split(',')[0].strip()
+        
+        if admin_id:
+            text = (
+                "💬 <b>قسم الدعم الفني:</b>\n"
+                "━━━━━━━━━━━━━━\n"
+                "يمكنك التواصل مباشرة مع إدارة المنصة للاستفسار عن الدورات أو حل المشكلات التقنية.\n\n"
+                "👇 اضغط على الزر أدناه لبدء المحادثة:"
+            )
+            # إنشاء زر يحول الطالب لمحادثة خاصة مع المالك
+            keyboard = [
+                [InlineKeyboardButton("📨 إرسال رسالة للإدارة", url=f"tg://user?id={admin_id}")],
+                [InlineKeyboardButton("🔙 العودة للقائمة", callback_data="main_menu")]
+            ]
+        else:
+            # حالة عدم وجود معرف أدمن مسجل في الشيت
+            text = "⚠️ عذراً، لم يتم ضبط حساب الدعم الفني لهذه المنصة بعد. يرجى المحاولة لاحقاً."
+            keyboard = [[InlineKeyboardButton("🔙 العودة", callback_data="main_menu")]]
+
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+# --------------------------------------------------------------------------
+    # --- [ معالج الأسئلة الشائعة ] ---
+    elif data == "view_faq":
+        from cache_manager import FACTORY_GLOBAL_CACHE
+        
+        # جلب بيانات الأسئلة الشائعة من الكاش (الرام)
+        all_faq = FACTORY_GLOBAL_CACHE["data"].get("الأسئلة_الشائعة", [])
+        bot_faq = [f for f in all_faq if str(f.get("bot_id")) == str(bot_token)]
+        
+        if not bot_faq:
+            text = "❓ <b>الأسئلة الشائعة:</b>\n\nلا توجد أسئلة شائعة مضافة حالياً في هذا البوت."
+        else:
+            text = "❓ <b>الأسئلة الشائعة:</b>\n\n"
+            for item in bot_faq:
+                # عرض السؤال والإجابة من العمود "محتوى_السؤال_مع_الإجابة"
+                text += f"📍 <b>{item.get('محتوى_السؤال_مع_الإجابة', 'سؤال غير مسمى')}</b>\n"
+                text += "━━━━━━━━━━━━━━\n"
+
+        keyboard = [[InlineKeyboardButton("🔙 العودة", callback_data="main_menu")]]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+# --------------------------------------------------------------------------
+
 
  
  
