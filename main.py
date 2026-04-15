@@ -153,7 +153,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # إظهار القائمة الرئيسية للمستخدم
     await update.message.reply_text(
         "✨ أهلاً بك في مصنع البوتات المتطور 🤖\n\n"
-        "أنا بوت المصنع، يمكنني مساعدتك في إنشاء وإدارة بوتاتك الخاصة بسهولة وربطها بقاعدة بيانات جوجل.",parse_mode="HTML"
+        "أنا بوت المصنع، يمكنني مساعدتك في إنشاء وإدارة بوتاتك الخاصة بسهولة وربطها بقاعدة بيانات جوجل.",parse_mode="HTML", 
         reply_markup=get_main_menu_inline(user.id)
     )
 
@@ -164,12 +164,12 @@ async def start_create_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query:
         await query.answer()
         await query.edit_message_text(
-            "🛠 **مرحباً بك في قسم التصنيع**\n\nاختر نوع البوت الذي تريد إنشاءه:",parse_mode="HTML"
+            "🛠 **مرحباً بك في قسم التصنيع**\n\nاختر نوع البوت الذي تريد إنشاءه:",parse_mode="HTML", 
             reply_markup=get_types_menu_inline(query.from_user.id)
         )
     else:
         await update.message.reply_text(
-            "🛠 **مرحباً بك في قسم التصنيع**\n\nاختر نوع البوت الذي تريد إنشاءه:",parse_mode="HTML"
+            "🛠 **مرحباً بك في قسم التصنيع**\n\nاختر نوع البوت الذي تريد إنشاءه:",parse_mode="HTML", 
             reply_markup=get_types_menu_inline(update.effective_user.id)
         )
     return CHOOSING_TYPE
@@ -510,7 +510,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "back_to_main":
         await query.answer()
         await query.edit_message_text(
-            "✨ أهلاً بك في مصنع البوتات المتطور 🤖\n\nاختر ما تريد القيام به:",parse_mode="HTML"
+            "✨ أهلاً بك في مصنع البوتات المتطور 🤖\n\nاختر ما تريد القيام به:",parse_mode="HTML", 
             reply_markup=get_main_menu_inline(user_id)
         )
 # --------------------------------------------------------------------------
