@@ -289,8 +289,8 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
     user_id = query.from_user.id
     bot_token = context.bot.token
     config = get_bot_config(bot_token)
+    from sheets import get_bot_config
     bot_owner_id = int(config.get("admin_ids", 0))
-
     await query.answer()
 # --------------------------------------------------------------------------
     # 1. معالجة جداول المحاضرات
