@@ -64,6 +64,7 @@ from sheets import (
     update_content_setting,
     client,
     save_ai_setup,
+    add_new_employee_advanced, 
     get_courses_knowledge_base
 )
 
@@ -289,7 +290,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
     user_id = query.from_user.id
     bot_token = context.bot.token
     config = get_bot_config(bot_token)
-    from sheets import get_bot_config
+
     bot_owner_id = int(config.get("admin_ids", 0))
     await query.answer()
 # --------------------------------------------------------------------------
@@ -526,7 +527,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
     # --- [ معالج استعراض الأقسام للطالب ] ---
     elif data == "view_categories":
         # جلب الأقسام من الكاش لسرعة الاستجابة
-        from sheets import get_all_categories
+
         categories = get_all_categories(bot_token)
         
         if not categories:
@@ -553,7 +554,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
     # --- [ معالج عرض دورات قسم محدد للطالب ] ---
     elif data.startswith("std_view_cat_"):
         cat_id = data.replace("std_view_cat_", "")
-        from sheets import get_courses_by_category
+
         
         courses = get_courses_by_category(bot_token, cat_id)
         
@@ -581,7 +582,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
     # --- [ معالج الدعم الفني ] ---
     elif data == "contact_admin":
         # جلب إعدادات البوت لمعرفة هوية الإدارة
-        from sheets import get_bot_config
+
         config = get_bot_config(bot_token)
         
         # تحويل معرف المالك إلى نص نظيف
@@ -785,7 +786,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         # 🟢 التعبئة الآلية للرتبة: تحويل نوع الطلب لوسم عربي (مدرب/موظف) للعمود 42
         role_type_ar = "مدرب" if pending['role'] == "coach" else "موظف"
 
-        from sheets import add_new_employee_advanced, update_global_version
+
         
         # تنفيذ الحفظ الموحد في ورقة "إدارة_الموظفين" (المحرك الجديد بـ 43 عموداً)
         success = add_new_employee_advanced(
