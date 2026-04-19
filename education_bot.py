@@ -66,6 +66,7 @@ from sheets import (
     save_ai_setup,
     add_new_employee_advanced,
     process_referral_reward_on_purchase,
+    seed_default_settings,
     get_courses_knowledge_base
 )
 
@@ -2127,16 +2128,17 @@ async def show_course_selector(update, context, employee_id):
     await update.callback_query.edit_message_text("🎯 اختر الدورات التي يمكن للموظف إدارتها:", 
                                                  reply_markup=InlineKeyboardMarkup(keyboard))
 # --------------------------------------------------------------------------
-#دالة فحص الطلاب وإرسال الرسائل 
+# دالة فحص الطلاب وإرسال الرسائل (النسخة المعدلة والمدمجة)
 async def activation_monitor(context: ContextTypes.DEFAULT_TYPE):
     """وظيفة خلفية تراقب تفعيلات الطلاب وترسل تنبيهات فورا"""
     bot_token = context.bot.token
     
-    
+    # جلب الطلاب الذين تم تفعيلهم ولم يتم إشعارهم بعد
     new_activations = get_newly_activated_students(bot_token)
     
     for student in new_activations:
         try:
+            # 1. إرسال رسالة التهنئة للطالب
             msg = (
                 f"🎉 <b>تهانينا يا {student['name']}!</b>\n\n"
                 f"تم تفعيل اشتراكك في الدورة بنجاح. ✅\n"
@@ -2145,26 +2147,28 @@ async def activation_monitor(context: ContextTypes.DEFAULT_TYPE):
             )
             await context.bot.send_message(chat_id=student['user_id'], text=msg, parse_mode="HTML")
             
-            # تحديث القاعدة لكي لا يرسل الرسالة مرة أخرى
+            # 2. 🔥 [التعديل الجوهري]: استدعاء نظام الإحالة المتطور للداعي داخل الحلقة
+            # نستخدم student['user_id'] الذي يمثل الشخص الذي تم تفعيله الآن
+            success, inviter_id, points = process_referral_reward_on_purchase(bot_token, student['user_id'])
+
+            if success and inviter_id:
+                try:
+                    ref_msg = (
+                        f"🎉 <b>بشرى سارة!</b>\n\n"
+                        f"أحد الطلاب الذين دعوتهم قام بالتسجيل الفعلي الآن.\n"
+                        f"💰 تم إضافة <b>{points} نقطة</b> إلى رصيدك بنجاح!"
+                    )
+                    await context.bot.send_message(chat_id=inviter_id, text=ref_msg, parse_mode="HTML")
+                except:
+                    pass # حماية في حال قام الداعي بحظر البوت
+
+            # 3. تحديث القاعدة (العمود 21) لضمان عدم تكرار العملية
             sheet = ss.worksheet("قاعدة_بيانات_الطلاب")
-            sheet.update_cell(student['row'], 21, f"تم الإشعار: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+            # نسجل الوقت ونؤكد إتمام الإشعار والمكافأة
+            sheet.update_cell(student['row'], 21, f"تم الإشعار والمكافأة: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+            
         except Exception as e:
-            print(f"⚠️ فشل إرسال إشعار للطالب {student['user_id']}: {e}")
-
-# --------------------------------------------------------------------------
-# داخل دالة المراقبة عند التأكد من تفعيل الطالب بنجاح:
-success, inviter_id, points = process_referral_reward_on_purchase(context.bot.token, student_id)
-
-if success:
-    try:
-        msg = (
-            f"🎉 <b>بشرى سارة!</b>\n\n"
-            f"أحد الطلاب الذين دعوتهم قام بالتسجيل الفعلي الآن.\n"
-            f"💰 تم إضافة <b>{points} نقطة</b> إلى رصيدك بنجاح!"
-        )
-        await context.bot.send_message(chat_id=inviter_id, text=msg, parse_mode="HTML")
-    except:
-        pass # لتجنب التوقف إذا كان الداعي قد حظر البوت
+            print(f"⚠️ فشل إرسال إشعار أو مكافأة للطالب {student['user_id']}: {e}")
 
 # --------------------------------------------------------------------------
 
@@ -2926,6 +2930,10 @@ async def run_bot(token, owner_id):
     await application.initialize()
     await application.start()
     await application.updater.start_polling()
+
+
+
+
 
 
 # --------------------------------------------------------------------------

@@ -681,13 +681,13 @@ def seed_default_settings(bot_token):
             {
                 "key": "ref_points_join",
                 "title": "نقاط دعوة صديق",
-                "value": "10",
+                "value": "1",
                 "note": "النقاط التي يحصل عليها الشخص عند دخول صديق عبر رابطه"
             },
             {
                 "key": "ref_points_purchase",
                 "title": "نقاط الشراء",
-                "value": "50",
+                "value": "100",
                 "note": "النقاط التي يحصل عليها الداعي عند قيام الصديق بشراء دورة"
             },
             {
