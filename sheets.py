@@ -293,6 +293,10 @@ connect_to_google()
 # --- [ 3. الدوال الوظيفية لبوت المصنع والطلاب ] ---
 # --- الدوال الوظيفية الأساسية ---
 
+# هذه الدالة 
+#  1 تحتاج إلى ضبط التحقق من وجود  ID المستخدم كي يحافظ على عدم التكرر
+# 2 تحتاج الى التحقق من رابط الدعوة  اقصد اذا دخل المستخدم عبر رابط الاحالة يتم تسجيل ايدي المحييل في عمود معرف إحالة
+#         {"name": "المستخدمين", "cols": ["ID المستخدم","اسم المستخدم","تاريخ التسجيل","الحالة","نوع الاشتراك","عدد البوتات","آخر نشاط","اللغة","مصدر التسجيل","معرف إحالة","رصيد"], "color": {"red": 0.85, "green": 0.92, "blue": 0.83}},
 def save_user(user_id, username):
     global users_sheet
     if users_sheet is None:
@@ -739,7 +743,20 @@ def seed_default_settings(bot_token):
                 "title": "درجة الواجبات",
                 "value": "10",
                 "note": "درجة الواجبات اليومية للطلاب"
-            }
+            }, 
+            {
+                "key": "maximum_withdrawal_marketers",
+                "title": "سحب الرصيد",
+                "value": "50",
+                "note": "الحد الأقصى لسحب الرصيد للمسوقين"            
+            },
+            {
+                "key": "marketers_commission",
+                "title": "عمولة المسوقين",
+                "value": "10%",
+                "note": "نسبة العمولة للمسوقين"            
+            }           
+          
         ]
 
         # 2. فحص كل مفتاح لضمان عدم التكرار لنفس البوت
@@ -2408,6 +2425,36 @@ def delete_coach_from_sheet(bot_token, coach_id):
         print(f"❌ Error deleting coach: {e}")
         return False
 # --------------------------------------------------------------------------
+def process_referral_reward_on_purchase(bot_token, student_id):
+    """منح النقاط للداعي الأصلي عند قيام الطالب بالتسجيل الفعلي"""
+    try:
+        # 1. البحث عن الطالب في ورقة المستخدمين لجلب معرف الداعي
+        student_cell = users_sheet.find(str(student_id), in_column=1)
+        if not student_cell: return False, None, 0
+        
+        # جلب معرف الداعي من العمود 10
+        inviter_id = users_sheet.cell(student_cell.row, 10).value
+        
+        if inviter_id and str(inviter_id).isdigit():
+            # 2. جلب قيمة النقاط من الإعدادات
+            points_to_give = float(get_bot_setting(bot_token, "ref_points_purchase", default=50))
+            
+            # 3. البحث عن الداعي لمنحه النقاط
+            inviter_cell = users_sheet.find(str(inviter_id), in_column=1)
+            if inviter_cell:
+                # تحديث رصيد النقاط في العمود 11
+                current_balance = float(users_sheet.cell(inviter_cell.row, 11).value or 0)
+                new_balance = current_balance + points_to_give
+                users_sheet.update_cell(inviter_cell.row, 11, new_balance)
+                
+                # تحديث نسخة الكاش لضمان المزامنة
+                update_global_version(bot_token)
+                return True, inviter_id, points_to_give
+                
+        return False, None, 0
+    except Exception as e:
+        logger.error(f"❌ فشل منح مكافأة الشراء: {e}")
+        return False, None, 0
 
 # --------------------------------------------------------------------------
 

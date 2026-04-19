@@ -64,7 +64,8 @@ from sheets import (
     update_content_setting,
     client,
     save_ai_setup,
-    add_new_employee_advanced, 
+    add_new_employee_advanced,
+    process_referral_reward_on_purchase,
     get_courses_knowledge_base
 )
 
@@ -1339,15 +1340,18 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
              InlineKeyboardButton("🎓 لمشتركي مجموعة", callback_data="bc_group")],
             [InlineKeyboardButton("🔙 العودة", callback_data="main_menu")]
         ]), parse_mode="HTML")
-
+#>>>>>>>>>>>>>>>>
     # --- [ لوحة المفاتيح الذكية للآدمن ] ---
     elif data == "tech_settings":
+        config = get_bot_config(bot_token)
+        m_status = "🔴 (نشط)" if str(config.get("maintenance_mode", "FALSE")).upper() == "TRUE" else "🟢 (متوقف)"    	
         keyboard = [
             [
                 InlineKeyboardButton("📝 كليشة الترحيب", callback_data="manage_welcome_texts"),
                 InlineKeyboardButton("🔄 المزامنة", callback_data="manual_cache_sync")
             ],
             [
+                InlineKeyboardButton(f"🛠 وضع الصيانة {m_status}", callback_data="toggle_maintenance"),            
                 InlineKeyboardButton("تجهيز قاعدة البيانات", callback_data="database_preparation")
             ],
             [
@@ -1385,7 +1389,31 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 
         await query.edit_message_text("👨‍🏫 <b>إدارة الشؤون التعليمية :</b>\nيمكنك إضافة مدربين جدد دورات جديدة او اقسام او مجموعات أو استعراض القائمة الحالية للحذف.", 
                                       reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+#>>>>>>>>>>>>>>>>
 
+    elif data == "database_preparation":
+        keyboard = [
+            [
+                InlineKeyboardButton("ضبط نقاط الدخول", callback_data="referral_points_settings"), 
+                InlineKeyboardButton("ضبط وحدة العملة", callback_data="manual_cache_sync")
+            ],
+            [
+                InlineKeyboardButton(f"ضبط درجة النجاح", callback_data="toggle_maintenance"),            
+                InlineKeyboardButton("ضبط درجة الواجبات", callback_data="database_preparation")
+            ],
+            [
+                InlineKeyboardButton("ضبط مبلغ السحب", callback_data="manage_branches"),
+                InlineKeyboardButton("ضبط الأمور", callback_data="manage_financial"),
+
+            ], 
+            [InlineKeyboardButton("🔙 عودة", callback_data="back_to_admin")]
+        ]
+
+        await query.edit_message_text("👨‍🏫 <b>إدارة الشؤون التعليمية :</b>\nيمكنك إضافة مدربين جدد دورات جديدة او اقسام او مجموعات أو استعراض القائمة الحالية للحذف.", 
+                                      reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+
+#>>>>>>>>>>>>>>>>
     elif data == "manage_welcome_texts":
         keyboard = [
             [InlineKeyboardButton("🌅 الصباحية", callback_data="edit_welcome_morning"), InlineKeyboardButton("☀️ الظهرية", callback_data="edit_welcome_noon")],
@@ -1488,10 +1516,20 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         context.user_data['action'] = 'awaiting_new_branch_name'
         await query.edit_message_text("📝 أرسل الآن <b>الاسم الجديد</b> للفرع:")
 
+#>>>>>>>>>>>>>>>>
+#إعداد ضبط نقاط الإحالة 
+    elif data == "referral_points_settings":
+        await query.edit_message_text(
+            "أضبط نقاط الإحالة",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("ضبط نقاط الاحالة", callback_data="entry_points_settings")],
+                [InlineKeyboardButton("ضبط نقاط التسجيل", callback_data="registration_points_settings")],
+                [InlineKeyboardButton("🔙 عودة", callback_data="tech_settings")]
+            ]), parse_mode="HTML"
+        )
+        
 
-
-
-
+#>>>>>>>>>>>>>>>>
 # --------------------------------------------------------------------------
 
 # --------------------------------------------------------------------------
@@ -2114,6 +2152,19 @@ async def activation_monitor(context: ContextTypes.DEFAULT_TYPE):
             print(f"⚠️ فشل إرسال إشعار للطالب {student['user_id']}: {e}")
 
 # --------------------------------------------------------------------------
+# داخل دالة المراقبة عند التأكد من تفعيل الطالب بنجاح:
+success, inviter_id, points = process_referral_reward_on_purchase(context.bot.token, student_id)
+
+if success:
+    try:
+        msg = (
+            f"🎉 <b>بشرى سارة!</b>\n\n"
+            f"أحد الطلاب الذين دعوتهم قام بالتسجيل الفعلي الآن.\n"
+            f"💰 تم إضافة <b>{points} نقطة</b> إلى رصيدك بنجاح!"
+        )
+        await context.bot.send_message(chat_id=inviter_id, text=msg, parse_mode="HTML")
+    except:
+        pass # لتجنب التوقف إذا كان الداعي قد حظر البوت
 
 # --------------------------------------------------------------------------
 
