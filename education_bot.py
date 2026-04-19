@@ -2772,57 +2772,70 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
             return
 
 # --------------------------------------------------------------------------
-    # --- [ تابع دالة سحب الرصيد للمسوق ] ---
-    elif action == 'awaiting_payout_method':
-        amount = context.user_data.get('payout_amount', 0)
-        currency = context.user_data.get('currency', "نقطة")
-        payout_method = text  # النص الذي أرسله المسوق
-        
-        # تنفيذ الطلب في الشيت (سيتم خصم الرصيد تلقائياً من العمود 11)
-        success, req_id = create_withdrawal_request(bot_token, user.id, user.username, amount, payout_method)
-        
-        if success:
-            await update.message.reply_text(
-                f"✅ <b>تم تقديم طلبك بنجاح!</b>\n"
-                f"المبلغ المحجوز: <b>{amount} {currency}</b>\n"
-                f"رقم الطلب: <code>{req_id}</code>\n"
-                f"الحالة: <b>قيد الانتظار</b>",
-                parse_mode="HTML"
-            )
-            # إشعار مالك البوت (أنت) لاتخاذ إجراء
-            admin_msg = (
-                f"🚨 <b>طلب سحب جديد:</b>\n"
-                f"👤 المسوق: {user.full_name} (@{user.username})\n"
-                f"💰 المبلغ: {amount} {currency}\n"
-                f"🏦 الوسيلة: <code>{payout_method}</code>\n"
-                f"🎫 المعرف: <code>{req_id}</code>"
-            )
-            keyboard = [[InlineKeyboardButton("✅ تم التحويل", callback_data=f"payout_approve_{req_id}"),
-                         InlineKeyboardButton("❌ رفض", callback_data=f"payout_reject_{req_id}")]]
-            await context.bot.send_message(chat_id=bot_owner_id, text=admin_msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
-        else:
-            await update.message.reply_text("❌ عذراً، رصيدك غير كافٍ أو حدث خطأ تقني.")
-        
-        context.user_data['action'] = None
-        return  # إنهاء المعالجة لضمان صحة الصياغة البرمجية
-
-    # معالجة استلام صورة الإيصال من الآدمن (المرحلة 2: التنفيذ الفعلي)
-    elif action == 'awaiting_payout_proof' and update.message.photo:
-        req_id = context.user_data.get('payout_req_id')
-        target_user_id = context.user_data.get('target_payout_user_id')
-        photo_file = await update.message.photo[-1].get_file()
-        proof_url = photo_file.file_path
-        
-        if update_withdrawal_status(bot_token, req_id, "مكتمل", admin_note="تم التحويل والإثبات مرفق", proof_link=proof_url):
-            await update.message.reply_text("✅ تم توثيق الإيصال وتحديث الشيت.")
+        # --- [ تابع دالة سحب الرصيد للمسوق ] ---
+        elif action == 'awaiting_payout_method':
+            amount = context.user_data.get('payout_amount', 0)
+            currency = context.user_data.get('currency', "نقطة")
+            payout_method = text  # النص الذي أرسله المسوق
             
-            # إرسال الصورة للمسوق مباشرة
-            if target_user_id:
-                caption = f"🎉 <b>تم تحويل أرباحك بنجاح!</b>\n🎫 رقم الطلب: <code>{req_id}</code>\n💰 الحالة: <b>مكتمل</b>"
-                await context.bot.send_photo(chat_id=target_user_id, photo=proof_url, caption=caption, parse_mode="HTML")
-        
-        context.user_data['action'] = None
-        return  # إنهاء المعالجة ومنع حدوث Syntax Error مع الحالات التالية
+            # تنفيذ الطلب في الشيت (سيتم خصم الرصيد تلقائياً من العمود 11)
+            success, req_id = create_withdrawal_request(bot_token, user.id, user.username, amount, payout_method)
+            
+            if success:
+                await update.message.reply_text(
+                    f"✅ <b>تم تقديم طلبك بنجاح!</b>\n"
+                    f"المبلغ المحجوز: <b>{amount} {currency}</b>\n"
+                    f"رقم الطلب: <code>{req_id}</code>\n"
+                    f"الحالة: <b>قيد الانتظار</b>",
+                    parse_mode="HTML"
+                )
+                # إشعار مالك البوت (أنت) لاتخاذ إجراء
+                admin_msg = (
+                    f"🚨 <b>طلب سحب جديد:</b>\n"
+                    f"👤 المسوق: {user.full_name} (@{user.username})\n"
+                    f"💰 المبلغ: {amount} {currency}\n"
+                    f"🏦 الوسيلة: <code>{payout_method}</code>\n"
+                    f"🎫 المعرف: <code>{req_id}</code>"
+                )
+                keyboard = [[InlineKeyboardButton("✅ تم التحويل", callback_data=f"payout_approve_{req_id}"),
+                             InlineKeyboardButton("❌ رفض", callback_data=f"payout_reject_{req_id}")]]
+                await context.bot.send_message(chat_id=bot_owner_id, text=admin_msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+            else:
+                await update.message.reply_text("❌ عذراً، رصيدك غير كافٍ أو حدث خطأ تقني.")
+            
+            context.user_data['action'] = None
+            return  # إنهاء المعالجة لضمان صحة الصياغة البرمجية
+
+        # معالجة استلام صورة الإيصال من الآدمن (المرحلة 2: التنفيذ الفعلي)
+        elif action == 'awaiting_payout_proof' and update.message.photo:
+            req_id = context.user_data.get('payout_req_id')
+            target_user_id = context.user_data.get('target_payout_user_id')
+            photo_file = await update.message.photo[-1].get_file()
+            proof_url = photo_file.file_path
+            
+            if update_withdrawal_status(bot_token, req_id, "مكتمل", admin_note="تم التحويل والإثبات مرفق", proof_link=proof_url):
+                await update.message.reply_text("✅ تم توثيق الإيصال وتحديث الشيت.")
+                
+                # إرسال الصورة للمسوق مباشرة
+                if target_user_id:
+                    caption = f"🎉 <b>تم تحويل أرباحك بنجاح!</b>\n🎫 رقم الطلب: <code>{req_id}</code>\n💰 الحالة: <b>مكتمل</b>"
+                    await context.bot.send_photo(chat_id=target_user_id, photo=proof_url, caption=caption, parse_mode="HTML")
+            
+            context.user_data['action'] = None
+            return  # إنهاء المعالجة ومنع حدوث Syntax Error مع الحالات التالية
+
+        # --- [ حفظ كليشة الترحيب الجديدة - السطر 2829 الأصلي ] ---
+        elif action == 'awaiting_new_welcome_text':
+            period = context.user_data.get('edit_period')
+            column_name = f"welcome_{period}"
+            
+            if update_content_setting(bot_token, column_name, text):
+                await update.message.reply_text(f"✅ تم تحديث كليشة الترحيب <b>({period})</b> بنجاح!", reply_markup=get_admin_panel(), parse_mode="HTML")
+                context.user_data['action'] = None
+            else:
+                await update.message.reply_text("❌ فشل التحديث. تأكد من إضافة الأعمدة المطلوبة.")
+            return
+
 
 
         # --- [ حفظ كليشة الترحيب الجديدة ] ---
