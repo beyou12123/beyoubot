@@ -1083,7 +1083,28 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             await query.message.reply_text("✅ <b>تمت المزامنة بنجاح!</b>\nالبوت الآن يقرأ أحدث البيانات  مباشرة.", parse_mode="HTML")
         else:
             await query.message.reply_text("❌ فشلت المزامنة، يرجى التحقق من سجل الأخطاء.")
- 
+ # --------------------------------------------------------------------------
+    elif data == "fin_summary":
+        # استدعاء المحرك التنفيذي من ملف course_engine
+        await course_engine.show_financial_dashboard(update, context)
+ #>>>>>>>>>>>>>>>>       
+    elif data == "fin_payroll":
+        await course_engine.show_payroll_management(update, context)
+        
+    elif data == "fin_payouts":
+        await course_engine.show_marketers_payouts(update, context)
+        
+    elif data == "fin_settings":
+        # استدعاء محرك الضبط من course_engine
+        await course_engine.show_financial_settings(update, context)
+
+
+
+
+
+# --------------------------------------------------------------------------
+
+
 # --------------------------------------------------------------------------
     # عرض قائمة المدربين كأزرار
     elif data == "list_coaches":
@@ -1631,6 +1652,18 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         ]
 
         await query.edit_message_text("👨‍🏫 <b>إدارة الشؤون التعليمية :</b>\nيمكنك إضافة مدربين جدد دورات جديدة او اقسام او مجموعات أو استعراض القائمة الحالية للحذف.", 
+                                      reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+
+#>>>>>>>>>>>>>>>>#>>>>>>>>>>>>>>>>
+    elif data == "manage_financial":
+        keyboard = [
+            [InlineKeyboardButton("📊 تقرير الأرباح والخزينة", callback_data="fin_summary")],
+            [InlineKeyboardButton("👔 كشوف المرتبات (الكادر)", callback_data="fin_payroll")],
+            [InlineKeyboardButton("💸 طلبات سحب المسوقين", callback_data="fin_payouts")],
+            [InlineKeyboardButton("🔙 عودة", callback_data="tech_settings")]
+        ]
+        await query.edit_message_text("💰 <b>وحدة الإدارة المالية:</b>\nيرجى اختيار القسم المطلوب للمراجعة أو الصرف.", 
                                       reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
 

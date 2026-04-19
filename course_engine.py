@@ -276,12 +276,138 @@ async def show_student_profile(update, context):
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
 # --------------------------------------------------------------------------
+async def show_financial_dashboard(update, context):
+    query = update.callback_query
+    bot_token = context.bot.token
+    
+    # الاستدعاء المباشر من الكاش لتعويض الدوال المحذوفة
+    from sheets import get_bot_data_from_cache
+    
+    # جلب البيانات الخام من الأوراق الأربعة
+    users = get_bot_data_from_cache(bot_token, "المستخدمين")
+    payroll = get_bot_data_from_cache(bot_token, "كشوف_المرتبات")
+    withdrawals = get_bot_data_from_cache(bot_token, "سجل_السحوبات")
+    registrations = get_bot_data_from_cache(bot_token, "سجل_التسجيلات")
+
+    # الحسابات (بناءً على أعمدة الشيت التي حددتها)
+    total_income = sum(float(r.get("المبلغ_المدفوع", 0) or 0) for r in registrations if r.get("حالة_الدفع") == "مدفوع")
+    affiliate_liabilities = sum(float(u.get("رصيد", 0) or 0) for u in users)
+    pending_payroll = sum(float(p.get("صافي_الراتب", 0) or 0) for p in payroll if p.get("حالة_الصرف") == "معلق")
+    actual_payouts = sum(float(w.get("المبلغ", 0) or 0) for w in withdrawals if w.get("الحالة") == "مكتمل")
+
+    current_cash = total_income - actual_payouts
+    net_profit = current_cash - affiliate_liabilities - pending_payroll
+
+    # نص الرسالة المنسق
+    text = (
+        f"📊 <b>تقرير الخزينة والتدفق المالي اللحظي:</b>\n"
+        f"━━━━━━━━━━━━━━\n"
+        f"💰 <b>إجمالي الإيرادات:</b> <code>{total_income}</code>\n"
+        f"💸 <b>سحوبات تم سدادها:</b> <code>{actual_payouts}</code>\n"
+        f"--------------------------\n"
+        f"🏛 <b>السيولة الحالية (Cash):</b> <code>{current_cash}</code>\n"
+        f"--------------------------\n"
+        f"⚠️ <b>التزامات مالية قائمة:</b>\n"
+        f"👥 أرصدة مسوقين: <code>{affiliate_liabilities}</code>\n"
+        f"👔 رواتب معلقة: <code>{pending_payroll}</code>\n"
+        f"--------------------------\n"
+        f"💎 <b>صافي الربح المتوقع:</b> <code>{net_profit}</code>\n\n"
+        f"<i>💡 البيانات مجلوبة من الكاش المركزي لضمان السرعة.</i>"
+    )
+
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    keyboard = [[InlineKeyboardButton("🔙 عودة للوحة المالية", callback_data="manage_financial")]]
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
 # --------------------------------------------------------------------------
+# =============================================================
+# --- [ محرك إدارة مستحقات الكادر والمسوقين ] ---
+# =============================================================
+
+async def show_payroll_management(update, context):
+    """عرض قائمة الرواتب المعلقة للصرف بناءً على الكاش"""
+    query = update.callback_query
+    bot_token = context.bot.token
+    from sheets import get_bot_data_from_cache
+    
+    payroll_list = get_bot_data_from_cache(bot_token, "كشوف_المرتبات")
+    # تصفية الرواتب المعلقة (حالة_الصرف هو العمود 9 في الشيت)
+    pending = [p for p in payroll_list if str(p.get("حالة_الصرف")) == "معلق"]
+    
+    if not pending:
+        text = "✅ <b>لا توجد رواتب معلقة للصرف حالياً.</b>"
+        keyboard = [[InlineKeyboardButton("🔙 عودة", callback_data="manage_financial")]]
+    else:
+        text = "👔 <b>كشوف المرتبات المعلقة (انتظار الصرف):</b>\n"
+        text += "━━━━━━━━━━━━━━\n"
+        for p in pending:
+            text += f"👤 <b>الموظف:</b> <code>{p.get('معرف_الموظف')}</code>\n" \
+                    f"📅 <b>الشهر:</b> {p.get('الشهر')}\n" \
+                    f"💵 <b>المبلغ:</b> <code>{p.get('صافي_الراتب')}</code>\n" \
+                    f"--------------------------\n"
+        text += "\n💡 <i>يمكنك تحديث الحالة إلى 'تم الصرف' من الشيت لتنعكس هنا فوراً.</i>"
+        keyboard = [[InlineKeyboardButton("🔙 عودة", callback_data="manage_financial")]]
+
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
 # --------------------------------------------------------------------------
+# --- [ محرك إدارة سحوبات المسوقين ] ---
+async def show_marketers_payouts(update, context):
+    """عرض طلبات السحب المقدمة من المسوقين"""
+    query = update.callback_query
+    bot_token = context.bot.token
+    
+    from sheets import get_bot_data_from_cache
+    withdrawals = get_bot_data_from_cache(bot_token, "سجل_السحوبات")
+    
+    # تصفية الطلبات التي تنتظر التنفيذ
+    pending_reqs = [w for w in withdrawals if str(w.get("الحالة")) == "قيد الانتظار"]
+    
+    if not pending_reqs:
+        text = "✅ <b>لا توجد طلبات سحب معلقة حالياً.</b>"
+        keyboard = [[InlineKeyboardButton("🔙 عودة", callback_data="manage_financial")]]
+    else:
+        text = "💸 <b>طلبات سحب الأرباح المعلقة:</b>\n"
+        text += "━━━━━━━━━━━━━━\n"
+        for r in pending_reqs:
+            text += f"👤 <b>المسوق:</b> {r.get('اسم_المستخدم')}\n" \
+                    f"💰 <b>المبلغ:</b> <code>{r.get('المبلغ')}</code>\n" \
+                    f"🏦 <b>الوسيلة:</b> {r.get('وسيلة_التحويل')}\n" \
+                    f"🎫 <b>المعرف:</b> <code>{r.get('معرف_الطلب')}</code>\n" \
+                    f"--------------------------\n"
+        text += "\n⚠️ يرجى استخدام زر (اعتماد الصرف) المرفق مع كل طلب في سجل المحادثات."
+        keyboard = [[InlineKeyboardButton("🔙 عودة", callback_data="manage_financial")]]
+
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
 # --------------------------------------------------------------------------
+# --- [ محرك ضبط الإعدادات المالية ] ---
+async def show_financial_settings(update, context):
+    """عرض واجهة التحكم في الأسعار والعمولات من الكاش"""
+    query = update.callback_query
+    bot_token = context.bot.token
+    
+    from sheets import get_bot_setting
+    
+    # جلب القيم الحالية من ورقة الإعدادات عبر الكاش لضمان السرعة
+    course_price = get_bot_setting(bot_token, "subscription_price", default="100")
+    commission = get_bot_setting(bot_token, "marketers_commission", default="10%")
+    min_payout = get_bot_setting(bot_token, "maximum_withdrawal_marketers", default="50")
+    currency = get_bot_setting(bot_token, "currency_unit", default="نقطة")
+
+    text = (
+        f"⚙️ <b>ضبط الإعدادات المالية للمنصة:</b>\n"
+        f"━━━━━━━━━━━━━━\n"
+        f"💰 <b>سعر الاشتراك الافتراضي:</b> <code>{course_price}</code>\n"
+        f"📣 <b>عمولة المسوقين:</b> <code>{commission}</code>\n"
+        f"💳 <b>الحد الأدنى للسحب:</b> <code>{min_payout} {currency}</code>\n"
+        f"🪙 <b>وحدة العملة:</b> <code>{currency}</code>\n"
+        f"━━━━━━━━━━━━━━\n"
+        f"⚠️ <i>ملاحظة: يمكنك تعديل هذه القيم مباشرة من ورقة 'الإعدادات' في ملف جوجل شيت لتحديثها فوراً في البوت.</i>"
+    )
+
+    keyboard = [[InlineKeyboardButton("🔙 عودة للوحة المالية", callback_data="manage_financial")]]
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
 # --------------------------------------------------------------------------
 
