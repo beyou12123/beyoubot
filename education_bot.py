@@ -176,15 +176,15 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 await update.message.reply_text(text, parse_mode="HTML")
             return
+ 
 
-    # معالجة روابط الانضمام اللحظية للمدربين والموظفين
+   # --- [ 1. معالجة روابط انضمام الكوادر (مدرب/موظف) ] ---
     if context.args and context.args[0].startswith("reg_"):
         token = context.args[0].replace("reg_", "")
         from cache_manager import FACTORY_GLOBAL_CACHE
         
         if token in FACTORY_GLOBAL_CACHE.get("temp_registration_tokens", {}):
             role = FACTORY_GLOBAL_CACHE["temp_registration_tokens"][token]
-            # حذف الكود فوراً لضمان استخدامه مرة واحدة فقط
             del FACTORY_GLOBAL_CACHE["temp_registration_tokens"][token]
             
             context.user_data['reg_role'] = role
@@ -200,14 +200,18 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("⚠️ معذرة، هذا الرابط غير صالح أو تم استخدامه مسبقاً.")
             return
 
-    # --- [ 2. نظام الإحالة (Referral System) ] ---
+    # --- [ 2. نظام الإحالة المتطور (للطلاب والزوار) ] ---
+    inviter_id = None
     if context.args and context.args[0].startswith("ref_"):
-        inviter_id = context.args[0].replace("ref_", "")
-        if str(inviter_id) != str(user.id):
-            link_user_to_inviter(bot_token, user.id, inviter_id)
+        potential_inviter = context.args[0].replace("ref_", "")
+        # التأكد أن المستخدم لا يحيل نفسه
+        if str(potential_inviter) != str(user.id):
+            inviter_id = potential_inviter
 
-    # تسجيل المستخدم في القاعدة
-    save_user(user.id, user.username)
+    # --- [ 3. تسجيل المستخدم في القاعدة (استدعاء واحد فقط) ] ---
+    # نمرر inviter_id (سواء كان ID أو None) ليتم الحفظ في العمود 10 مرة واحدة
+    save_user(user.id, user.username, inviter_id)
+    
 
     # --- [ 3. محرك اختيار الكليشة الذكي ] ---
     hour = datetime.now().hour
