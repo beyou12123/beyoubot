@@ -202,6 +202,33 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await update.message.reply_text("⚠️ معذرة، هذا الرابط غير صالح أو تم استخدامه مسبقاً.")
             return
+#>>>>>>>>>>>>>>>>#>>>>>>>>>>>>>>>>
+    # --- [ معالجة رابط الهدية للمستلم ] ---
+    if context.args and context.args[0].startswith("gift_"):
+        gift_code = context.args[0].replace("gift_", "")
+        
+        from sheets import ss
+        sheet_coupons = ss.worksheet("الكوبونات")
+        coupon = sheet_coupons.find(gift_code, in_column=3)
+        
+        if coupon:
+            coupon_data = sheet_coupons.row_values(coupon.row)
+            # التأكد أن الكوبون "نشط"
+            if coupon_data[7] == "نشط":
+                # استخراج معرف الدورة من الملاحظات (التي خزنّاها بصيغة دورة_CRSxxxx)
+                course_id = coupon_data[10].replace("دورة_", "")
+                
+                # تخزين كود الهدية في بيانات المستخدم لبدء التسجيل
+                context.user_data['reg_flow'] = {'gift_code': gift_code}
+                
+                # استدعاء محرك التسجيل الموحد
+                await course_engine.start_registration_flow(update, context, course_id, payment_method="Gift")
+                return
+            else:
+                await update.message.reply_text("⚠️ معذرة، هذا الرابط تم استخدامه مسبقاً.")
+                return
+
+#>>>>>>>>>>>>>>>>#>>>>>>>>>>>>>>>>
 
     # --- [ 2. نظام الإحالة المتطور (للطلاب والزوار) ] ---
     inviter_id = None
@@ -1597,7 +1624,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             ],
             [
                 InlineKeyboardButton("ضبط مبلغ السحب", callback_data="manage_branches"),
-                InlineKeyboardButton("ضبط الأمور", callback_data="manage_financial"),
+                InlineKeyboardButton("معلومات الدفع الافتراضية", callback_data="default_payment_information"),
 
             ], 
             [InlineKeyboardButton("🔙 عودة", callback_data="back_to_admin")]

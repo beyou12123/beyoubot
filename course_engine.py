@@ -159,8 +159,12 @@ async def finalize_and_save(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 success_deduct, new_balance = redeem_points_for_course(bot_token, inviter_id, redeem_cost)
                 
                 if success_deduct:
-                    # تحديث حالة الكوبون لمستعمل
-                    sheet_coupons.update_cell(coupon_cell.row, 8, "مستعمل")
+                    # تحديث حالة الكوبون وتوثيق الاستخدام بشكل احترافي
+                    current_notes = sheet_coupons.cell(coupon_cell.row, 11).value or "" # جلب الملاحظة الحالية (اسم الدورة)
+                    usage_log = f"{current_notes} | استخدمه: {state['name_ar']} ({user.id}) بتاريخ: {now}" # بناء السجل التوثيقي
+
+                    sheet_coupons.update_cell(coupon_cell.row, 11, usage_log) # تحديث عمود الملاحظات
+                    sheet_coupons.update_cell(coupon_cell.row, 8, "مستعمل") # تحديث الحالة لمنع إعادة الاستخدام
                     
                     # إرسال إشعار للمسوق باستخدام البيانات المجمعة
                     notification_text = (
@@ -174,6 +178,8 @@ async def finalize_and_save(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     )
                     await context.bot.send_message(chat_id=inviter_id, text=notification_text, parse_mode="HTML")
                     await query.edit_message_text("🎉 مبروك! تم تفعيل الهدية وفتح الدورة لك بنجاح.")
+                else:
+                    await query.edit_message_text("⚠️ عذراً، تعذر إتمام عملية الهدية نظراً لنقص رصيد المانح أو خطأ في الكوبون.")
         
         else:
             await query.edit_message_text("🎉 مبروك! تم تفعيل الدورة بنجاح باستخدام نقاطك.")
@@ -183,7 +189,6 @@ async def finalize_and_save(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Save error: {e}")
         await query.answer("❌ حدث خطأ في الحفظ.")
-
 
 # --------------------------------------------------------------------------
 
