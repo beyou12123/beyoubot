@@ -2772,7 +2772,7 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
             return
 
 # --------------------------------------------------------------------------
-#تابع دالة سحب الرصيد للمسوق
+    # --- [ تابع دالة سحب الرصيد للمسوق ] ---
     elif action == 'awaiting_payout_method':
         amount = context.user_data.get('payout_amount', 0)
         currency = context.user_data.get('currency', "نقطة")
@@ -2804,6 +2804,7 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
             await update.message.reply_text("❌ عذراً، رصيدك غير كافٍ أو حدث خطأ تقني.")
         
         context.user_data['action'] = None
+        return  # إنهاء المعالجة لضمان صحة الصياغة البرمجية
 
     # معالجة استلام صورة الإيصال من الآدمن (المرحلة 2: التنفيذ الفعلي)
     elif action == 'awaiting_payout_proof' and update.message.photo:
@@ -2812,7 +2813,6 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
         photo_file = await update.message.photo[-1].get_file()
         proof_url = photo_file.file_path
         
-
         if update_withdrawal_status(bot_token, req_id, "مكتمل", admin_note="تم التحويل والإثبات مرفق", proof_link=proof_url):
             await update.message.reply_text("✅ تم توثيق الإيصال وتحديث الشيت.")
             
@@ -2822,11 +2822,9 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
                 await context.bot.send_photo(chat_id=target_user_id, photo=proof_url, caption=caption, parse_mode="HTML")
         
         context.user_data['action'] = None
+        return  # إنهاء المعالجة ومنع حدوث Syntax Error مع الحالات التالية
 
 
-# --------------------------------------------------------------------------
-
-# --------------------------------------------------------------------------
         # --- [ حفظ كليشة الترحيب الجديدة ] ---
         elif action == 'awaiting_new_welcome_text':
             period = context.user_data.get('edit_period')
