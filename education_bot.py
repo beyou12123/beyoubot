@@ -2,6 +2,7 @@ import logging
 import re
 import io
 import uuid
+import course_engine
 import g4f  # لضمان عمل المحرك المجاني الذي اعتمدناه
 import google.generativeai as genai
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Bot, ChatMember
@@ -67,6 +68,8 @@ from sheets import (
     add_new_employee_advanced,
     process_referral_reward_on_purchase,
     seed_default_settings,
+    update_withdrawal_status,
+    create_withdrawal_request,
     get_courses_knowledge_base
 )
 
@@ -322,6 +325,22 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         from educational_manager import process_dsc_check
         await process_dsc_check(update, context, course_id)
     #>>>>>>>>>>>>>>>>    
+# داخل contact_callback_handler (عند اختيار "أريدها لي"):
+    elif data.startswith("buy_c_me_"):
+        course_id = data.replace("buy_c_me_", "")
+        await course_engine.start_registration_flow(update, context, course_id, payment_method="points")
+#>>>>>>>>>>>>>>>>
+    # معالجة أزرار الجنس والتأكيد من محرك التسجيل
+    elif data.startswith("reg_gen_"):
+        gender = "ذكر" if "male" in data else "أنثى"
+        context.user_data['reg_flow']['gender'] = gender
+        context.user_data['reg_flow']['step'] = 'awaiting_country'
+        await query.message.reply_text("🌍 يرجى إرسال <b>اسم البلد</b> الحالي:")
+
+    elif data == "confirm_reg_final":
+        await course_engine.finalize_and_save(update, context)
+#>>>>>>>>>>>>>>>>
+
 
     elif data == "dsc_continue":
         from educational_manager import process_dsc_ask_desc
@@ -389,16 +408,94 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             f"💡 <i>يمكنك استبدال النقاط بفتح الدورات المدفوعة فور وصولك للحد المطلوب.</i>"
         )
         
-        # تعديل أزرار قائمة الإحالة لتشمل المتجر
-        # السطر 262 يبدأ من هنا تقريباً
+        # تعديل أزرار قائمة الإحالة لتشمل المتجر وطلب السحب
         keyboard = [
             [InlineKeyboardButton("🛒 استبدال النقاط بالدورات", callback_data="redeem_store")],
+            [InlineKeyboardButton("💰 سحب الأرباح (كاش)", callback_data="request_payout_start")], 
             [InlineKeyboardButton("🔄 تحديث الإحصائيات", callback_data="referral_system")],
             [InlineKeyboardButton("🔙 العودة للقائمة", callback_data="main_menu")]
         ]
 
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+    elif data == "request_payout_start":
+        bot_token = context.bot.token
+        # 1. جلب الإعدادات الديناميكية لهذا البوت من ورقة الإعدادات
+        currency = get_bot_setting(bot_token, "currency_unit", default="نقطة")
+        min_payout = float(get_bot_setting(bot_token, "maximum_withdrawal_marketers", default=50))
+        
+        # 2. جلب رصيد المسوق الحالي من الشيت
+        stats = get_user_referral_stats(bot_token, user_id)
+        current_balance = float(stats.get('balance', 0))
+        
+        # 3. التحقق من الحد الأدنى للسحب
+        if current_balance < min_payout:
+            await query.answer(f"⚠️ رصيدك {current_balance} {currency}. الحد الأدنى للسحب هو {min_payout} {currency}.", show_alert=True)
+            return
+
+        # 4. حفظ البيانات المؤقتة في الذاكرة لبدء طلب وسيلة التحويل
+        context.user_data['payout_amount'] = current_balance
+        context.user_data['currency'] = currency 
+        context.user_data['action'] = 'awaiting_payout_method'
+        
+        text = (
+            f"💰 <b>طلب سحب الأرباح</b>\n"
+            f"━━━━━━━━━━━━━━\n"
+            f"الرصيد القابل للسحب: <b>{current_balance} {currency}</b>\n\n"
+            f"يرجى إرسال <b>وسيلة التحويل</b> وبياناتك (مثلاً: رقم الحساب أو المحفظة):\n"
+        )
+        await query.edit_message_text(text, parse_mode="HTML")
+
+
+
 #>>>>>>>>>>>>>>>>
+    # اعتماد صرف الأرباح - (المرحلة 1: طلب صورة الإيصال)
+    elif data.startswith("payout_approve_"):
+        req_id = data.replace("payout_approve_", "")
+        
+        # جلب بيانات الطلب من الشيت لمعرفة من هو صاحب الطلب (المسوق)
+        sheet_req = ss.worksheet("سجل_السحوبات")
+        cell = sheet_req.find(str(req_id), in_column=4)
+        if cell:
+            row_data = sheet_req.row_values(cell.row)
+            target_user_id = row_data[1] # العمود الثاني هو ID المسوق
+            context.user_data['target_payout_user_id'] = target_user_id
+            context.user_data['payout_req_id'] = req_id
+            context.user_data['action'] = 'awaiting_payout_proof'
+            
+            await query.edit_message_text(
+                f"📸 <b>يرجى إرسال صورة الإيصال للطلب {req_id}</b>\n"
+                f"سيتم إرسالها فوراً للمسوق وتحديث السجل.", 
+                parse_mode="HTML"
+            )
+
+
+    # رفض طلب السحب وإرجاع الرصيد (يبقى كما هو لأنه صحيح وآمن)
+    elif data.startswith("payout_reject_"):
+        req_id = data.replace("payout_reject_", "")
+        try:
+            sheet_req = ss.worksheet("سجل_السحوبات")
+            row_cell = sheet_req.find(str(req_id), in_column=4)
+            if row_cell:
+                req_data = sheet_req.row_values(row_cell.row)
+                target_user_id = req_data[1] 
+                refund_amount = float(req_data[4])
+                
+                sheet_users = ss.worksheet("المستخدمين")
+                u_cell = sheet_users.find(str(target_user_id), in_column=1)
+                if u_cell:
+                    old_bal = float(sheet_users.cell(u_cell.row, 11).value or 0)
+                    sheet_users.update_cell(u_cell.row, 11, old_bal + refund_amount)
+                
+                update_withdrawal_status(bot_token, req_id, "مرفوض", admin_note="تم الرفض وإعادة الرصيد")
+                await query.edit_message_text(f"❌ تم رفض الطلب <code>{req_id}</code> وإعادة {refund_amount} إلى رصيد المسوق.", parse_mode="HTML")
+        except Exception as e:
+            await query.answer(f"❌ خطأ في عملية الرفض: {e}")
+
+
+#>>>>>>>>>>>>>>>>
+
+
+
 
     # معالج تعطيل/تفعيل الكود مؤقتاً
     elif data.startswith("dsc_tog_"):
@@ -421,16 +518,14 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         except Exception as e:
             await query.answer("❌ فشل تحديث الحالة.")
 #>>>>>>>>>>>>>>>>
-#استبدل النقاط 
-    # أضف هذا الشرط داخل دالة contact_callback_handler في education_bot.py
+    # استبدال النقاط بالدورات - عرض المتجر
     elif data == "redeem_store":
         await query.answer()
-        
         
         stats = get_user_referral_stats(bot_token, user_id)
         current_balance = stats.get('balance', 0)
         
-        # جلب سعر الدورة الموحد من الإعدادات (أو يمكنك جعلها لكل دورة)
+        # جلب سعر الدورة الموحد من الإعدادات
         redeem_cost = get_bot_setting(bot_token, "min_points_redeem", default=100)
         
         text = (
@@ -441,9 +536,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             f"اختر الدورة التي تود فتحها برصيدك:"
         )
         
-        # جلب الدورات المتاحة (يمكنك تعديل هذا لجلب دورات محددة فقط)
-        # هنا سنعرض مثالاً لجلب كافة الدورات لتبسيط الاختيار
-
+        # جلب الدورات المتاحة من الشيت
         courses_ws = ss.worksheet("الدورات_التدريبية")
         all_courses = courses_ws.get_all_records()
         
@@ -455,27 +548,55 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
                 
                 # زر الشراء يتغير حسب الرصيد
                 if float(current_balance) >= float(redeem_cost):
-                    keyboard.append([InlineKeyboardButton(f"✅ فتح: {c_name}", callback_data=f"buy_c_{c_id}")])
+                    keyboard.append([InlineKeyboardButton(f"✅ فتح: {c_name}", callback_data=f"select_c_{c_id}")])
                 else:
                     keyboard.append([InlineKeyboardButton(f"🔒 {c_name} (تحتاج نقاط)", callback_data="insufficient_points")])
         
         keyboard.append([InlineKeyboardButton("🔙 العودة", callback_data="referral_system")])
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
-    # معالج عملية الشراء الفعلية
-    elif data.startswith("buy_c_"):
-        course_id = data.replace("buy_c_", "")
-
+    # المرحلة الوسيطة: اختيار (لي أم لمشترك آخر)
+    elif data.startswith("select_c_"):
+        course_id = data.replace("select_c_", "")
         
+        # جلب اسم الدورة للتوضيح
+        courses_ws = ss.worksheet("الدورات_التدريبية")
+        course_row = courses_ws.find(str(course_id), in_column=2) # نفترض ID الدورة في العمود 2
+        course_name = courses_ws.cell(course_row.row, 3).value if course_row else "الدورة المختارة"
+
+        text = (
+            f"🎯 <b>تأكيد اختيار الدورة</b>\n"
+            f"━━━━━━━━━━━━━━\n"
+            f"الدورة المختارة هي: <b>{course_name}</b>\n\n"
+            f"هل تريد التسجيل في هذه الدورة لنفسك، أم تريد إهداءها لمشترك آخر؟"
+        )
+        
+        keyboard = [
+            [InlineKeyboardButton("👤 أريدها لي", callback_data=f"buy_c_me_{course_id}")],
+            [InlineKeyboardButton("🎁 أريدها لمشترك آخر", callback_data=f"buy_c_gift_{course_id}")],
+            [InlineKeyboardButton("🔙 عودة للقائمة السابقة", callback_data="redeem_store")]
+        ]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+    # تنفيذ عملية الشراء "لي"
+    elif data.startswith("buy_c_me_"):
+        course_id = data.replace("buy_c_me_", "")
         redeem_cost = get_bot_setting(bot_token, "min_points_redeem", default=100)
+        
+        # استدعاء دالة الخصم والتفعيل
         success, new_balance = redeem_points_for_course(bot_token, user_id, redeem_cost)
         
         if success:
             await query.answer("🎉 مبروك! تم فتح الدورة بنجاح", show_alert=True)
-            # هنا يمكنك إضافة كود لإرسال رابط الدورة للطالب أو تسجيله فيها آلياً
-            await query.edit_message_text(f"✅ تم شراء الدورة بنجاح!\nرصيدك المتبقي: {new_balance} نقطة.\nيمكنك الآن البدء بالدراسة من القائمة الرئيسية.")
+            await query.edit_message_text(
+                f"✅ <b>تم شراء الدورة بنجاح!</b>\n"
+                f"رصيدك المتبقي: <b>{new_balance} نقطة</b>.\n\n"
+                f"تم تفعيل الدورة في حسابك، يمكنك البدء الآن من القائمة الرئيسية.",
+                parse_mode="HTML"
+            )
         else:
             await query.answer("❌ فشلت العملية، تأكد من رصيدك.", show_alert=True)
+
 #>>>>>>>>>>>>>>>>
 # ربط الدورات بالنقاط
 
@@ -2208,6 +2329,16 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
         'awaiting_reg_email'
     ]
 
+#داخل handle_contact_message (في البداية تماماً):
+
+#>>>>>>>>>>>>>>>>#>>>>>>>>>>>>>>>>
+    # تحويل الرسالة لمحرك التسجيل إذا كان المستخدم في حالة تسجيل
+    if context.user_data.get('reg_flow'):
+        await course_engine.process_registration_steps(update, context)
+        return
+
+
+#>>>>>>>>>>>>>>>>#>>>>>>>>>>>>>>>>
     if action in registration_actions:
         # --- 1. مرحلة الاسم الكامل ---
         if action == 'awaiting_reg_full_name':
@@ -2257,7 +2388,7 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
             ]
             await context.bot.send_message(chat_id=bot_owner_id, text=info_msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
             
-            await update.message.reply_text("✅ <b>تم إرسال بياناتك بنجاح.</b>\nسيتم إشعارك فور موافقة الإدارة على طلبك.")
+            await update.message.reply_text("✅ <b>تم إرسال بياناتك بنجاح.</b>\nسيتم إشعارك فور موافقة الإدارة على طلبك.",parse_mode="HTML")
             context.user_data['action'] = None
             return
 
@@ -2641,6 +2772,57 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
             return
 
 # --------------------------------------------------------------------------
+#تابع دالة سحب الرصيد للمسوق
+    elif action == 'awaiting_payout_method':
+        amount = context.user_data.get('payout_amount', 0)
+        currency = context.user_data.get('currency', "نقطة")
+        payout_method = text  # النص الذي أرسله المسوق
+        
+        # تنفيذ الطلب في الشيت (سيتم خصم الرصيد تلقائياً من العمود 11)
+        success, req_id = create_withdrawal_request(bot_token, user.id, user.username, amount, payout_method)
+        
+        if success:
+            await update.message.reply_text(
+                f"✅ <b>تم تقديم طلبك بنجاح!</b>\n"
+                f"المبلغ المحجوز: <b>{amount} {currency}</b>\n"
+                f"رقم الطلب: <code>{req_id}</code>\n"
+                f"الحالة: <b>قيد الانتظار</b>",
+                parse_mode="HTML"
+            )
+            # إشعار مالك البوت (أنت) لاتخاذ إجراء
+            admin_msg = (
+                f"🚨 <b>طلب سحب جديد:</b>\n"
+                f"👤 المسوق: {user.full_name} (@{user.username})\n"
+                f"💰 المبلغ: {amount} {currency}\n"
+                f"🏦 الوسيلة: <code>{payout_method}</code>\n"
+                f"🎫 المعرف: <code>{req_id}</code>"
+            )
+            keyboard = [[InlineKeyboardButton("✅ تم التحويل", callback_data=f"payout_approve_{req_id}"),
+                         InlineKeyboardButton("❌ رفض", callback_data=f"payout_reject_{req_id}")]]
+            await context.bot.send_message(chat_id=bot_owner_id, text=admin_msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+        else:
+            await update.message.reply_text("❌ عذراً، رصيدك غير كافٍ أو حدث خطأ تقني.")
+        
+        context.user_data['action'] = None
+
+    # معالجة استلام صورة الإيصال من الآدمن (المرحلة 2: التنفيذ الفعلي)
+    elif action == 'awaiting_payout_proof' and update.message.photo:
+        req_id = context.user_data.get('payout_req_id')
+        target_user_id = context.user_data.get('target_payout_user_id')
+        photo_file = await update.message.photo[-1].get_file()
+        proof_url = photo_file.file_path
+        
+
+        if update_withdrawal_status(bot_token, req_id, "مكتمل", admin_note="تم التحويل والإثبات مرفق", proof_link=proof_url):
+            await update.message.reply_text("✅ تم توثيق الإيصال وتحديث الشيت.")
+            
+            # إرسال الصورة للمسوق مباشرة
+            if target_user_id:
+                caption = f"🎉 <b>تم تحويل أرباحك بنجاح!</b>\n🎫 رقم الطلب: <code>{req_id}</code>\n💰 الحالة: <b>مكتمل</b>"
+                await context.bot.send_photo(chat_id=target_user_id, photo=proof_url, caption=caption, parse_mode="HTML")
+        
+        context.user_data['action'] = None
+
 
 # --------------------------------------------------------------------------
 

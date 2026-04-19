@@ -107,7 +107,9 @@ def get_sheets_structure():
         {"name": "جدول_المحاضرات", "cols": ["bot_id","معرف_الفرع ","التاريخ", "اليوم", "وقت_البداية", "وقت_النهاية", "معرف_الدورة", "معرف_المجموعة", "معرف_المدرب", "اسم_المدرب", "الحالة", "ملاحظات", "نوع_الحصة", "رابط_الحصة", "تنبيه_تلقائي"] },
         {"name": "سجل_ساعات_العمل", "cols": ["bot_id","معرف_الفرع ","معرف_الموظف", "وقت_تسجيل_الدخول", "وقت_تسجيل_الخروج", "نوع_النشاط", "ملاحظات"] },
         {"name": "كشوف_المرتبات", "cols": ["bot_id","معرف_الفرع ","الشهر", "معرف_الموظف", "الراتب_الأساسي", "الحوافز", "الخصومات", "صافي_الراتب", "حالة_الصرف"] },
-        
+        {"name": "سجل_السحوبات", "cols": ["bot_id", "ID", "اسم_المستخدم", "معرف_الطلب", "المبلغ", "وسيلة_التحويل", "تاريخ_الطلب", "الحالة", "رابط_تأكيد الدفع", "ملاحظة_الإدارة", "تاريخ_التنفيذ"], "color": {"red": 0.98, "green": 0.92, "blue": 0.84}}, 
+
+
 
     
 
@@ -783,6 +785,12 @@ def seed_default_settings(bot_token):
                 "value": "50",
                 "note": "الحد الأقصى لسحب الرصيد للمسوقين"            
             },
+            {
+                "key": "payment_information",
+                "title": "معلومات الدفع",
+                "value": "بنك الرياض حساب رقم 1234455666 بنك الاهلي حساب6765566 ",
+                "note": "معلومات تحويل الرسوم "            
+            },            
             {
                 "key": "marketers_commission",
                 "title": "عمولة المسوقين",
@@ -2488,6 +2496,94 @@ def process_referral_reward_on_purchase(bot_token, student_id):
     except Exception as e:
         logger.error(f"❌ فشل منح مكافأة الشراء: {e}")
         return False, None, 0
+
+# --------------------------------------------------------------------------
+#طلب السحب 
+def create_withdrawal_request(bot_token, user_id, username, amount, payment_method):
+    """إنشاء طلب سحب وخصم الرصيد من المستخدم فوراً لضمان الأمان"""
+    try:
+        sheet_requests = ss.worksheet("سجل_السحوبات")
+        sheet_users = ss.worksheet("المستخدمين")
+        
+        # 1. البحث عن المستخدم لخصم الرصيد (العمود 11)
+        user_cell = sheet_users.find(str(user_id), in_column=1)
+        if user_cell:
+            # جلب الرصيد الحالي من الشيت (العمود 11)
+            current_balance = float(sheet_users.cell(user_cell.row, 11).value or 0)
+            
+            if current_balance < float(amount):
+                return False, "insufficient_balance"
+            
+            # تنفيذ الخصم فوراً (حجز المبلغ)
+            new_balance = current_balance - float(amount)
+            sheet_users.update_cell(user_cell.row, 11, new_balance)
+        else:
+            return False, "user_not_found"
+
+        # 2. توليد معرف طلب فريد وتسجيل الطلب
+        request_id = f"REQ-{str(uuid.uuid4().int)[:6]}"
+        row = [
+            str(bot_token), str(user_id), str(username), request_id, 
+            float(amount), str(payment_method), get_system_time("full"), 
+            "قيد الانتظار", "", "", ""
+        ]
+        
+        sheet_requests.append_row(row)
+        update_global_version(bot_token) # تحديث الكاش لضمان مزامنة الرصيد الجديد
+        return True, request_id
+    except Exception as e:
+        logger.error(f"❌ خطأ في معالجة طلب السحب: {e}")
+        return False, None
+
+def update_withdrawal_status(bot_token, request_id, new_status, admin_note="", proof_link=""):
+    """
+    تحديث حالة طلب السحب في شيت 'سجل_السحوبات'
+    الترتيب: bot_id(1), ID(2), اسم_المستخدم(3), معرف_الطلب(4), المبلغ(5), 
+    وسيلة_التحويل(6), تاريخ_الطلب(7), الحالة(8), رابط_تأكيد الدفع(9), 
+    ملاحظة_الإدارة(10), تاريخ_التنفيذ(11)
+    """
+    try:
+        sheet = ss.worksheet("سجل_السحوبات")
+        
+        # البحث عن رقم الطلب في العمود الرابع (معرف_الطلب)
+        cell = sheet.find(str(request_id), in_column=4)
+        
+        if cell:
+            row_index = cell.row
+            
+            # تحديث العمود 8: الحالة (مكتمل / مرفوض / قيد الانتظار)
+            sheet.update_cell(row_index, 8, new_status)
+            
+            # تحديث العمود 9: رابط_تأكيد الدفع
+            sheet.update_cell(row_index, 9, proof_link)
+            
+            # تحديث العمود 10: ملاحظة_الإدارة
+            sheet.update_cell(row_index, 10, admin_note)
+            
+            # تحديث العمود 11: تاريخ_التنفيذ (الوقت الحالي)
+            sheet.update_cell(row_index, 11, get_system_time("full"))
+            
+            # مزامنة الكاش لضمان تحديث البيانات لكل البوتات
+            update_global_version(bot_token)
+            
+            return True
+        else:
+            logger.warning(f"⚠️ لم يتم العثور على طلب السحب بالمعرف: {request_id}")
+            return False
+            
+    except Exception as e:
+        logger.error(f"❌ خطأ أثناء تحديث حالة السحب: {e}")
+        return False
+
+
+
+# --------------------------------------------------------------------------
+
+# --------------------------------------------------------------------------
+
+# --------------------------------------------------------------------------
+
+# --------------------------------------------------------------------------
 
 # --------------------------------------------------------------------------
 
