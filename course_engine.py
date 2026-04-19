@@ -107,8 +107,6 @@ async def show_review_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     await update.message.reply_text(review, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 # --------------------------------------------------------------------------
-
-
 # --- [ 5. الضخ النهائي في قواعد البيانات (41 و 37 عمود) ] ---
 async def finalize_and_save(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -144,10 +142,44 @@ async def finalize_and_save(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text = f"✅ <b>تم تسجيل بياناتك!</b>\n\n💰 <b>بيانات الدفع:</b>\n<code>{pay_info}</code>\n\n⚠️ يرجى إرسال صورة إيصال الدفع الآن:"
             context.user_data['action'] = 'awaiting_payment_receipt'
             await query.edit_message_text(text, parse_mode="HTML")
+        
+        elif state['pay_method'] == "Gift":
+            # جلب بيانات المسوق (المهدِي) لتنفيذ الخصم والإشعار
+            gift_code = state.get('gift_code')
+            from sheets import ss
+            sheet_coupons = ss.worksheet("الكوبونات")
+            coupon_cell = sheet_coupons.find(gift_code, in_column=3)
+            
+            if coupon_cell:
+                inviter_id = sheet_coupons.cell(coupon_cell.row, 4).value # آيدي المسوق
+                redeem_cost = get_bot_setting(bot_token, "min_points_redeem", default=100)
+                
+                # تنفيذ الخصم من رصيد المسوق
+                from sheets import redeem_points_for_course
+                success_deduct, new_balance = redeem_points_for_course(bot_token, inviter_id, redeem_cost)
+                
+                if success_deduct:
+                    # تحديث حالة الكوبون لمستعمل
+                    sheet_coupons.update_cell(coupon_cell.row, 8, "مستعمل")
+                    
+                    # إرسال إشعار للمسوق باستخدام البيانات المجمعة
+                    notification_text = (
+                        f"📶 <b>عزيزي العميل</b>\n"
+                        f"تم استخدام الهدية الممنوحة من قبلكم من قبل الشخص:\n\n"
+                        f"👤 <b>معلومات العضو:</b>\n"
+                        f"• الاسم: {state['name_ar']}\n"
+                        f"• المعرّف: @{user.username or 'بدون'}\n"
+                        f"• الآيدي: <code>{user.id}</code>\n\n"
+                        f"💰 <b>رصيدك الحالي هو:</b> {new_balance} نقطة"
+                    )
+                    await context.bot.send_message(chat_id=inviter_id, text=notification_text, parse_mode="HTML")
+                    await query.edit_message_text("🎉 مبروك! تم تفعيل الهدية وفتح الدورة لك بنجاح.")
+        
         else:
             await query.edit_message_text("🎉 مبروك! تم تفعيل الدورة بنجاح باستخدام نقاطك.")
             
         context.user_data.pop('reg_flow', None)
+
     except Exception as e:
         logger.error(f"Save error: {e}")
         await query.answer("❌ حدث خطأ في الحفظ.")

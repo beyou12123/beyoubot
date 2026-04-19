@@ -2578,6 +2578,20 @@ def update_withdrawal_status(bot_token, request_id, new_status, admin_note="", p
 
 
 # --------------------------------------------------------------------------
+#دالة توليد رابط كوبون للمسوقين
+def get_active_gift_link(bot_token, user_id):
+    """التحقق من وجود رابط هدية نشط وغير مستخدم لهذا المسوق"""
+    try:
+        sheet = ss.worksheet("الكوبونات")
+        records = sheet.get_all_records()
+        for r in records:
+            if (str(r.get("bot_id")) == str(bot_token) and 
+                str(r.get("معرف_الطالب")) == str(user_id) and # نستخدم هذا العمود لتخزين ID المهدِي
+                str(r.get("حالة_الكوبون")) == "نشط"):
+                return r.get("معرف_الكوبon") # يعيد كود الهدية النشط
+        return None
+    except:
+        return None
 
 # --------------------------------------------------------------------------
 

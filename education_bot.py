@@ -597,6 +597,74 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         else:
             await query.answer("❌ فشلت العملية، تأكد من رصيدك.", show_alert=True)
 
+    # تنفيذ عملية الإهداء لمشترك آخر (نظام روابط الإهداء المشفرة)
+    elif data.startswith("buy_c_gift_"):
+        course_id = data.replace("buy_c_gift_", "")
+        bot_token = context.bot.token
+        
+        # 1. التحقق من وجود رابط هدية نشط لم يُستخدم بعد لهذا المسوق (القفل الذكي)
+        from sheets import ss
+        sheet_coupons = ss.worksheet("الكوبونات")
+        records = sheet_coupons.get_all_records()
+        
+        active_code = None
+        for r in records:
+            if (str(r.get("bot_id")) == str(bot_token) and 
+                str(r.get("معرف_الطالب")) == str(user_id) and 
+                str(r.get("حالة_الكوبون")) == "نشط"):
+                active_code = r.get("معرف_الكوبون")
+                break
+        
+        # 2. إذا وجد رابط نشط، يتم تزويد المسوق به بدلاً من توليد جديد
+        if active_code:
+            bot_info = await context.bot.get_me()
+            old_link = f"https://t.me/{bot_info.username}?start=gift_{active_code}"
+            
+            text = (
+                f"⚠️ <b>عذراً عزيزي المسوق!</b>\n"
+                f"━━━━━━━━━━━━━━\n"
+                f"لديك بالفعل <b>هدية سارية المفعول</b> لم يتم استخدامها بعد. نظامنا يسمح بهدية واحدة نشطة في كل مرة لضمان دقة حساباتك.\n\n"
+                f"🔗 <b>رابط الهدية الحالي:</b>\n"
+                f"<code>{old_link}</code>\n\n"
+                f"✨ <i>يرجى مشاركة الرابط أعلاه، وفور استخدامه ستتمكن من توليد هدية جديدة.</i>"
+            )
+            await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔙 العودة للمتجر", callback_data="redeem_store")]
+            ]), parse_mode="HTML")
+            return
+
+        # 3. توليد كود هدية جديد وحفظه (بدون خصم نقاط في هذه المرحلة)
+        import secrets
+        gift_code = f"GFT{secrets.token_hex(3).upper()}"
+        
+        # ترتيب الأعمدة في شيت الكوبونات (11 عمود):
+        # bot_id, معرف_الفرع, معرف_الكوبون, معرف_الطالب (نخزن فيه ID المهدِي), قيمة_الخصم, 
+        # نوع_الخصم, الحد_الأقصى_للاستخدام, حالة_الكوبون, تاريخ_الإنشاء, تاريخ_الانتهاء, ملاحظات
+        from sheets import get_system_time
+        new_row = [
+            str(bot_token), "1001001", gift_code, str(user_id), "100", 
+            "هدية دورة", "1", "نشط", get_system_time("date"), "2026-12-31", f"دورة_{course_id}"
+        ]
+        sheet_coupons.append_row(new_row)
+        from sheets import update_global_version
+        update_global_version(bot_token)
+
+        bot_info = await context.bot.get_me()
+        new_link = f"https://t.me/{bot_info.username}?start=gift_{gift_code}"
+        
+        success_text = (
+            f"🎁 <b>تم تجهيز رابط الهدية بنجاح!</b>\n"
+            f"━━━━━━━━━━━━━━\n"
+            f"يمكنك الآن إرسال هذا الرابط لمن تحب. سيتم خصم النقاط من رصيدك <b>فقط</b> عندما يقوم الطرف الآخر بالتسجيل الفعلي.\n\n"
+            f"🔗 <b>رابط الإهداء الخاص بك:</b>\n"
+            f"<code>{new_link}</code>\n\n"
+            f"📢 <i>سيصلك إشعار فوري فور تفعيل الهدية.</i>"
+        )
+        await query.edit_message_text(success_text, reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔙 العودة للمتجر", callback_data="redeem_store")]
+        ]), parse_mode="HTML")
+
+
 #>>>>>>>>>>>>>>>>
 # ربط الدورات بالنقاط
 
