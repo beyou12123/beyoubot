@@ -372,7 +372,12 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 
     elif data == "confirm_reg_final":
         await course_engine.finalize_and_save(update, context)
-#>>>>>>>>>>>>>>>>
+#>>>>>>>>>>>>>>>>*
+#©©©©©©©©©©
+# المناداة لدالة معلومات تهيئة البوت 
+    elif data == "system_setup_information":
+        from course_engine import show_system_setup_information
+        await show_system_setup_information(update, context)
 
 
     elif data == "dsc_continue":
@@ -2325,7 +2330,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             filtered = [c for c in all_courses if str(c['bot_id']) == str(bot_token)]
             
 # --------------------------------------------------------------------------
-    # معالج تصدير النسخة الاحتياطية بصيغة JSON
+
     # معالج تصدير النسخة الاحتياطية بصيغة JSON
     elif data == "export_data_json":
         import json
@@ -2333,7 +2338,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         from cache_manager import FACTORY_GLOBAL_CACHE
         
         current_token = str(context.bot.token)
-        await query.message.reply_text("⏳ جاري فحص 37 ورقة بيانات وتجميع النسخة الاحتياطية...")
+        await query.message.reply_text("⏳ جاري فحص  البيانات وتجميع النسخة الاحتياطية...")
         
         backup_data = {}
         all_cache = FACTORY_GLOBAL_CACHE.get("data", {})
