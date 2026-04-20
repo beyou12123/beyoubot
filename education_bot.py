@@ -1863,6 +1863,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 
 #~~~~~~~~~~~~~~~~
 #ضبط زر 📢 الإعلانات
+    # --- [ محرك إدارة الإعلانات المطور ] ---
     elif data == "manage_ads":
         from course_engine import manage_ads_main_ui
         await manage_ads_main_ui(update, context)
@@ -1871,12 +1872,16 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         from course_engine import ad_create_start
         await ad_create_start(update, context)
 
+    elif data == "ad_report_view": # هذا الزر كان ينقصه المعالج
+        from course_engine import ad_report_view
+        await ad_report_view(update, context)
+
     elif data.startswith("ad_set_crs_"):
         course_id = data.replace("ad_set_crs_", "")
         context.user_data['temp_ad'] = {'course_id': course_id}
         context.user_data['action'] = 'awaiting_ad_platform'
-        await query.edit_message_text("🌐 <b>الخطوة 2:</b> أرسل اسم المنصة الإعلانية (مثلاً: فيسبوك، سناب):")
- 
+        await query.edit_message_text("🌐 <b>الخطوة 2:</b> أرسل اسم المنصة الإعلانية (مثلاً: فيسبوك، سناب):", parse_mode="HTML")
+
 #~~~~~~~~~~~~~~~~
 #زر معالجة التقارير
     elif data == "ad_report_view":
