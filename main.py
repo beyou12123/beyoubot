@@ -817,14 +817,18 @@ app.add_handler(MessageHandler(filters.Document.ALL, start_restore_process))
 
 if __name__ == "__main__":
     import asyncio
-    try:
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+    import sys
 
+    # ضمان تعريف حلقة الأحداث (Loop) بشكل مستقر
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+    try:
         # 1. تشغيل كافة البوتات التابعة أولاً لضمان جاهزيتها
+        # ملاحظة: يجب أن تكون الدالة boot_all_bots معرفة في الأعلى داخل نفس الملف
         loop.run_until_complete(boot_all_bots())
 
         # 2. --- [ إعداد محرك المزامنة الذكية للمصنع ] ---
@@ -838,13 +842,16 @@ if __name__ == "__main__":
         scheduler.start()
         print("⏰ تم تفعيل جدولة المزامنة الذكية: يومياً الساعة 03:30 فجراً")
 
-        # 3. تجهيز المهام الإضافية في حلقة الأحداث
+        # 3. تجهيز المهام الإضافية في حلقة الأحداث لتعمل بالتوازي
+        # التأكد من استدعاء start_all_sub_bots (الوظيفة التي أضفتها أنت)
         loop.create_task(start_all_sub_bots()) 
         print("🚀 مصنع البوتات يعمل الآن بكافة محركاته...")
 
         # 4. تشغيل بوت المصنع الرئيسي (هذا السطر يجب أن يكون الأخير لأنه يوقف الكود للمراقبة)
         print("🚀 بوت المصنع الرئيسي قيد التشغيل الآن...")
-        # --- [إصلاح: إضافة drop_pending_updates لإنهاء التعارض] ---
+        
+        # استخدام run_polling كـ Blocking Call لضمان بقاء السيرفر حياً
+        # مع إضافة drop_pending_updates لإنهاء التعارض كما طلبت
         app.run_polling(drop_pending_updates=True) 
         
     except Exception as e:
