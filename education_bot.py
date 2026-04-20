@@ -2514,7 +2514,6 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
         'awaiting_reg_email'
     ]
 
-#داخل handle_contact_message (في البداية تماماً):
 #  //===========================================
     # استخراج الحالة الحالية للمستخدم لسهولة الفحص
     current_action = context.user_data.get('action')
@@ -3349,3 +3348,4 @@ async def run_bot(token, owner_id):
 
 
 # --------------------------------------------------------------------------
+
