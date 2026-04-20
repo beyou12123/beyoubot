@@ -730,7 +730,16 @@ async def save_channel_id_logic(update: Update, context: ContextTypes.DEFAULT_TY
     target = user_input.replace("https://", "").replace("http://", "").replace("t.me/", "").strip()
     
     # التأكد من وجود @ إذا كان النص يوزرنيم وليس ID رقمي
-    if not target.startswith("-100") and not target.startswith("@"):
+    
+    # التحقق: إذا كان المدخل رقماً فقط (مثل الذي أرسلته 3925479535)
+    if target.isdigit():
+        # القنوات في تليجرام يجب أن تبدأ بـ -100
+        if not target.startswith("100"):
+            target = f"-100{target}"
+        else:
+            target = f"-{target}"
+    else:
+        # إذا كان نصاً، نتأكد من وجود @ في البداية لـ get_chat
         target = f"@{target}"
     
     try:
