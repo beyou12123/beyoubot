@@ -126,15 +126,31 @@ async def finalize_and_save(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         ss.worksheet("قاعدة_بيانات_الطلاب").append_row(row_db)
 
-        # ب: تجهيز سجل_التسجيلات (37 عموداً)
+        # ب: تجهيز سجل_التسجيلات (مطابقة لـ 37 عموداً التي أرسلتها)
         reg_id = f"REG{str(uuid.uuid4().int)[:5]}"
         row_reg = [""] * 37
-        row_reg[0], row_reg[1], row_reg[2], row_reg[3] = bot_token, "1001001", reg_id, now
-        row_reg[4], row_reg[5], row_reg[6], row_reg[7], row_reg[8] = student_id, state['name_ar'], user.id, state['course_id'], state['course_name']
-        row_reg[11], row_reg[13] = now, state['pay_method']
+        
+        # ملء الأعمدة بناءً على الهيكل الجديد
+        row_reg[0] = bot_token                # bot_id
+        row_reg[1] = "1001001"                # معرف_الفرع
+        row_reg[2] = reg_id                   # معرف_التسجيل
+        row_reg[3] = now                      # طابع_زمني
+        row_reg[4] = student_id               # معرف_الطالب
+        row_reg[5] = state['name_ar']         # اسم_الطالب
+        row_reg[6] = user.id                  # ID_المستخدم_تيليجرام
+        row_reg[7] = state['course_id']       # معرف_الدورة
+        row_reg[8] = state['course_name']     # اسم_الدورة
+        
+        # --- الربط الجوهري بالحملة الإعلانية ---
+        # إذا كان الطالب قادماً من رابط حملة، نضع المعرف في العمود 26 (الفهرس 25)
+        if context.user_data.get('source_campaign_id'):
+            row_reg[25] = context.user_data.get('source_campaign_id') 
+        
+        row_reg[13] = state['pay_method']     # طريقة_التسجيل
+        row_reg[20] = "قيد الانتظار"            # حالة_الدفع
         
         ss.worksheet("سجل_التسجيلات").append_row(row_reg)
-        update_global_version(bot_token)
+
 
         # تفرقة المسار المالي
         if state['pay_method'] == "manual":
@@ -823,24 +839,445 @@ async def show_system_setup_information(update, context):
 
 
 # --------------------------------------------------------------------------
+# دالة بدء طلب المعلومات عند الضغط على الزر معلومات الدفع 
+async def set_default_payment_flow(update, context):
+    query = update.callback_query
+    context.user_data['action'] = 'awaiting_payment_info_text'
+    
+    text = (
+        "💰 <b>إعداد معلومات الدفع الافتراضية:</b>\n\n"
+        "يرجى إرسال تفاصيل الدفع التي ستظهر للطلاب (رقم حساب، محفظة، إلخ):\n"
+        "<i>يمكنك استخدام التنسيق الذي تراه مناسباً.</i>"
+    )
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    keyboard = [[InlineKeyboardButton("🔙 إلغاء", callback_data="tech_settings")]]
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+# دالة الحفظ (تُستدعى من handle_contact_message)
+async def save_payment_info_logic(update, context):
+    text = update.message.text.strip()
+    bot_token = context.bot.token
+    
+    from sheets import update_content_setting # استخدام الدالة العامة الموجودة في ملفك
+    # سنستخدم مفتاح 'payment_information' ليتم حفظه في العمود المخصص
+    if update_content_setting(bot_token, "payment_information", text):
+        await update.message.reply_text("✅ تم حفظ معلومات الدفع الافتراضية بنجاح!")
+    else:
+        await update.message.reply_text("❌ فشل الحفظ، تأكد من وجود عمود 'payment_information' في الشيت.")
+    
+    context.user_data['action'] = None
 
 # --------------------------------------------------------------------------
+# دالة بدء طلب درجة الواجب
+async def set_homework_grade_flow(update, context):
+    query = update.callback_query
+    context.user_data['action'] = 'awaiting_homework_grade_value'
+    
+    text = (
+        "📝 <b>ضبط درجة الواجبات الافتراضية:</b>\n\n"
+        "من فضلك أرسل الدرجة المطلوبة لكل واجب (أرقام فقط):\n"
+        "<i>سيتم اعتماد هذه الدرجة في كافة التقارير والاختبارات المرتبطة.</i>"
+    )
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    keyboard = [[InlineKeyboardButton("🔙 إلغاء", callback_data="tech_settings")]]
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+# دالة حفظ الدرجة وتحديث الكاش
+async def save_homework_grade_logic(update, context):
+    text = update.message.text.strip()
+    bot_token = context.bot.token
+    
+    if not text.isdigit():
+        await update.message.reply_text("⚠️ خطأ! يرجى إرسال أرقام فقط (مثال: 10).")
+        return
+
+    from sheets import ss, update_global_version
+    try:
+        sheet = ss.worksheet("الإعدادات")
+        # البحث عن المفتاح البرمجي المطلوب
+        cell = sheet.find("homework_grade")
+        # تحديث القيمة في العمود الرابع (القيمة)
+        sheet.update_cell(cell.row, 4, text)
+        
+        # مزامنة الكاش لضمان عمل النظام بالدرجة الجديدة فوراً
+        update_global_version(bot_token)
+        
+        await update.message.reply_text(f"✅ تم ضبط درجة الواجبات على: <b>{text}</b> بنجاح!", parse_mode="HTML")
+    except Exception as e:
+        await update.message.reply_text("❌ فشل الحفظ، تأكد من وجود مفتاح <code>homework_grade</code> في ورقة الإعدادات.")
+    
+    context.user_data['action'] = None
 
 # --------------------------------------------------------------------------
+# دالة بدء طلب وحدة العملة
+async def set_currency_unit_flow(update, context):
+    query = update.callback_query
+    context.user_data['action'] = 'awaiting_currency_unit_value'
+    
+    text = (
+        "🪙 <b>ضبط وحدة العملة الرسمية:</b>\n\n"
+        "يرجى إرسال رمز أو اسم العملة (مثلاً: ريال، دولار، SAR، USD):\n"
+        "<i>سيتم استخدام هذا الرمز في كافة العمليات المالية والتقارير.</i>"
+    )
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    keyboard = [[InlineKeyboardButton("🔙 إلغاء", callback_data="tech_settings")]]
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+# دالة حفظ العملة وتحديث النظام
+async def save_currency_unit_logic(update, context):
+    text = update.message.text.strip()
+    bot_token = context.bot.token
+    
+    from sheets import ss, update_global_version
+    try:
+        sheet = ss.worksheet("الإعدادات")
+        # البحث عن المفتاح البرمجي في العمود الثاني
+        cell = sheet.find("currency_unit")
+        # تحديث القيمة في العمود الرابع (القيمة)
+        sheet.update_cell(cell.row, 4, text)
+        
+        # تحديث الكاش اللحظي
+        update_global_version(bot_token)
+        
+        await update.message.reply_text(f"✅ تم اعتماد <b>{text}</b> كوحدة عملة رسمية للمنصة.", parse_mode="HTML")
+    except Exception as e:
+        await update.message.reply_text("❌ فشل الحفظ، تأكد من وجود مفتاح <code>currency_unit</code> في ورقة الإعدادات.")
+    
+    context.user_data['action'] = None
 
 # --------------------------------------------------------------------------
+# دالة بدء طلب نقاط الإحالة (عند الانضمام)
+async def set_ref_points_join_flow(update, context):
+    query = update.callback_query
+    context.user_data['action'] = 'awaiting_ref_points_join_value'
+    
+    text = (
+        "💰 <b>ضبط نقاط الإحالة (عند الانضمام):</b>\n\n"
+        "يرجى إرسال عدد النقاط التي سيحصل عليها الداعي عند انضمام طالب جديد عبر رابطه (أرقام فقط):\n"
+        "<i>مثال: 10</i>"
+    )
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    keyboard = [[InlineKeyboardButton("🔙 إلغاء", callback_data="tech_settings")]]
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+# دالة حفظ النقاط وتحديث النظام
+async def save_ref_points_join_logic(update, context):
+    text = update.message.text.strip()
+    bot_token = context.bot.token
+    
+    if not text.isdigit():
+        await update.message.reply_text("⚠️ خطأ! يرجى إرسال أرقام فقط.")
+        return
+
+    from sheets import ss, update_global_version
+    try:
+        sheet = ss.worksheet("الإعدادات")
+        # البحث عن المفتاح البرمجي ref_points_join في العمود الثاني
+        cell = sheet.find("ref_points_join")
+        # تحديث القيمة في العمود الرابع
+        sheet.update_cell(cell.row, 4, text)
+        
+        # تحديث الكاش اللحظي لنظام المصنع
+        update_global_version(bot_token)
+        
+        await update.message.reply_text(f"✅ تم ضبط مكافأة الانضمام على: <b>{text} نقطة</b> بنجاح!", parse_mode="HTML")
+    except Exception as e:
+        await update.message.reply_text("❌ فشل الحفظ، تأكد من وجود مفتاح <code>ref_points_join</code> في ورقة الإعدادات.")
+    
+    context.user_data['action'] = None
 
 # --------------------------------------------------------------------------
+# دالة بدء طلب نقاط المكافأة (عند الشراء/التسجيل في دورة)
+async def set_ref_points_purchase_flow(update, context):
+    query = update.callback_query
+    context.user_data['action'] = 'awaiting_ref_points_purchase_value'
+    
+    text = (
+        "💰 <b>ضبط نقاط مكافأة التسجيل في دورة:</b>\n\n"
+        "يرجى إرسال عدد النقاط التي سيحصل عليها الداعي عندما يقوم الطالب الذي دعاه بشراء/التسجيل في دورة (أرقام فقط):\n"
+        "<i>مثال: 50</i>"
+    )
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    keyboard = [[InlineKeyboardButton("🔙 إلغاء", callback_data="tech_settings")]]
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+# دالة حفظ نقاط الشراء وتحديث النظام
+async def save_ref_points_purchase_logic(update, context):
+    text = update.message.text.strip()
+    bot_token = context.bot.token
+    
+    if not text.isdigit():
+        await update.message.reply_text("⚠️ خطأ! يرجى إرسال أرقام فقط.")
+        return
+
+    from sheets import ss, update_global_version
+    try:
+        sheet = ss.worksheet("الإعدادات")
+        # البحث عن المفتاح البرمجي ref_points_purchase في العمود الثاني
+        cell = sheet.find("ref_points_purchase")
+        # تحديث القيمة في العمود الرابع
+        sheet.update_cell(cell.row, 4, text)
+        
+        # تحديث الكاش اللحظي لنظام المصنع
+        update_global_version(bot_token)
+        
+        await update.message.reply_text(f"✅ تم ضبط مكافأة التسجيل في دورة على: <b>{text} نقطة</b> بنجاح!", parse_mode="HTML")
+    except Exception as e:
+        await update.message.reply_text("❌ فشل الحفظ، تأكد من وجود مفتاح <code>ref_points_purchase</code> في ورقة الإعدادات.")
+    
+    context.user_data['action'] = None
 
 # --------------------------------------------------------------------------
+# دالة بدء طلب الحد الأدنى لمبلغ السحب
+async def set_min_payout_flow(update, context):
+    query = update.callback_query
+    context.user_data['action'] = 'awaiting_min_payout_value'
+    
+    text = (
+        "💰 <b>ضبط الحد الأدنى لسحب الأرباح:</b>\n\n"
+        "يرجى إرسال المبلغ الأدنى الذي يجب أن يصل إليه المسوق ليتمكن من طلب السحب (أرقام فقط):\n"
+        "<i>مثال: 50</i>"
+    )
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    keyboard = [[InlineKeyboardButton("🔙 إلغاء", callback_data="tech_settings")]]
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+# دالة حفظ مبلغ السحب وتحديث النظام
+async def save_min_payout_logic(update, context):
+    text = update.message.text.strip()
+    bot_token = context.bot.token
+    
+    if not text.isdigit():
+        await update.message.reply_text("⚠️ خطأ! يرجى إرسال أرقام فقط.")
+        return
+
+    from sheets import ss, update_global_version
+    try:
+        sheet = ss.worksheet("الإعدادات")
+        # البحث عن المفتاح البرمجي maximum_withdrawal_marketers في العمود الثاني
+        cell = sheet.find("maximum_withdrawal_marketers")
+        # تحديث القيمة في العمود الرابع
+        sheet.update_cell(cell.row, 4, text)
+        
+        # تحديث الكاش اللحظي لنظام المصنع
+        update_global_version(bot_token)
+        
+        await update.message.reply_text(f"✅ تم ضبط الحد الأدنى للسحب على: <b>{text}</b> بنجاح!", parse_mode="HTML")
+    except Exception as e:
+        await update.message.reply_text("❌ فشل الحفظ، تأكد من وجود مفتاح <code>maximum_withdrawal_marketers</code> في ورقة الإعدادات.")
+    
+    context.user_data['action'] = None
 
 # --------------------------------------------------------------------------
+# --- [ 1. إعدادات درجة النجاح الصغرى ] ---
+async def set_min_passing_grade_flow(update, context):
+    query = update.callback_query
+    context.user_data['action'] = 'awaiting_min_passing_grade_value'
+    
+    text = (
+        "📉 <b>ضبط درجة النجاح الصغرى:</b>\n\n"
+        "يرجى إرسال الحد الأدنى لدرجة النجاح (أرقام فقط):\n"
+        "<i>مثال: 50</i>"
+    )
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    keyboard = [[InlineKeyboardButton("🔙 إلغاء", callback_data="tech_settings")]]
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+async def save_min_passing_grade_logic(update, context):
+    text = update.message.text.strip()
+    bot_token = context.bot.token
+    
+    if not text.isdigit():
+        await update.message.reply_text("⚠️ يرجى إرسال أرقام فقط.")
+        return
+
+    from sheets import ss, update_global_version
+    try:
+        sheet = ss.worksheet("الإعدادات")
+        cell = sheet.find("minimum_passing_grade")
+        sheet.update_cell(cell.row, 4, text)
+        update_global_version(bot_token)
+        await update.message.reply_text(f"✅ تم ضبط درجة النجاح الصغرى على: <b>{text}</b>", parse_mode="HTML")
+    except:
+        await update.message.reply_text("❌ فشل الحفظ، تأكد من وجود مفتاح <code>minimum_passing_grade</code>")
+    context.user_data['action'] = None
+
+# --- [ 2. إعدادات درجة النجاح الكبرى ] ---
+async def set_max_passing_grade_flow(update, context):
+    query = update.callback_query
+    context.user_data['action'] = 'awaiting_max_passing_grade_value'
+    
+    text = (
+        "📈 <b>ضبط درجة النجاح الكبرى (الدرجة النهائية):</b>\n\n"
+        "يرجى إرسال الدرجة الكلية للاختبارات (أرقام فقط):\n"
+        "<i>مثال: 100</i>"
+    )
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    keyboard = [[InlineKeyboardButton("🔙 إلغاء", callback_data="tech_settings")]]
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+async def save_max_passing_grade_logic(update, context):
+    text = update.message.text.strip()
+    bot_token = context.bot.token
+    
+    if not text.isdigit():
+        await update.message.reply_text("⚠️ يرجى إرسال أرقام فقط.")
+        return
+
+    from sheets import ss, update_global_version
+    try:
+        sheet = ss.worksheet("الإعدادات")
+        cell = sheet.find("greatest_success_grade")
+        sheet.update_cell(cell.row, 4, text)
+        update_global_version(bot_token)
+        await update.message.reply_text(f"✅ تم ضبط درجة النجاح الكبرى على: <b>{text}</b>", parse_mode="HTML")
+    except:
+        await update.message.reply_text("❌ فشل الحفظ، تأكد من وجود مفتاح <code>greatest_success_grade</code>")
+    context.user_data['action'] = None
 
 # --------------------------------------------------------------------------
+# دالة بدء طلب نسبة عمولة المسوقين
+async def set_marketers_commission_flow(update, context):
+    query = update.callback_query
+    context.user_data['action'] = 'awaiting_marketers_commission_value'
+    
+    text = (
+        "📣 <b>ضبط نسبة عمولة المسوقين:</b>\n\n"
+        "يرجى إرسال نسبة العمولة التي سيحصل عليها المسوق من قيمة كل دورة (أرقام فقط، مثلاً: 10):\n"
+        "<i>سيقوم النظام بإضافة رمز % تلقائياً عند الحفظ.</i>"
+    )
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    keyboard = [[InlineKeyboardButton("🔙 إلغاء", callback_data="tech_settings")]]
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+# دالة حفظ النسبة وتحديث النظام
+async def save_marketers_commission_logic(update, context):
+    text = update.message.text.strip()
+    bot_token = context.bot.token
+    
+    # التحقق من أن المدخل رقمي
+    if not text.isdigit():
+        await update.message.reply_text("⚠️ خطأ! يرجى إرسال أرقام فقط (مثال: 15).")
+        return
+
+    from sheets import ss, update_global_version
+    try:
+        sheet = ss.worksheet("الإعدادات")
+        # البحث عن المفتاح البرمجي marketers_commission في العمود الثاني
+        cell = sheet.find("marketers_commission")
+        
+        # إضافة رمز % للقيمة المحفوظة لضمان التنسيق
+        final_value = f"{text}%"
+        
+        # تحديث القيمة في العمود الرابع
+        sheet.update_cell(cell.row, 4, final_value)
+        
+        # تحديث الكاش اللحظي
+        update_global_version(bot_token)
+        
+        await update.message.reply_text(f"✅ تم ضبط عمولة المسوقين على: <b>{final_value}</b> بنجاح!", parse_mode="HTML")
+    except Exception as e:
+        await update.message.reply_text("❌ فشل الحفظ، تأكد من وجود مفتاح <code>marketers_commission</code> في ورقة الإعدادات.")
+    
+    context.user_data['action'] = None
 
 # --------------------------------------------------------------------------
+# 1. واجهة الإعلانات الرئيسية
+async def manage_ads_main_ui(update, context):
+    query = update.callback_query
+    text = "📢 <b>إدارة الحملات الإعلانية الممولة:</b>\n\nيمكنك إنشاء حملة جديدة لربط المسوقين بالدورات أو عرض التقارير."
+    keyboard = [
+        [InlineKeyboardButton("➕ إنشاء حملة جديدة", callback_data="ad_create_start")],
+        [InlineKeyboardButton("📊 تقرير الأداء اللحظي", callback_data="ad_report_view")],
+        [InlineKeyboardButton("🔙 عودة", callback_data="tech_settings")]
+    ]
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+# 2. بدء إنشاء حملة واختيار الدورة
+async def ad_create_start(update, context):
+    query = update.callback_query
+    bot_token = context.bot.token
+    from sheets import get_bot_data_from_cache
+    
+    courses = get_bot_data_from_cache(bot_token, "الدورات_التدريبية")
+    if not courses:
+        await query.answer("⚠️ لا توجد دورات مضافة لعمل حملة لها!", show_alert=True)
+        return
+
+    keyboard = [[InlineKeyboardButton(c['اسم_الدورة'], callback_data=f"ad_set_crs_{c['معرف_الدورة']}")] for c in courses]
+    keyboard.append([InlineKeyboardButton("❌ إلغاء", callback_data="manage_ads")])
+    
+    await query.edit_message_text("🎯 <b>الخطوة 1:</b> اختر الدورة المراد الترويج لها:", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+# 3. معالجة حفظ البيانات نصياً (تُستدعى من handle_contact_message)
+async def process_ad_campaign_flow(update, context):
+    text = update.message.text.strip()
+    action = context.user_data.get('action')
+    
+    if action == 'awaiting_ad_platform':
+        context.user_data['temp_ad']['platform'] = text
+        context.user_data['action'] = 'awaiting_ad_budget'
+        await update.message.reply_text("💰 <b>الخطوة 3:</b> أرسل الميزانية المخصصة للحملة (أرقام فقط):")
+
+    elif action == 'awaiting_ad_budget':
+        if not text.isdigit():
+            await update.message.reply_text("⚠️ أرسل رقماً فقط للميزانية:")
+            return
+        context.user_data['temp_ad']['budget'] = text
+        context.user_data['action'] = 'awaiting_ad_marketer_id'
+        await update.message.reply_text("👤 <b>الخطوة 4:</b> أرسل معرف (ID) المسوق المسؤول عن الحملة:")
+
+    elif action == 'awaiting_ad_marketer_id':
+        ad = context.user_data['temp_ad']
+        from sheets import add_new_ad_campaign
+        # استدعاء الحفظ (بقيم افتراضية للتواريخ والفرع حالياً لتبسيط التدفق)
+        success, res = add_new_ad_campaign(
+            context.bot.token, "1001001", ad['course_id'], "حملة جديدة", 
+            ad['platform'], "2026-01-01", "2026-12-31", ad['budget'], text
+        )
+        if success:
+            await update.message.reply_text(f"✅ <b>تم إنشاء الحملة بنجاح!</b>\n🆔 معرف الحملة: <code>{res}</code>", parse_mode="HTML")
+        else:
+            await update.message.reply_text(f"❌ فشل الحفظ: {res}")
+        context.user_data.pop('temp_ad', None)
+        context.user_data['action'] = None
 
 # --------------------------------------------------------------------------
+async def ad_report_view(update, context):
+    """عرض تقرير أداء الحملات الإعلانية وتحليل النتائج"""
+    query = update.callback_query
+    bot_token = context.bot.token
+    
+    # أولاً: تحديث البيانات قبل العرض لضمان الدقة
+    from sheets import sync_ad_campaign_results, get_bot_data_from_cache
+    sync_ad_campaign_results(bot_token)
+    
+    # جلب البيانات المحدثة من الكاش
+    ads = get_bot_data_from_cache(bot_token, "إدارة_الحملات_الإعلانية")
+    
+    if not ads:
+        await query.answer("📭 لا توجد بيانات حملات لعرضها حالياً.", show_alert=True)
+        return
+
+    report = "📊 <b>تقرير أداء الحملات الإعلانية:</b>\n━━━━━━━━━━━━━━\n"
+    
+    for ad in ads:
+        budget = float(ad.get('الميزانية', 0))
+        count = int(ad.get('عدد_المسجلين', 0))
+        # حساب تكلفة الاستحواذ على الطالب (Cost Per Acquisition)
+        cpa = round(budget / count, 2) if count > 0 else 0
+        
+        report += (
+            f"📍 <b>المنصة:</b> {ad.get('المنصة')}\n"
+            f"🆔 <b>الحملة:</b> <code>{ad.get('معرف_الحملة')}</code>\n"
+            f"💰 <b>الميزانية:</b> {budget}\n"
+            f"👥 <b>المسجلين:</b> {count}\n"
+            f"📉 <b>تكلفة الطالب:</b> {cpa}\n"
+            f"--------------------------\n"
+        )
+
+    keyboard = [[InlineKeyboardButton("🔙 عودة", callback_data="manage_ads")]]
+    await query.edit_message_text(report, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
 # --------------------------------------------------------------------------
 

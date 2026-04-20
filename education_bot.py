@@ -187,6 +187,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
  
 
+
    # --- [ 1. معالجة روابط انضمام الكوادر (مدرب/موظف) ] ---
     if context.args and context.args[0].startswith("reg_"):
         token = context.args[0].replace("reg_", "")
@@ -1653,14 +1654,14 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             ],
             [
                 InlineKeyboardButton("ضبط نقاط الدخول", callback_data="referral_points_settings"), 
-                InlineKeyboardButton("ضبط وحدة العملة", callback_data="manual_cache_sync")
+                InlineKeyboardButton("ضبط وحدة العملة", callback_data="currency_unit")
             ],
             [
-                InlineKeyboardButton(f"ضبط درجة النجاح", callback_data="toggle_maintenance"),            
-                InlineKeyboardButton("ضبط درجة الواجبات", callback_data="database_preparation")
+                InlineKeyboardButton(f"ضبط درجة النجاح", callback_data="passing_grade"),            
+                InlineKeyboardButton("ضبط درجة الواجبات", callback_data="homework_grade")
             ],
             [
-                InlineKeyboardButton("ضبط مبلغ السحب", callback_data="manage_branches"),
+                InlineKeyboardButton("ضبط مبلغ السحب", callback_data="minimum_withdrawal_amount"),
                 InlineKeyboardButton("معلومات الدفع الافتراضية", callback_data="default_payment_information"),
 
             ],
@@ -1668,13 +1669,22 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
                 InlineKeyboardButton("القناة الرسمية", callback_data="public_channel_idd"),
                 InlineKeyboardButton("قناة الأوسمة والإنجازات", callback_data="honors_channel_idd"),
 
-            ],                         
+            ],  
+            [InlineKeyboardButton("ضبط عمولة المسوقين %", callback_data="percentage_marketers")],                                                
             [InlineKeyboardButton("🔙 عودة", callback_data="back_to_admin")]
         ]
 
         await query.edit_message_text("👨‍🏫 <b>إدارة الشؤون التعليمية :</b>\nيمكنك إضافة مدربين جدد دورات جديدة او اقسام او مجموعات أو استعراض القائمة الحالية للحذف.", 
                                       reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 #>>>>>>>>>>>>>>>>
+    elif data == "passing_grade":
+        keyboard = [
+            [InlineKeyboardButton("درجة النجاح الصغرى", callback_data="minimum_passing_grade")],
+            [InlineKeyboardButton("درجة النجاح الكبر", callback_data="greatest_success_grade")],
+            [InlineKeyboardButton("🔙 عودة", callback_data="tech_settings")]
+        ]
+        await query.edit_message_text("💰 <b>درجات النجاح الافتراضية :</b>\nيرجى ضبط اعدادات الدراجات لإعتمادها في الاختبارات .", 
+                                      reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
 #>>>>>>>>>>>>>>>>#>>>>>>>>>>>>>>>>
     elif data == "manage_financial":
@@ -1802,10 +1812,87 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
                 [InlineKeyboardButton("🔙 عودة", callback_data="tech_settings")]
             ]), parse_mode="HTML"
         )
-        
+   #®®®®®®®®®®
+#عند الضغط على زر معلومات الدفع
+    elif data == "default_payment_information":
+        from course_engine import set_default_payment_flow
+        await set_default_payment_flow(update, context)
+#~~~~~~~~~~~~~~~~
+# عنج الضغط على رز درجة الواجبات 
+    elif data == "homework_grade":
+        from course_engine import set_homework_grade_flow
+        await set_homework_grade_flow(update, context)
 
-#>>>>>>>>>>>>>>>>
-# --------------------------------------------------------------------------
+#~~~~~~~~~~~~~~~~
+# عند الضغط على رز ضبط وحدة العملة
+    elif data == "currency_unit":
+        from course_engine import set_currency_unit_flow
+        await set_currency_unit_flow(update, context)
+#~~~~~~~~~~~~~~~~
+# عند الضغط على رز ضبط نقاط الاحالة
+    elif data == "entry_points_settings":
+        from course_engine import set_ref_points_join_flow
+        await set_ref_points_join_flow(update, context)
+# عند الضغط على رز ضبط نقاط التسجيل 
+    elif data == "registration_points_settings":
+        from course_engine import set_ref_points_purchase_flow
+        await set_ref_points_purchase_flow(update, context)
+
+#~~~~~~~~~~~~~~~~
+# عند الضغط على رز الحد الأدنى للسحب الأرباح للمسوقين
+    elif data == "minimum_withdrawal_amount":
+        from course_engine import set_min_payout_flow
+        await set_min_payout_flow(update, context)
+
+#~~~~~~~~~~~~~~~~
+# ضبط درجات النجاح الصغرى والكبرى
+    elif data == "minimum_passing_grade":
+        from course_engine import set_min_passing_grade_flow
+        await set_min_passing_grade_flow(update, context)
+
+    elif data == "greatest_success_grade":
+        from course_engine import set_max_passing_grade_flow
+        await set_max_passing_grade_flow(update, context)
+
+
+#~~~~~~~~~~~~~~~~
+# ضبط عمولات المسوقين
+    elif data == "percentage_marketers":
+        from course_engine import set_marketers_commission_flow
+        await set_marketers_commission_flow(update, context)
+
+#~~~~~~~~~~~~~~~~
+#ضبط زر 📢 الإعلانات
+    elif data == "manage_ads":
+        from course_engine import manage_ads_main_ui
+        await manage_ads_main_ui(update, context)
+
+    elif data == "ad_create_start":
+        from course_engine import ad_create_start
+        await ad_create_start(update, context)
+
+    elif data.startswith("ad_set_crs_"):
+        course_id = data.replace("ad_set_crs_", "")
+        context.user_data['temp_ad'] = {'course_id': course_id}
+        context.user_data['action'] = 'awaiting_ad_platform'
+        await query.edit_message_text("🌐 <b>الخطوة 2:</b> أرسل اسم المنصة الإعلانية (مثلاً: فيسبوك، سناب):")
+ 
+#~~~~~~~~~~~~~~~~
+#زر معالجة التقارير
+    elif data == "ad_report_view":
+        from course_engine import ad_report_view
+        await ad_report_view(update, context)
+ 
+#~~~~~~~~~~~~~~~~
+
+#~~~~~~~~~~~~~~~~
+
+#~~~~~~~~~~~~~~~~
+
+
+
+
+
 
 # --------------------------------------------------------------------------
     # --- [ قسم إدارة الكنترول والاختبارات ] ---
@@ -2750,6 +2837,10 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
 # --------------------------------------------------------------------------
 
 # --------------------------------------------------------------------------
+    if context.args:
+        if context.args[0].startswith("ad_"):
+            campaign_id = context.args[0].replace("ad_", "")
+            context.user_data['source_campaign_id'] = campaign_id
 
     
 # --------------------------------------------------------------------------
@@ -2776,7 +2867,83 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
             from educational_manager import validate_dsc_max
             await validate_dsc_max(update, context)
             return
+#~~~~~~~~~~~~~~~~
+        # --- [ حفظ معلومات الدفع الافتراضية ] ---
+        elif action == 'awaiting_payment_info_text':
+            from course_engine import save_payment_info_logic
+            await save_payment_info_logic(update, context)
+            return
+#~~~~~~~~~~~~~~~~
+        # --- [ حفظ درجة الواجبات ] ---
+        elif action == 'awaiting_homework_grade_value':
+            from course_engine import save_homework_grade_logic
+            await save_homework_grade_logic(update, context)
+            return
 
+
+
+#~~~~~~~~~~~~~~~~
+        # --- [ حفظ وحدة العملة ] ---
+        elif action == 'awaiting_currency_unit_value':
+            from course_engine import save_currency_unit_logic
+            await save_currency_unit_logic(update, context)
+            return
+
+#~~~~~~~~~~~~~~~~
+        # --- [ حفظ نقاط الإحالة عند الانضمام ] ---
+        elif action == 'awaiting_ref_points_join_value':
+            from course_engine import save_ref_points_join_logic
+            await save_ref_points_join_logic(update, context)
+            return
+#~~~~~~~~~~~~~~~~
+        # --- [ حفظ نقاط الإحالة عند شراء دورة ] ---
+        elif action == 'awaiting_ref_points_purchase_value':
+            from course_engine import save_ref_points_purchase_logic
+            await save_ref_points_purchase_logic(update, context)
+            return
+
+#~~~~~~~~~~~~~~~~
+        # --- [ حفظ الحد الأدنى لمبلغ السحب ] ---
+        elif action == 'awaiting_min_payout_value':
+            from course_engine import save_min_payout_logic
+            await save_min_payout_logic(update, context)
+            return
+
+#~~~~~~~~~~~~~~~~
+        # --- [ حفظ درجات النجاح ] ---
+        elif action == 'awaiting_min_passing_grade_value':
+            from course_engine import save_min_passing_grade_logic
+            await save_min_passing_grade_logic(update, context)
+            return
+
+        elif action == 'awaiting_max_passing_grade_value':
+            from course_engine import save_max_passing_grade_logic
+            await save_max_passing_grade_logic(update, context)
+            return
+#~~~~~~~~~~~~~~~~
+        # --- [ حفظ نسبة عمولة المسوقين ] ---
+        elif action == 'awaiting_marketers_commission_value':
+            from course_engine import save_marketers_commission_logic
+            await save_marketers_commission_logic(update, context)
+            return
+
+#~~~~~~~~~~~~~~~~
+        # --- [ إدارة الحملات الإعلانية ] ---
+        elif action and action.startswith('awaiting_ad_'):
+            from course_engine import process_ad_campaign_flow
+            await process_ad_campaign_flow(update, context)
+            return
+
+#~~~~~~~~~~~~~~~~
+
+#~~~~~~~~~~~~~~~~
+
+#~~~~~~~~~~~~~~~~
+
+
+
+
+#~~~~~~~~~~~~~~~~
     
         # إضافة قسم جديد
         if action == 'awaiting_cat_name':

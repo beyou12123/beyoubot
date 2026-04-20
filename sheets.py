@@ -69,13 +69,12 @@ SENSITIVE_FIELDS = {"التوكن", "كلمة_المرور", "token", "api_key",
 def get_sheets_structure():
     sheets_config = [
     
-
         {"name": "الإعدادات","cols": ["bot_id", "المفتاح_البرمجي", "العنوان", "القيمة", "ملاحظات"],"color": {"red": 0.8, "green": 0.9, "blue": 1}},
         {"name":"نظام_المزامنة","cols":["bot_id","رقم_الإصدار","آخر_تحديث","الحالة","ID_المالك","ID_المطور"],"color":{"red":0.9,"green":0.8,"blue":1}}, 
         {"name": "الهيكل_التنظيمي_والصلاحيات", "cols": ["bot_id", "معرف_الفرع", "ID_الموظف_أو_المدرب", "صلاحية_الأقسام", "صلاحية_الدورات", "صلاحية_المدربين", "صلاحية_الموظفين", "صلاحية_الإحصائيات", "صلاحية_الإذاعة", "صلاحية_الرسائل_الخاصة", "صلاحية_الكوبونات", "صلاحية_أكواد_الخصم", "الدورات_المسموحة", "المجموعات_المسموحة", "تحديث_السيرفر"]}, 
         {"name": "المستخدمين", "cols": ["ID المستخدم","اسم المستخدم","تاريخ التسجيل","الحالة","نوع الاشتراك","عدد البوتات","آخر نشاط","اللغة","مصدر التسجيل","معرف إحالة","رصيد"], "color": {"red": 0.85, "green": 0.92, "blue": 0.83}},
         {"name": "البوتات_المصنوعة", "cols": ["ID المالك","نوع البوت","اسم البوت","التوكن","حالة التشغيل","bot_id","username_bot","تاريخ الإنشاء","آخر تشغيل","عدد المستخدمين","عدد الرسائل","الحالة التقنية","webhook_url","api_type","plan","expiration_date","is_active","errors_log","تاريخ_آخر_تجديد","سعر_الاشتراك","رصيد_البوت","الحد_الأقصى_للطلاب","الحد_الأقصى_للدوات","الحد_الأقصى_للاقسام", "ميزة_الذكاء_الاصطناعي", "ميزة_رفع_وتصدير_البيانات_اكسل" ,"معرف_الفاتورة","متوسط_زمن_الاستجابة","استخدام_CPU","استخدام_الذاكرة","المستخدمون_النشطون_يومياً","المستخدمون_النشطون_شهرياً","معدل_الاحتفاظ","تاريخ_آخر_تحديث_للتوكن","حالة_التوكن","حالة_الدفع","طريقة_الدفع","دورة_الفوترة","إصدار_البوت","بيئة_التشغيل","إعادة_تشغيل_تلقائي","نموذج_الذكاء_الاصطناعي","استهلاك_التوكنات_AI","تكلفة_AI"], "color": {"red":0.81,"green":0.88,"blue":0.95} }, 
-        {"name": "إعدادات_المحتوى", "cols": ["bot_id","الرسالة الترحيبية","القوانين","رد التوقف","auto_reply","ai_enabled","welcome_enabled","buttons","banned_words","admin_ids","language","theme","delay_response","broadcast_enabled","custom_commands", "welcome_morning", "welcome_noon", "welcome_evening", "welcome_night", "اسم_المؤسسة", "تعليمات_AI", "ref_points_join", "ref_points_purchase", "min_points_redeem", "currency_unit", "homework_grade", "subscription_price", "ai_provider", "maintenance_mode", "max_daily_ai_questions", "backup_channel_id", "bot_status_msg", "trial_end_action", "timezone", "ai_memory_limit"], "color": {"red": 1.0, "green": 0.95, "blue": 0.8}},
+        {"name": "إعدادات_المحتوى", "cols": ["bot_id","الرسالة الترحيبية","القوانين","رد التوقف","auto_reply","ai_enabled","welcome_enabled","buttons","banned_words","admin_ids","language","theme","delay_response","broadcast_enabled","custom_commands", "welcome_morning", "welcome_noon", "welcome_evening", "welcome_night", "اسم_المؤسسة", "تعليمات_AI", "ref_points_join", "ref_points_purchase", "min_points_redeem", "currency_unit", "homework_grade", "subscription_price", "ai_provider", "maintenance_mode", "max_daily_ai_questions", "backup_channel_id", "bot_status_msg", "trial_end_action", "timezone", "ai_memory_limit", "إعدادات_الدفع"], "color": {"red": 1.0, "green": 0.95, "blue": 0.8}},
         {"name": "الإحصائيات", "cols": ["bot_id","daily_users","messages_count","new_users","blocked_users","date"], "color": {"red": 0.92, "green": 0.82, "blue": 0.86}},
         {"name": "السجلات", "cols": ["bot_id","type","message","time"], "color": {"red": 0.93, "green": 0.93, "blue": 0.93}},
         {"name": "_meta", "cols": ["key", "value", "updated_at"], "color": {"red": 1, "green": 0.8, "blue": 0.8}}, 
@@ -801,7 +800,19 @@ def seed_default_settings(bot_token):
                 "title": "معرف قناة الأوسمة",
                 "value": "-100yyyyyyy",
                 "note": "قناة مخصصة لاستعراض انحازات الطلاب"            
+            },                 
+            {
+                "key": "minimum_passing_gradee",
+                "title": "درجة النجاح الصغرى",
+                "value": "50",
+                "note": "الدرجة الادنى للنجاح "            
             },                  
+            {
+                "key": "greatest_success_gradee",
+                "title": "درجة النجاح الكبرى",
+                "value": "100",
+                "note": "الدرجة الاعلى للنجاح"            
+            },                              
             {
                 "key": "public_channel_id",
                 "title": "معرف القناة العامة",
@@ -2606,10 +2617,77 @@ def get_active_gift_link(bot_token, user_id):
         return None
 
 # --------------------------------------------------------------------------
-
+# دالة إعدادات الدفع
+def update_payment_settings(bot_token, text):
+    """تحديث معلومات الدفع في عمود payment_info أو أي عمود تختاره"""
+    try:
+        # ملاحظة: تأكد من إضافة عمود باسم 'payment_info' في شيت إعدادات_المحتوى
+        sheet = ss.worksheet("إعدادات_المحتوى")
+        cell = sheet.find(str(bot_token))
+        # سنفترض أننا سنضيف العمود في نهاية الجدول
+        # يمكنك تغيير الرقم 36 بناءً على ترتيب العمود الجديد
+        sheet.update_cell(cell.row, 36, text) 
+        return True
+    except:
+        return False
+ 
 # --------------------------------------------------------------------------
-
+# دالة الإعلانات
+def add_new_ad_campaign(bot_token, branch_id, course_id, campaign_name, platform, start_date, end_date, budget, marketer_id):
+    """حفظ حملة إعلانية جديدة في ورقة إدارة_الحملات_الإعلانية - 11 عموداً"""
+    import uuid
+    try:
+        sheet = ss.worksheet("إدارة_الحملات_الإعلانية")
+        campaign_id = f"AD-{str(uuid.uuid4().int)[:5]}" # توليد معرف فريد للحملة
+        
+        # ترتيب الأعمدة: bot_id, معرف_الفرع, معرف_الدورة, معرف_الحملة, المنصة, تاريخ_البداية, تاريخ_النهاية, الميزانية, عدد_المسجلين, الحالة, ID_المسوق
+        row = [
+            str(bot_token), 
+            str(branch_id), 
+            str(course_id), 
+            campaign_id, 
+            platform, 
+            start_date, 
+            end_date, 
+            budget, 
+            "0",         # عدد المسجلين الابتدائي
+            "نشط",       # الحالة الافتراضية
+            str(marketer_id)
+        ]
+        sheet.append_row(row)
+        return True, campaign_id
+    except Exception as e:
+        print(f"❌ Error adding campaign: {e}")
+        return False, str(e)
+ 
 # --------------------------------------------------------------------------
+def sync_ad_campaign_results(bot_token):
+    """تحديث عدد المسجلين في ورقة الإعلانات بناءً على العمود 26 في سجل التسجيلات"""
+    try:
+        ads_sheet = ss.worksheet("إدارة_الحملات_الإعلانية")
+        reg_sheet = ss.worksheet("سجل_التسجيلات")
+        
+        all_ads = ads_sheet.get_all_records()
+        # جلب قيم العمود رقم 26 مباشرة لتسريع العملية
+        all_regs_campaigns = reg_sheet.col_values(26) 
+        
+        # فلترة الإعلانات الخاصة بهذا البوت
+        bot_ads = [a for a in all_ads if str(a.get('bot_id')) == str(bot_token)]
+        
+        for ad in bot_ads:
+            campaign_id = str(ad.get('معرف_الحملة'))
+            # حساب التكرار لمعرف الحملة داخل سجل التسجيلات (العمود 26)
+            count = all_regs_campaigns.count(campaign_id)
+            
+            # تحديث الخلية في شيت الإعلانات (العمود 9 هو عدد_المسجلين)
+            cell = ads_sheet.find(campaign_id)
+            if cell:
+                ads_sheet.update_cell(cell.row, 9, count)
+            
+        return True
+    except Exception as e:
+        print(f"❌ Error syncing ad results: {e}")
+        return False
 
 # --------------------------------------------------------------------------
 
