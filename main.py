@@ -830,7 +830,8 @@ if __name__ == "__main__":
         # 2. --- [ إعداد محرك المزامنة الذكية للمصنع ] ---
         from apscheduler.schedulers.asyncio import AsyncIOScheduler
         from cache_manager import sync_factory_to_sheets_smart
-        
+        from cache_manager import FACTORY_GLOBAL_CACHE, save_cache_to_disk
+
         scheduler = AsyncIOScheduler()
         # ضبط المزامنة الساعة 3:30 فجراً بتوقيت السيرفر
         scheduler.add_job(sync_factory_to_sheets_smart, 'cron', hour=3, minute=30)
