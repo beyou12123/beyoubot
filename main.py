@@ -213,18 +213,26 @@ async def receive_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["bot_token"] = token
     bot_type = context.user_data.get("type", "")
 
-    # جلب الاسم الوصفي مباشرة من الميتا (ديناميكياً)
-    friendly_name = bot_type
-    try:
-        from sheets import meta_sheet
-        records = meta_sheet.get_all_records()
-        for r in records:
-            if str(r.get('key')) == f"desc_{bot_type.strip()}.py":
-                friendly_name = r.get('value')
-                break
-    except: pass
+    # 1. محاولة جلب الاسم العربي المخزن سابقاً من الذاكرة (الأولوية القصوى)
+    friendly_name = context.user_data.get("bot_friendly_name")
 
-    # تخزين الاسم في الذاكرة لكي تقرأه الدالة التالية
+    # 2. إذا لم يوجد الاسم في الذاكرة (فقط وحصراً)، نبحث عنه في الميتا
+    if not friendly_name:
+        try:
+            from sheets import meta_sheet
+            records = meta_sheet.get_all_records()
+            for r in records:
+                if str(r.get('key')) == f"desc_{bot_type.strip()}.py":
+                    friendly_name = r.get('value')
+                    break
+        except: 
+            pass
+
+    # 3. إذا لم يوجد في الذاكرة ولا في الميتا، نستخدم النوع التقني كخيار أخير
+    if not friendly_name:
+        friendly_name = bot_type
+
+    # تخزين الاسم النهائي في الذاكرة لضمان وصوله إلى finalize_bot بشكل صحيح
     context.user_data["bot_friendly_name"] = friendly_name
     
     await finalize_bot(update, context)
