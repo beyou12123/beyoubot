@@ -450,7 +450,7 @@ async def owner_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton("🔄 تحديث السيرفر", callback_data="restart_factory"), 
             InlineKeyboardButton("📥 تحميل نسخة احتياطية", callback_data="download_cache_files")
         ],
-        [InlineKeyboardButton("♻️ إعادة تشغيل المحرك", callback_data="reboot_system")]
+        [InlineKeyboardButton("♻️ إعادة تشغيل المحرك", callback_data="reboot_system")],
 
         [InlineKeyboardButton("بدء المزامنة ", callback_data="start_sync_shet")],
         [InlineKeyboardButton("📤 رفع نسخة احتياطية", callback_data="start_restore_request")],
