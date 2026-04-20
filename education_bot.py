@@ -80,6 +80,7 @@ from educational_manager import (
 )
 
 
+
 # إعداد المفتاح الذي حصلت عليه
 genai.configure(api_key="AIzaSyCkpHbxvjZNqN_PT8O1yXUAIG-dMAGZj2Y")
 model = genai.GenerativeModel('gemini-1.5-flash')
