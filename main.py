@@ -316,13 +316,11 @@ async def run_dynamic_bot(bot_token, bot_type, user_id):
 async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """حفظ البيانات، تشغيل المحرك، وإرسال إشعارات النجاح بكافة اللغات والمسميات"""
     
+
     # 1. جلب البيانات من الذاكرة المؤقتة
     # friendly_type_name: هو الاسم العربي الذي تم التقاطه من الزر (مثل: 🛡 حماية)
-    friendly_type_name = context.user_data.get("bot_friendly_name", "بوت مخصص")
-    
-    # bot_display_name: الاسم المختار للبوت
-    bot_display_name = context.user_data.get("bot_friendly_name", friendly_type_name)
-    
+    friendly_name = context.user_data.get("bot_friendly_name", "بوت مخصص")
+
     user = update.effective_user
     user_id = user.id
     bot_type = context.user_data.get("type") 
@@ -340,7 +338,7 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
         bot_username = f"@{bot_info.username}"
 
         from sheets import save_bot, get_total_bots_count
-        success = save_bot(user_id, bot_type, bot_display_name, bot_token)
+        success = save_bot(user_id, bot_type, friendly_name, bot_token)
 
         if success:
             from main import run_dynamic_bot 
@@ -350,7 +348,6 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_success_text = (
                 f"<b>🎊 تمت العملية بنجاح!</b>\n\n"
                 f"لقد انتهينا من برمجة بوتك الجديد وإطلاقه.\n\n"
-                f"📦 <b>نوع الموديول:</b> {friendly_name}\n"
                 f"📛 <b>الاسم المخصص:</b> {friendly_name}\n"
                 f"🤖 <b>يوزر البوت:</b> {bot_username}\n\n"
                 f"🚀 البوت الآن جاهز للعمل!"
@@ -364,7 +361,6 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
             congrats_text = (
                 f"<b>🎈 أهلاً بك في عالمك الخاص!</b>\n\n"
                 f"لقد تم ربط هذا البوت بنجاح بمصنع البوتات وقاعدة البيانات.\n\n"
-                f"📋 <b>الوظيفة الأساسية:</b> {friendly_name}\n" 
                 f"📛 <b>الاسم:</b> {friendly_name}\n"
                 f"⚙️ <b>الحالة:</b> مرتبط وجاهز للعمل\n"
                 f"-----------------------\n"
