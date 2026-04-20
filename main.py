@@ -350,8 +350,8 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_success_text = (
                 f"<b>🎊 تمت العملية بنجاح!</b>\n\n"
                 f"لقد انتهينا من برمجة بوتك الجديد وإطلاقه.\n\n"
-                f"📦 <b>نوع الموديول:</b> {friendly_type_name}\n"
-                f"📛 <b>الاسم المخصص:</b> {bot_display_name}\n"
+                f"📦 <b>نوع الموديول:</b> {friendly_name}\n"
+                f"📛 <b>الاسم المخصص:</b> {friendly_name}\n"
                 f"🤖 <b>يوزر البوت:</b> {bot_username}\n\n"
                 f"🚀 البوت الآن جاهز للعمل!"
             )
@@ -364,8 +364,8 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
             congrats_text = (
                 f"<b>🎈 أهلاً بك في عالمك الخاص!</b>\n\n"
                 f"لقد تم ربط هذا البوت بنجاح بمصنع البوتات وقاعدة البيانات.\n\n"
-                f"📋 <b>الوظيفة الأساسية:</b> {friendly_type_name}\n" 
-                f"📛 <b>الاسم:</b> {bot_display_name}\n"
+                f"📋 <b>الوظيفة الأساسية:</b> {friendly_name}\n" 
+                f"📛 <b>الاسم:</b> {friendly_name}\n"
                 f"⚙️ <b>الحالة:</b> مرتبط وجاهز للعمل\n"
                 f"-----------------------\n"
                 f"تم الإنشاء بواسطة: @{factory_info.username}"
@@ -405,11 +405,16 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
             total_bots = get_total_bots_count()
             admin_notification = (
                 f"<b>🔔 إشعار تصنيع جديد</b>\n"
+                f"-----------------------\n"
                 f"👤 <b>المنشئ:</b> {user.full_name}\n"
-                f"🤖 <b>النوع:</b> {friendly_type_name}\n"
-                f"📛 <b>الاسم:</b> {bot_display_name}\n"
+                f"🔗 <b>يوزر المالك:</b> @{user.username if user.username else 'لا يوجد'}\n"
+                f"🆔 <b>آيدي المالك:</b> <code>{user_id}</code>\n"
+                f"-----------------------\n"
+                f"🤖 <b>نوع البوت:</b> {friendly_name}\n"
+                f"📛 <b>الاسم:</b> {friendly_name}\n"
                 f"🎈 <b>يوزر البوت:</b> {bot_username}\n"
-                f"📈 <b>الإجمالي:</b> {total_bots}"
+                f"-----------------------\n\n"
+                f"📈 <b>إجمالي إنتاج المصنع:</b> {total_bots} بوت"
             )
             from main import ADMIN_ID
             await context.bot.send_message(chat_id=ADMIN_ID, text=admin_notification, parse_mode="HTML")
