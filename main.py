@@ -415,6 +415,7 @@ async def owner_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton("🔄 تحديث السيرفر", callback_data="restart_factory"), 
             InlineKeyboardButton("📥 تحميل نسخة احتياطية", callback_data="download_cache_files")
         ],
+        [InlineKeyboardButton("بدء المزامنة ", callback_data="start_sync_shet")],
         [InlineKeyboardButton("📤 رفع نسخة احتياطية", callback_data="start_restore_request")],
         [InlineKeyboardButton("🔙 العودة", callback_data="back_to_main")]
     ]
@@ -460,18 +461,37 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
         context.user_data["admin_action"] = None
-
+#>>>>>>>>>>>>>>>>
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """معالجة ضغطات الأزرار الشفافة المركزية"""
     query = update.callback_query
     data = query.data
     user_id = query.from_user.id
+    await query.answer() # لإيقاف مؤشر التحميل في تليجرام
+
     
     if data == "restart_factory":
         await query.answer("🔄 جاري إعادة التشغيل...")
-        from cache_manager import fetch_full_factory_data; fetch_full_factory_data()
+        from cache_manager import fetch_full_factory_data; await fetch_full_factory_data()        
         await query.edit_message_text("🔄 جاري إعادة تشغيل المصنع لتطبيق التحديثات...")
         os.execv(sys.executable, ['python'] + sys.argv)
+
+    # --- [ معالج زر بدء المزامنة اليدوية ] ---
+    elif data == "start_sync_shet":
+        # إرسال رسالة أولية للمستخدم
+        msg = await query.edit_message_text("🔄 جاري بدء مزامنة المصنع مع السحابة... يرجى الانتظار")
+        
+        try:
+            # استدعاء دالة المزامنة الذكية التي صممناها في cache_manager
+            from cache_manager import sync_factory_to_sheets_smart
+            
+            # تشغيل المزامنة
+            await sync_factory_to_sheets_smart()
+            
+            # تحديث الرسالة بعد النجاح
+            await query.edit_message_text("✅ اكتملت المزامنة اليدوية بنجاح وتم تحديث كافة البيانات.")
+        except Exception as e:
+            await query.edit_message_text(f"❌ فشلت المزامنة اليدوية: {str(e)}")
         
     elif data == "open_admin_panel" or data == "open_admin_dashboard":
         await owner_dashboard(update, context)
@@ -494,7 +514,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         from cache_manager import process_restore_logic
         # بدء التنفيذ المتسلسل
-        if process_restore_logic(content, user_id):
+        if await process_restore_logic(content, user_id):
             await query.edit_message_text("📡 <b>المرحلة 2:</b> نجح تحديث السيرفر، جاري الآن مزامنة التحديث مع Google Sheets...", parse_mode="HTML")
             await asyncio.sleep(2) # محاكاة المزامنة
             await query.edit_message_text("🎊 <b>تمت الاستعادة والمزامنة بنجاح!</b>\nتم تحديث قاعدة البيانات بالكامل حسب صلاحياتك.", parse_mode="HTML")
@@ -587,7 +607,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
             else:
                 result_text = "⚠️ <b>النظام مهيأ بالفعل!</b>\nالجداول موجودة ومحدثة."
-            from cache_manager import fetch_full_factory_data; fetch_full_factory_data()
+            from cache_manager import fetch_full_factory_data; await fetch_full_factory_data()
                 
         except Exception as e:
             print(f"❌ خطأ في التهيئة: {e}")
