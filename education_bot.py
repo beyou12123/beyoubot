@@ -70,6 +70,7 @@ from sheets import (
     seed_default_settings,
     update_withdrawal_status,
     create_withdrawal_request,
+    get_system_time, 
     get_courses_knowledge_base
 )
 
@@ -212,7 +213,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.args and context.args[0].startswith("gift_"):
         gift_code = context.args[0].replace("gift_", "")
         
-        from sheets import ss
+
         sheet_coupons = ss.worksheet("الكوبونات")
         coupon = sheet_coupons.find(gift_code, in_column=3)
         
@@ -455,7 +456,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         currency = get_bot_setting(bot_token, "currency_unit", default="نقطة")
         min_payout = float(get_bot_setting(bot_token, "maximum_withdrawal_marketers", default=50))
         
-        # 2. جلب رصيد المسوق الحالي من الشيت
+        # 2. جلب رصيد المسوق الحالي من البيانات
         stats = get_user_referral_stats(bot_token, user_id)
         current_balance = float(stats.get('balance', 0))
         
@@ -484,7 +485,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
     elif data.startswith("payout_approve_"):
         req_id = data.replace("payout_approve_", "")
         
-        # جلب بيانات الطلب من الشيت لمعرفة من هو صاحب الطلب (المسوق)
+        # جلب بيانات الطلب من البيانات لمعرفة من هو صاحب الطلب (المسوق)
         sheet_req = ss.worksheet("سجل_السحوبات")
         cell = sheet_req.find(str(req_id), in_column=4)
         if cell:
@@ -568,7 +569,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             f"اختر الدورة التي تود فتحها برصيدك:"
         )
         
-        # جلب الدورات المتاحة من الشيت
+        # جلب الدورات المتاحة من البيانات
         courses_ws = ss.worksheet("الدورات_التدريبية")
         all_courses = courses_ws.get_all_records()
         
@@ -635,7 +636,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         bot_token = context.bot.token
         
         # 1. التحقق من وجود رابط هدية نشط لم يُستخدم بعد لهذا المسوق (القفل الذكي)
-        from sheets import ss
+
         sheet_coupons = ss.worksheet("الكوبونات")
         records = sheet_coupons.get_all_records()
         
@@ -672,13 +673,13 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         # ترتيب الأعمدة في شيت الكوبونات (11 عمود):
         # bot_id, معرف_الفرع, معرف_الكوبون, معرف_الطالب (نخزن فيه ID المهدِي), قيمة_الخصم, 
         # نوع_الخصم, الحد_الأقصى_للاستخدام, حالة_الكوبون, تاريخ_الإنشاء, تاريخ_الانتهاء, ملاحظات
-        from sheets import get_system_time
+
         new_row = [
             str(bot_token), "1001001", gift_code, str(user_id), "100", 
             "هدية دورة", "1", "نشط", get_system_time("date"), "2026-12-31", f"دورة_{course_id}"
         ]
         sheet_coupons.append_row(new_row)
-        from sheets import update_global_version
+
         update_global_version(bot_token)
 
         bot_info = await context.bot.get_me()
@@ -828,7 +829,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
                 [InlineKeyboardButton("🔙 العودة للقائمة", callback_data="main_menu")]
             ]
         else:
-            # حالة عدم وجود معرف أدمن مسجل في الشيت
+            # حالة عدم وجود معرف أدمن مسجل في البيانات
             text = "⚠️ عذراً، لم يتم ضبط حساب الدعم الفني لهذه المنصة بعد. يرجى المحاولة لاحقاً."
             keyboard = [[InlineKeyboardButton("🔙 العودة", callback_data="main_menu")]]
 
@@ -1738,7 +1739,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         keyboard = [[InlineKeyboardButton(f"🏢 {b.get('اسم_الفرع')}", callback_data=f"view_br_{b.get('معرف_الفرع')}")] for b in branches]
         keyboard.append([InlineKeyboardButton("🔙 عودة", callback_data="manage_branches")])
         
-        await query.edit_message_text("📋 <b>قائمة الفروع (من الذاكرة المركزية):</b>", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+        await query.edit_message_text("📋 <b>قائمة الفروع الحالية :</b>", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
     # عرض تفاصيل فرع محدد (بعد الضغط على اسمه من القائمة)
     elif data.startswith("view_br_"):
@@ -2325,33 +2326,56 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             
 # --------------------------------------------------------------------------
     # معالج تصدير النسخة الاحتياطية بصيغة JSON
+    # معالج تصدير النسخة الاحتياطية بصيغة JSON
     elif data == "export_data_json":
         import json
+        import io
         from cache_manager import FACTORY_GLOBAL_CACHE
         
-        await query.message.reply_text("⏳ جاري سحب بياناتك من نظام المزامنة...")
+        current_token = str(context.bot.token)
+        await query.message.reply_text("⏳ جاري فحص 37 ورقة بيانات وتجميع النسخة الاحتياطية...")
         
-        # تجميع البيانات الخاصة بهذا البوت فقط من كافة الأوراق
         backup_data = {}
-        for sheet_name, records in FACTORY_GLOBAL_CACHE["data"].items():
-            # فلترة الصفوف التي تخص هذا التوكن فقط
-            bot_records = [r for r in records if str(r.get("bot_id")) == str(bot_token)]
+        all_cache = FACTORY_GLOBAL_CACHE.get("data", {})
+        
+        for sheet_name, records in all_cache.items():
+            if not records: continue
+            
+            # منطق الفلترة الذكي:
+            # إذا كان الجدول يحتوي على عمود bot_id نفلتر بحسبه
+            if "bot_id" in records[0]:
+                bot_records = [r for r in records if str(r.get("bot_id")) == current_token]
+            else:
+                # إذا لم يوجد bot_id (مثل جدول المستخدمين العام في المصنع) 
+                # سنأخذ كافة البيانات حالياً أو يمكنك تخصيصها
+                bot_records = records 
+            
             if bot_records:
                 backup_data[sheet_name] = bot_records
         
         if not backup_data:
-            await query.message.reply_text("⚠️ لا توجد بيانات مسجلة لتصديرها حالياً.")
+            await query.message.reply_text("⚠️ لم يتم العثور على أي سجلات مطابقة لتوكن هذا البوت.")
             return
 
-        # تحويل البيانات لملف JSON في الذاكرة
-        json_file = io.BytesIO(json.dumps(backup_data, indent=4, ensure_ascii=False).encode('utf-8'))
-        json_file.name = f"Backup_{bot_token[:5]}.json"
-        
-        await context.bot.send_document(
-            chat_id=query.message.chat_id,
-            document=json_file,
-            caption=f"✅ تم توليد النسخة الاحتياطية (JSON)\n📅 التاريخ: {get_system_time('date')}"
-        )
+        try:
+            # تحويل البيانات لملف
+            json_file = io.BytesIO(json.dumps(backup_data, indent=4, ensure_ascii=False).encode('utf-8'))
+            json_file.name = f"Backup_Full_{get_system_time('date')}.json"
+            
+            await context.bot.send_document(
+                chat_id=query.message.chat_id,
+                document=json_file,
+                caption=(
+                    f"✅ **اكتمل تجميع النسخة الاحتياطية**\n\n"
+                    f"📦 عدد الجداول المضمنة: {len(backup_data)}\n"
+                    f"📅 التوقيت: {get_system_time('full')}\n"
+                    f"🔑 معرف البوت: `{current_token[:10]}...`"
+                ),
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            await query.message.reply_text(f"❌ خطأ فني أثناء إنشاء الملف: {e}")
+
 
     # معالج استيراد البيانات (تفعيل حالة الانتظار)
     elif data == "import_data_json":
@@ -2608,29 +2632,32 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
             context.user_data['action'] = None
             return
 
+#>>>>>>>>>>>>>>>>
     # معالجة المستندات (التي تحتوي على ملف النسخة الاحتياطية)
     if update.message.document:
         doc = update.message.document
+        # معالجة رفع الملف (للكاش فقط)
         if action == 'awaiting_json_backup' and doc.file_name.endswith('.json'):
             import json
-            import io
+            from cache_manager import FACTORY_GLOBAL_CACHE, save_cache_to_disk
             
             file = await context.bot.get_file(doc.file_id)
             content = await file.download_as_bytearray()
-            backup_data = json.loads(content.decode('utf-8'))
+            new_data = json.loads(content.decode('utf-8'))
             
-            msg = await update.message.reply_text("🔄 جاري فك التشفير والمزامنة...")
-            
-            for sheet_name, rows in backup_data.items():
-                try:
-                    sheet = ss.worksheet(sheet_name)
-                    for r in rows:
-                        sheet.append_row(list(r.values()))
-                except: 
-                    continue
+            # 1. تحديث الرام (FACTORY_GLOBAL_CACHE)
+            for sheet_name, rows in new_data.items():
+                # دمج البيانات الجديدة مع الكاش الموجود أو استبداله
+                FACTORY_GLOBAL_CACHE["data"][sheet_name] = rows
                 
-            update_global_version(bot_token) # تحديث الإصدار لضمان المزامنة
-            await msg.edit_text("✅ تم استعادة البيانات ومزامنة السيرفر بنجاح!")
+            # 2. حفظ نسخة في الهاردسك (للحماية من الريستارت)
+            save_cache_to_disk() 
+            
+            await update.message.reply_text(
+                "✅ **تم شحن الرام بالبيانات بنجاح!**\n\n"
+                "⚠️ البيانات الآن تعمل في البوت (كاش).\n"
+                "⏰ سيتم المزامنة الآلية مع الرام تلقائياً الساعة 12:00 ليلاً كل يوم."
+            )
             context.user_data['action'] = None
             return
 
@@ -2994,7 +3021,7 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
             currency = context.user_data.get('currency', "نقطة")
             payout_method = text  # النص الذي أرسله المسوق
             
-            # تنفيذ الطلب في الشيت (سيتم خصم الرصيد تلقائياً من العمود 11)
+            # تنفيذ الطلب في البيانات (سيتم خصم الرصيد تلقائياً من العمود 11)
             success, req_id = create_withdrawal_request(bot_token, user.id, user.username, amount, payout_method)
             
             if success:
@@ -3030,7 +3057,7 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
             proof_url = photo_file.file_path
             
             if update_withdrawal_status(bot_token, req_id, "مكتمل", admin_note="تم التحويل والإثبات مرفق", proof_link=proof_url):
-                await update.message.reply_text("✅ تم توثيق الإيصال وتحديث الشيت.")
+                await update.message.reply_text("✅ تم توثيق الإيصال وتحديث البيانات.")
                 
                 # إرسال الصورة للمسوق مباشرة
                 if target_user_id:
@@ -3070,7 +3097,7 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
            
             if save_ai_setup(bot_token, user.id, user.username, institution_name=text):
                 context.user_data['action'] = 'awaiting_ai_instructions'
-                await update.message.reply_text(f"✅ تم حفظ الاسم: <b>{text}</b>\n\nالآن أرسل <b>تعليمات الذكاء الاصطناعي</b> للمنصة:")
+                await update.message.reply_text(f"✅ تم حفظ الاسم: <b>{text}</b>\n\nالآن أرسل <b>تعليمات الذكاء الاصطناعي</b> للمنصة:",parse_mode="HTML")
             else:
                 # إذا فشل الحفظ، البوت سيخبرك بدلاً من التهنيج
                 await update.message.reply_text("❌ عذراً دكتور، فشل الحفظ في القاعدة. تأكد من وجود قسم 'الذكاء_الإصطناعي'.")
@@ -3082,7 +3109,7 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
             
             if save_ai_setup(bot_token, user.id, user.username, ai_instructions=text):
                 context.user_data['action'] = None
-                await update.message.reply_text("🎊 <b>اكتملت التهيئة!</b> تم ضبط هوية البوت بنجاح.", reply_markup=get_admin_panel())
+                await update.message.reply_text("🎊 <b>اكتملت التهيئة!</b> تم ضبط هوية البوت بنجاح.",parse_mode="HTML", reply_markup=get_admin_panel())
             return
 # --------------------------------------------------------------------------
 
@@ -3090,19 +3117,19 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
         elif action == 'awaiting_branch_name':
             context.user_data['temp_br'] = {'name': text}
             context.user_data['action'] = 'awaiting_branch_country'
-            await update.message.reply_text(f"🌍 تم تسجيل الاسم: <b>{text}</b>\nالآن أرسل <b>اسم الدولة</b> أو موقع الفرع:")
+            await update.message.reply_text(f"🌍 تم تسجيل الاسم: <b>{text}</b>\nالآن أرسل <b>اسم الدولة</b> أو موقع الفرع:",parse_mode="HTML")
             return
 
         elif action == 'awaiting_branch_country':
             context.user_data['temp_br']['country'] = text
             context.user_data['action'] = 'awaiting_branch_manager'
-            await update.message.reply_text(f"👤 من هو <b>المدير المسؤول</b> عن هذا الفرع؟")
+            await update.message.reply_text(f"👤 من هو <b>المدير المسؤول</b> عن هذا الفرع؟",parse_mode="HTML")
             return
 
         elif action == 'awaiting_branch_manager':
             context.user_data['temp_br']['manager'] = text
             context.user_data['action'] = 'awaiting_branch_currency'
-            await update.message.reply_text(f"💰 ما هي <b>العملة</b> المعتمدة للفرع؟ (مثلاً: SAR أو USD):")
+            await update.message.reply_text(f"💰 ما هي <b>العملة</b> المعتمدة للفرع؟ (مثلاً: SAR أو USD):",parse_mode="HTML")
             return
 
         elif action == 'awaiting_branch_currency':

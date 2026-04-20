@@ -823,9 +823,26 @@ if __name__ == "__main__":
         except RuntimeError:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            
+
+        # 1. تشغيل كافة البوتات التابعة أولاً لضمان جاهزيتها
+        loop.run_until_complete(boot_all_bots())
+
+        # 2. --- [ إعداد محرك المزامنة الذكية للمصنع ] ---
+        from apscheduler.schedulers.asyncio import AsyncIOScheduler
+        from cache_manager import sync_factory_to_sheets_smart
+        
+        scheduler = AsyncIOScheduler()
+        # ضبط المزامنة الساعة 3:30 فجراً بتوقيت السيرفر
+        scheduler.add_job(sync_factory_to_sheets_smart, 'cron', hour=3, minute=30)
+        scheduler.start()
+        print("⏰ تم تفعيل جدولة المزامنة الذكية: يومياً الساعة 03:30 فجراً")
+
+        # 3. تجهيز المهام الإضافية في حلقة الأحداث
         loop.create_task(start_all_sub_bots()) 
         print("🚀 مصنع البوتات يعمل الآن بكافة محركاته...")
+
+        # 4. تشغيل بوت المصنع الرئيسي (هذا السطر يجب أن يكون الأخير لأنه يوقف الكود للمراقبة)
+        print("🚀 بوت المصنع الرئيسي قيد التشغيل الآن...")
         # --- [إصلاح: إضافة drop_pending_updates لإنهاء التعارض] ---
         app.run_polling(drop_pending_updates=True) 
         

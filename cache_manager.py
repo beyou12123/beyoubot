@@ -6,6 +6,11 @@ import asyncio
 from datetime import datetime
 import gspread
 import base64
+from telegram import Bot
+from telegram.constants import ParseMode
+from sheets import ss, get_system_time
+from cache_manager import FACTORY_GLOBAL_CACHE, save_cache_to_disk
+
 # ==========================================================================
 # 1. كتلة الإعدادات الأساسية والمحرك العام (المفاتيح الأصلية)
 # ==========================================================================
@@ -385,8 +390,108 @@ def process_restore_logic(file_content, requester_id):
  
 
 # --------------------------------------------------------------------------
-
+logger = logging.getLogger(__name__)
 # --------------------------------------------------------------------------
+# دالة المزامنة الساعة 03:30 فجرا
+async def sync_factory_to_sheets_smart():
+    """
+    المحرك العملاق للمزامنة الذكية - مخصص للمصنع كامل
+    الوقت المقترح: 03:30 فجراً
+    """
+    print(f"🚀 [START] بدء ملحمة المزامنة الذكية للمصنع: {get_system_time('full')}")
+    
+    # 1. استخراج كافة البوتات لإرسال التنبيهات
+    active_bots = FACTORY_GLOBAL_CACHE["data"].get("البوتات", [])
+    
+    # --- [ الرسالة الجذابة قبل البدء ] ---
+    pre_msg = (
+        "<b>⚡️ تحديث أمني ومزامنة ذكية...</b>\n\n"
+        "عزيزي المطور، نقوم الآن بنقل بياناتك إلى السحابة الآمنة لضمان "
+        "استمرارية العمل بأعلى سرعة وكفاءة. 🛡️\n\n"
+        "<i>ثوانٍ معدودة ونعود إليكم بكامل طاقتنا...</i> ✨"
+    )
+    
+    for bot_info in active_bots:
+        try:
+            token = bot_info.get("token")
+            owner_id = bot_info.get("owner_id")
+            if token and owner_id:
+                async with Bot(token) as temp_bot:
+                    await temp_bot.send_message(chat_id=owner_id, text=pre_msg, parse_mode=ParseMode.HTML)
+        except: continue
+
+    # 2. عملية المزامنة الفعلية (ورقة ورقة)
+    all_sheets = FACTORY_GLOBAL_CACHE["data"].keys()
+    total_updates = 0
+    total_added = 0
+
+    for sheet_name in all_sheets:
+        try:
+            print(f"📡 فحص الورقة: {sheet_name}...")
+            worksheet = ss.worksheet(sheet_name)
+            
+            # جلب بيانات جوجل الحالية للمقارنة
+            google_data = worksheet.get_all_records()
+            cache_rows = FACTORY_GLOBAL_CACHE["data"].get(sheet_name, [])
+            headers = worksheet.row_values(1)
+            
+            # تحديد العمود المفتاح (Key) للمطابقة (غالباً أول عمود أو bot_id)
+            match_key = headers[0] 
+
+            # تحويل بيانات جوجل لقاموس للبحث السريع
+            google_dict = {str(row.get(match_key)): row for row in google_data if row.get(match_key)}
+
+            for i, cache_row in enumerate(cache_rows):
+                key_value = str(cache_row.get(match_key))
+                
+                # بناء الصف كقائمة (List) مطابقة للرؤوس
+                new_row_values = [cache_row.get(h, "") for h in headers]
+
+                if key_value in google_dict:
+                    # منطق المطابقة: هل هناك اختلاف؟
+                    if list(google_dict[key_value].values()) != new_row_values:
+                        # تحديث الصف الموجود (row_index = index + 2 لأن الرؤوس تأخذ 1)
+                        # ملاحظة: للتوفير، يمكن تحديث الخلايا المتغيرة فقط، لكن تحديث الصف أضمن هنا
+                        row_index = list(google_dict.keys()).index(key_value) + 2
+                        worksheet.update(f"A{row_index}", [new_row_values])
+                        total_updates += 1
+                else:
+                    # إضافة صف جديد تماماً
+                    worksheet.append_row(new_row_values)
+                    total_added += 1
+                
+                # "التنفس البرمجي" لمنع Quota 429
+                await asyncio.sleep(0.6)
+
+            print(f"✅ اكتملت الورقة: {sheet_name}")
+            await asyncio.sleep(3) # فاصل أمان بين الأوراق
+
+        except Exception as e:
+            print(f"⚠️ فشل مزامنة الورقة {sheet_name}: {e}")
+            continue
+
+    # 3. حفظ الكاش الفيزيائي النهائي
+    save_cache_to_disk()
+
+    # --- [ الرسالة الجذابة بعد النجاح ] ---
+    post_msg = (
+        "<b>✅ تمت المهمة بنجاح باهر!</b>\n\n"
+        "تمت مزامنة كافة بياناتك وتأمينها في السحابة الرئيسية. 📦✨\n"
+        "الآن، استمتع بتجربة أسرع وأكثر استقراراً مع نظامنا المطور.\n\n"
+        "<b>شكراً لكونك جزءاً من مصنعنا الإبداعي!</b> 🚀"
+    )
+
+    for bot_info in active_bots:
+        try:
+            token = bot_info.get("token")
+            owner_id = bot_info.get("owner_id")
+            if token and owner_id:
+                async with Bot(token) as temp_bot:
+                    await temp_bot.send_message(chat_id=owner_id, text=post_msg, parse_mode=ParseMode.HTML)
+        except: continue
+
+    print(f"🎊 [FINISH] المزامنة اكتملت: {total_updates} تحديث، {total_added} إضافة جديدة.")
+
 
 # --------------------------------------------------------------------------
 
