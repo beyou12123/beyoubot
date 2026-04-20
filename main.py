@@ -174,8 +174,6 @@ async def start_create_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     return CHOOSING_TYPE
 
-
-
 async def select_type(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """تخزين النوع المختار وطلب التوكن"""
     query = update.callback_query
@@ -185,11 +183,25 @@ async def select_type(update: Update, context: ContextTypes.DEFAULT_TYPE):
     bot_type = query.data.replace("set_type_", "")
     context.user_data["type"] = bot_type
     
+    # استخراج الاسم العربي من الأزرار ديناميكياً لضمان الدقة
+    friendly_name = "غير معروف"
+    for row in query.message.reply_markup.inline_keyboard:
+        for button in row:
+            if button.callback_data == query.data:
+                friendly_name = button.text
+                break
+    
+    # تخزين الاسم العربي في الذاكرة المؤقتة لاستخدامه في finalize_bot
+    context.user_data["bot_friendly_name"] = friendly_name
+    
+    # إرسال الرسالة المنسقة للمستخدم بالاسم العربي
     await query.edit_message_text(
-        f"✅ تم اختيار نوع: {bot_type}\n\n"
-        "الآن، من فضلك أرسل **API Token** الخاص بالبوت.\n"
-        "يمكنك الحصول عليه من @BotFather"
+        text=f"✅ تم اختيار نوع: <b>{friendly_name}</b>\n\n"
+             "الآن، من فضلك أرسل <b>API Token</b> الخاص بالبوت.\n"
+             "يمكنك الحصول عليه من @BotFather",
+        parse_mode="HTML"
     )
+
     return GETTING_TOKEN
 
 async def receive_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -207,7 +219,7 @@ async def receive_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from sheets import meta_sheet
         records = meta_sheet.get_all_records()
         for r in records:
-            if str(r.get('value')).strip() == bot_type.strip():
+            if str(r.get('key')) == f"desc_{bot_type.strip()}.py":
                 friendly_name = r.get('value')
                 break
     except: pass
@@ -237,7 +249,7 @@ async def run_dynamic_bot(bot_token, bot_type, user_id):
                 records = meta_sheet.get_all_records()
                 # نبحث عن السطر الذي يحتوي على الاسم الوصفي في العمود الثاني
                 for r in records:
-                    if str(r.get('value')) == bot_type.strip():
+                    if str(r.get('key')) == f"desc_{bot_type.strip()}.py":
                         # نأخذ اسم الملف من الـ key (نزيل منه desc_)
                         module_file_name = str(r.get('key')).replace('desc_', '').replace('.py', '')
                         break
