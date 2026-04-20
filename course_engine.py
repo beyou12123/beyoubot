@@ -2,6 +2,9 @@ import logging
 import re
 import g4f
 import uuid
+import os
+import sys
+import signal
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from sheets import ss, get_bot_setting, update_global_version, get_system_time
@@ -1280,7 +1283,19 @@ async def ad_report_view(update, context):
     await query.edit_message_text(report, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
 # --------------------------------------------------------------------------
+# دالة إيقاف النسخ القديمة للبوت 
 
+async def restart_bot_logic(update, context):
+    """دالة لقتل العملية الحالية للبوت لإجبار السيرفر على إعادة التشغيل بنسخة نظيفة"""
+    query = update.callback_query
+    await query.edit_message_text("🔄 **جاري إعادة تشغيل المحرك...**\nسيتوقف البوت لثوانٍ ثم يعود للعمل بنسخة نظيفة بدون تضارب.")
+    
+    # الحصول على معرف العملية الحالي (Process ID)
+    pid = os.getpid()
+    
+    # إرسال إشارة الإغلاق للعملية الحالية
+    # ملاحظة: السيرفر (Docker أو PM2) سيقوم بإعادة تشغيله تلقائياً
+    os.kill(pid, signal.SIGTERM) 
 # --------------------------------------------------------------------------
 
 

@@ -450,6 +450,8 @@ async def owner_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton("🔄 تحديث السيرفر", callback_data="restart_factory"), 
             InlineKeyboardButton("📥 تحميل نسخة احتياطية", callback_data="download_cache_files")
         ],
+        [InlineKeyboardButton("♻️ إعادة تشغيل المحرك", callback_data="reboot_system")]
+
         [InlineKeyboardButton("بدء المزامنة ", callback_data="start_sync_shet")],
         [InlineKeyboardButton("📤 رفع نسخة احتياطية", callback_data="start_restore_request")],
         [InlineKeyboardButton("🔙 العودة", callback_data="back_to_main")]
@@ -510,6 +512,16 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from cache_manager import fetch_full_factory_data; await fetch_full_factory_data()        
         await query.edit_message_text("🔄 جاري إعادة تشغيل المصنع لتطبيق التحديثات...")
         os.execv(sys.executable, ['python'] + sys.argv)
+#~~~~~~~~~~~~~~~~
+    # --- [ معالج زر إعادة تشغيل المحرك لقتل النسخ المتضاربة ] ---
+    elif data == "reboot_system":
+        from course_engine import restart_bot_logic
+        await restart_bot_logic(update, context)
+
+#~~~~~~~~~~~~~~~~
+
+#~~~~~~~~~~~~~~~~
+
 
     # --- [ معالج زر بدء المزامنة اليدوية ] ---
     elif data == "start_sync_shet":
