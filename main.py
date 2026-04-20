@@ -778,6 +778,17 @@ async def start_restore_process(update: Update, context: ContextTypes.DEFAULT_TY
 
 
 
+# --- [ القسم 1: الدوال التشغيلية (يجب أن تظل في الأعلى) ] ---
+
+# دالة تشغيل كافة البوتات عند الإقلاع لضمان التنفيذ المتسلسل
+async def boot_all_bots():
+    """هذه هي الدالة التي كانت تسبب خطأ name not defined، يجب التأكد من وجود محتواها هنا"""
+    from sheets import get_all_active_bots
+    active_bots = get_all_active_bots()
+    print(f"🔄 جاري تحضير إقلاع {len(active_bots)} بوت تابعة للمصنع...")
+    # هنا يتم تنفيذ منطق التشغيل الأولي إذا لزم الأمر
+    pass
+
 # --- دالة تشغيل البوتات المصنوعة تلقائياً بنظام التتابع الآمن ---
 async def start_all_sub_bots():
     """جلب وتشغيل كافة البوتات النشطة مع إضافة فاصل زمني لمنع التصادم 409"""
@@ -796,15 +807,14 @@ async def start_all_sub_bots():
             await asyncio.sleep(1.5) 
             
             # تشغيل البوت في مهمة مستقلة
+            # ملاحظة: يجب أن تكون دالة run_dynamic_bot معرفة في ملفك
             asyncio.create_task(run_dynamic_bot(token, bot_type, owner_id))
             print(f"✅ تم إرسال أمر تشغيل للبوت: {bot_type}")
 
     print("🎊 اكتملت عملية إقلاع كافة البوتات التابعة.")
 
+# --- [ القسم 2: بناء التطبيق والمعالجات ] ---
 
-
-
-# بناء التطبيق
 app = ApplicationBuilder().token(TOKEN).build()
 
 app.add_handler(CommandHandler("start", start))
@@ -814,52 +824,49 @@ app.add_handler(CallbackQueryHandler(button_callback))
 app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
 app.add_handler(MessageHandler(filters.Document.ALL, start_restore_process))
 
+# --- [ القسم 3: المحرك الرئيسي (نهاية الملف) ] ---
+
+async def main_factory_launcher():
+    """دالة داخلية لإدارة تسلسل الإقلاع بتركيز عالٍ"""
+    try:
+        # 1. تشغيل كافة البوتات التابعة أولاً لضمان جاهزيتها
+        await boot_all_bots()
+
+        # 2. --- [ إعداد محرك المزامنة الذكية للمصنع ] ---
+        from apscheduler.schedulers.asyncio import AsyncIOScheduler
+        from cache_manager import sync_factory_to_sheets_smart
+        from cache_manager import FACTORY_GLOBAL_CACHE, save_cache_to_disk
+
+        scheduler = AsyncIOScheduler()
+        # ضبط المزامنة الساعة 3:30 فجراً بتوقيت السيرفر
+        scheduler.add_job(sync_factory_to_sheets_smart, 'cron', hour=3, minute=30)
+        scheduler.start()
+        print("⏰ تم تفعيل جدولة المزامنة الذكية: يومياً الساعة 03:30 فجراً")
+
+        # 3. تجهيز المهام الإضافية
+        asyncio.create_task(start_all_sub_bots()) 
+        print("🚀 مصنع البوتات يعمل الآن بكافة محركاته...")
+
+        # 4. تشغيل بوت المصنع الرئيسي
+        print("🚀 بوت المصنع الرئيسي قيد التشغيل الآن...")
+        await app.initialize()
+        await app.updater.start_polling(drop_pending_updates=True)
+        await app.start()
+        
+        # ابقاء البرنامج حياً
+        while True:
+            await asyncio.sleep(3600)
+
+    except Exception as e:
+        print(f"🔴 خطأ في إقلاع المصنع: {e}")
 
 if __name__ == "__main__":
     import asyncio
     import logging
-
-    async def main_factory_launcher():
-        """دالة داخلية لإدارة تسلسل الإقلاع بتركيز عالٍ"""
-        try:
-            # 1. تشغيل كافة البوتات التابعة أولاً لضمان جاهزيتها
-            # تم استخدام await مباشرة هنا لضمان الوصول للدالة في نفس الملف
-            await boot_all_bots()
-
-            # 2. --- [ إعداد محرك المزامنة الذكية للمصنع ] ---
-            from apscheduler.schedulers.asyncio import AsyncIOScheduler
-            from cache_manager import sync_factory_to_sheets_smart
-            from cache_manager import FACTORY_GLOBAL_CACHE, save_cache_to_disk
-
-            scheduler = AsyncIOScheduler()
-            # ضبط المزامنة الساعة 3:30 فجراً بتوقيت السيرفر
-            scheduler.add_job(sync_factory_to_sheets_smart, 'cron', hour=3, minute=30)
-            scheduler.start()
-            print("⏰ تم تفعيل جدولة المزامنة الذكية: يومياً الساعة 03:30 فجراً")
-
-            # 3. تجهيز المهام الإضافية
-            asyncio.create_task(start_all_sub_bots()) 
-            print("🚀 مصنع البوتات يعمل الآن بكافة محركاته...")
-
-            # 4. تشغيل بوت المصنع الرئيسي
-            print("🚀 بوت المصنع الرئيسي قيد التشغيل الآن...")
-            # نستخدم initialize و start بدلاً من run_polling لأننا داخل loop موجود بالفعل
-            await app.initialize()
-            await app.updater.start_polling(drop_pending_updates=True)
-            await app.start()
-            
-            # ابقاء البرنامج حياً
-            while True:
-                await asyncio.sleep(3600)
-
-        except Exception as e:
-            print(f"🔴 خطأ في إقلاع المصنع: {e}")
-
-    # تشغيل المحرك الرئيسي
+    # تشغيل المحرك الرئيسي من خلال asyncio.run لضمان استقرار الـ Loop
     try:
         asyncio.run(main_factory_launcher())
     except (KeyboardInterrupt, SystemExit):
         print("🛑 تم إيقاف المصنع يدوياً.")
     except Exception as e:
-        print(f"🔴 فشل المحرك الرئيسي: {e}")
-
+        print(f"🔴 فشل المحرك الرئيسي الحرج: {e}")
