@@ -789,15 +789,28 @@ def seed_default_settings(bot_token):
                 "title": "معلومات الدفع",
                 "value": "بنك الرياض حساب رقم 1234455666 بنك الاهلي حساب6765566 ",
                 "note": "معلومات تحويل الرسوم "            
-            },            
+            },      
             {
                 "key": "marketers_commission",
                 "title": "عمولة المسوقين",
                 "value": "10%",
                 "note": "نسبة العمولة للمسوقين"            
+            },          
+            {
+                "key": "honors_channel_id",
+                "title": "معرف قناة الأوسمة",
+                "value": "-100yyyyyyy",
+                "note": "قناة مخصصة لاستعراض انحازات الطلاب"            
+            },                  
+            {
+                "key": "public_channel_id",
+                "title": "معرف القناة العامة",
+                "value": "-100xxxxxxx",
+                "note": "معرف القناة الرسمية للمؤسسة "            
             }           
           
         ]
+
 
         # 2. فحص كل مفتاح لضمان عدم التكرار لنفس البوت
         for item in default_keys:

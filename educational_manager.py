@@ -17,6 +17,7 @@ from sheets import (
     get_student_enrollment_data,
     get_lectures_by_group,
     get_active_discount_codes,
+    start_add_question_flow, 
     check_user_permission, # للتأكد من هوية الموظف
     delete_group_by_id  # تم تصحيح الاسم هنا ليتطابق مع المحرك
 )
@@ -954,8 +955,90 @@ async def hw_view_submissions_course_select(update, context):
     await query.edit_message_text("📥 <b>تصحيح الواجبات:</b> اختر الدورة لمشاهدة تسليمات الطلاب:", 
                                  reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 # --------------------------------------------------------------------------
+async def start_add_question_flow(update, context):
+    """بدء عملية إضافة سؤال جديد للبنك"""
+    query = update.callback_query
+    # إضافة معرف فريد للسؤال وقصره لسهولة التعامل
+    import uuid
+    q_id = f"Q-{str(uuid.uuid4().int)[:6]}"
+    
+    context.user_data['q_temp'] = {
+        'q_id': q_id,
+        'creator_id': update.effective_user.id
+    } 
+    context.user_data['action'] = 'awaiting_q_text'
+    
+    await query.edit_message_text(
+        f"❓ <b>إضافة سؤال جديد:</b>\n"
+        f"🆔 معرف السؤال: <code>{q_id}</code>\n\n"
+        f"أرسل الآن <b>نص السؤال</b> الذي تريد إضافته للبنك:",
+        parse_mode="HTML"
+    )
 
+async def process_q_flow(update, context):
+    """معالجة خطوات إدخال السؤال (نص، خيارات، إجابة)"""
+    text = update.message.text.strip()
+    action = context.user_data.get('action')
+    
+    if action == 'awaiting_q_text':
+        context.user_data['q_temp']['text'] = text
+        context.user_data['action'] = 'awaiting_q_options'
+        await update.message.reply_text(
+            "🔢 أرسل الآن <b>الخيارات الأربعة</b> مفصولة بفاصلة أو سطر جديد\n"
+            "⚠️ الترتيب سيكون (A ثم B ثم C ثم D)\n\n"
+            "مثال:\nخيار أول\nخيار ثاني\nخيار ثالث\nخيار رابع",
+            parse_mode="HTML"
+        )
+        
+    elif action == 'awaiting_q_options':
+        # معالجة النص لاستخراج الخيارات بدقة
+        options = [opt.strip() for opt in text.replace('\n', ',').split(',') if opt.strip()]
+        
+        if len(options) >= 2:
+            context.user_data['q_temp']['a'] = options[0]
+            context.user_data['q_temp']['b'] = options[1]
+            context.user_data['q_temp']['c'] = options[2] if len(options) > 2 else '-'
+            context.user_data['q_temp']['d'] = options[3] if len(options) > 3 else '-'
+            
+            context.user_data['action'] = 'awaiting_q_correct'
+            
+            msg = (
+                f"📝 <b>الخيارات التي تم رصدها:</b>\n"
+                f"🅰️: {context.user_data['q_temp']['a']}\n"
+                f"🅱️: {context.user_data['q_temp']['b']}\n"
+                f"🆂: {context.user_data['q_temp']['c']}\n"
+                f"🅳: {context.user_data['q_temp']['d']}\n\n"
+                f"✅ ما هي <b>الإجابة الصحيحة</b>؟\n"
+                f"أرسل الرمز فقط (A أو B أو C أو D)"
+            )
+            await update.message.reply_text(msg, parse_mode="HTML")
+        else:
+            await update.message.reply_text("⚠️ يرجى إرسال خيارين على الأقل ليتم اعتباره سؤالاً!")
 
+    elif action == 'awaiting_q_correct':
+        correct_answer = text.upper()
+        if correct_answer in ['A', 'B', 'C', 'D']:
+            context.user_data['q_temp']['correct'] = correct_answer
+            
+            # استدعاء الدالة الجاهزة في sheets.py
+            from sheets import add_question_to_bank
+            
+            # تمرير القاموس بالكامل للدالة التي تملأ الـ 21 عموداً
+            success = add_question_to_bank(context.bot.token, context.user_data['q_temp'])
+            
+            if success:
+                await update.message.reply_text(
+                    f"✅ تم حفظ السؤال <code>{context.user_data['q_temp']['q_id']}</code> في بنك الأسئلة بنجاح!",
+                    parse_mode="HTML"
+                )
+            else:
+                await update.message.reply_text("❌ حدث خطأ أثناء الحفظ في الشيت. تأكد من اتصال قاعدة البيانات.")
+                
+            # تنظيف البيانات بعد الحفظ أو الفشل النهائي
+            context.user_data.pop('q_temp', None)
+            context.user_data['action'] = None
+        else:
+            await update.message.reply_text("⚠️ خطأ! يرجى إرسال الرمز فقط (A، B، C، أو D).")
 
 # --------------------------------------------------------------------------
 # عرض الدروس للطالب 

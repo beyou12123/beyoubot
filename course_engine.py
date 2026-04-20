@@ -482,10 +482,9 @@ async def process_grant_medal_step(update, context):
 # =============================================================
 # --- [ محرك الأوسمة والإنجازات المدمج - 19 عموداً ] ---
 # =============================================================
-
 async def grant_reward_unified(update, context, reward_type="وسام"):
     """
-    منح وسام أو إنجاز وحفظه في الورقة المدمجة (19 عموداً)
+    منح وسام أو إنجاز وحفظه في الورقة المدمجة (19 عموداً) + الإعلان في القنوات
     reward_type: "وسام" أو "إنجاز"
     """
     bot_token = context.bot.token
@@ -493,7 +492,8 @@ async def grant_reward_unified(update, context, reward_type="وسام"):
     # سحب البيانات من ذاكرة المحادثة المؤقتة
     reward_data = context.user_data.get('temp_reward', {})
     
-    from sheets import ss, get_system_time, update_global_version
+    from sheets import ss, get_system_time, update_global_version, get_bot_setting
+    from telegram import Bot
     
     try:
         # بناء الصف الموحد (19 عموداً) بمطابقة تامة للمخطط المدمج
@@ -519,16 +519,43 @@ async def grant_reward_unified(update, context, reward_type="وسام"):
             "نشط"                                      # 19. حالة_السجل
         ]
         
-        # التنفيذ الفعلي في جوجل شيت
+        # 1. التنفيذ الفعلي في جوجل شيت
         ss.worksheet("الأوسمة_والإنجازات").append_row(row)
         
-        # رفع الإصدار لتحديث الكاش فوراً
+        # 2. رفع الإصدار لتحديث الكاش فوراً
         update_global_version(bot_token)
+
+        # 3. محرك الإعلان العام (اللمسة الإضافية)
+        public_chan = get_bot_setting(bot_token, "public_channel_id")
+        honors_chan = get_bot_setting(bot_token, "honors_channel_id")
+        
+        icon = "🏅" if str(reward_type) == "وسام" else "📜"
+        announcement_text = (
+            f"🎊 <b>تهنئة مستحقة لـ أحد أبطالنا!</b> 🎊\n\n"
+            f"تم منح الطالب: <b>{reward_data.get('student_name', '-')}</b>\n"
+            f"{icon} <b>{reward_type}:</b> {reward_data.get('title')}\n"
+            f"🎯 <b>بسبب:</b> {reward_data.get('reason', '-')}\n\n"
+            f"<i>نحن نفخر بوجود أمثالك في منصتنا.. إلى الأمام! 🚀</i>"
+        )
+
+        # محاولة الإرسال للقنوات المحددة في الإعدادات
+        target_channels = []
+        if public_chan: target_channels.append(public_chan)
+        if honors_chan: target_channels.append(honors_chan)
+
+        for channel_id in target_channels:
+            if str(channel_id).startswith("-100"):
+                try:
+                    await context.bot.send_message(chat_id=channel_id, text=announcement_text, parse_mode="HTML")
+                except Exception as send_err:
+                    logger.error(f"⚠️ فشل الإرسال للقناة {channel_id}: {send_err}")
         
         return True
     except Exception as e:
         logger.error(f"❌ Error in grant_reward_unified: {e}")
         return False
+
+
 # دالة عرض تفاصيل الوسام
 async def view_medal_details(update, context, record_id):
     """عرض تفاصيل وسام أو إنجاز محدد من الكاش"""
@@ -580,8 +607,189 @@ async def view_all_achievements_admin(update, context):
         keyboard.append([InlineKeyboardButton("🔙 عودة", callback_data="honors_achievements")])
 
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
- 
+ # =============================================================
+# --- [ واجهة الطالب للأوسمة والإنجازات - النظام المدمج ] ---
+# =============================================================
+
+async def show_student_honors(update, context):
+    """عرض قائمة أوسمة وإنجازات الطالب من الكاش"""
+    query = update.callback_query
+    user_id = query.from_user.id
+    bot_token = context.bot.token
+    
+    from sheets import get_bot_data_from_cache
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+    # جلب البيانات المدمجة من الكاش
+    all_records = get_bot_data_from_cache(bot_token, "الأوسمة_والإنجازات")
+    
+    # فلترة السجلات الخاصة بهذا الطالب والتي تم تعليمها كـ "مرئي_للطالب"
+    student_rewards = [
+        r for r in all_records 
+        if str(r.get("معرف_الطالب")) == str(user_id) and str(r.get("مرئي_للطالب")).upper() == "TRUE"
+    ]
+
+    if not student_rewards:
+        text = "🏅 <b>سجل الأوسمة:</b>\n\nلا توجد أوسمة أو إنجازات مسجلة باسمك حالياً. استمر في الاجتهاد لتظهر إنجازاتك هنا! ✨"
+        keyboard = [[InlineKeyboardButton("🔙 عودة للقائمة الرئيسية", callback_data="main_menu")]]
+    else:
+        text = "🏆 <b>خزانة الأوسمة والإنجازات:</b>\nفخورون بك! إليك قائمة بإنجازاتك المحققة، انقر على أي منها للتفاصيل:"
+        keyboard = []
+        
+        # بناء قائمة الأزرار ديناميكياً
+        for item in student_rewards:
+            # تمييز النوع بالإيموجي
+            icon = "🏅" if item.get("النوع") == "وسام" else "📜"
+            label = f"{icon} {item.get('العنوان')} ({item.get('تاريخ_الحدث')})"
+            # نرسل معرف السجل في الـ callback ليتم التعرف عليه
+            keyboard.append([InlineKeyboardButton(label, callback_data=f"st_medal_{item.get('معرف_السجل')}")])
+        
+        keyboard.append([InlineKeyboardButton("🔙 عودة", callback_data="main_menu")])
+
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+async def view_single_achievement(update, context, record_id):
+    """عرض التفاصيل الفخمة لإنجاز محدد"""
+    query = update.callback_query
+    bot_token = context.bot.token
+    from sheets import get_bot_data_from_cache
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+    all_records = get_bot_data_from_cache(bot_token, "الأوسمة_والإنجازات")
+    item = next((r for r in all_records if str(r.get("معرف_السجل")) == str(record_id)), None)
+
+    if not item:
+        await query.answer("⚠️ تعذر العثور على تفاصيل السجل.", show_alert=True)
+        return
+
+    # تنسيق الرسالة بشكل فخم
+    icon = "🏅" if item.get("النوع") == "وسام" else "📜"
+    text = (
+        f"{icon} <b>بطل الإنجاز: {item.get('اسم_الطالب')}</b>\n"
+        f"━━━━━━━━━━━━━━\n"
+        f"✨ <b>العنوان:</b> {item.get('العنوان')}\n"
+        f"📝 <b>الوصف:</b> {item.get('الوصف')}\n"
+        f"🎯 <b>السبب/المصدر:</b> {item.get('السبب_أو_المصدر')}\n"
+        f"--------------------------\n"
+        f"📊 <b>المستوى:</b> {item.get('المستوى')}\n"
+        f"➕ <b>النقاط المضافة:</b> <code>{item.get('النقاط')}</code> نقطة\n"
+        f"📅 <b>تاريخ المنح:</b> {item.get('تاريخ_الحدث')}\n"
+        f"━━━━━━━━━━━━━━\n"
+        f"<i>مبارك لك هذا التميز، استمر نحو القمة! 🚀</i>"
+    )
+
+    keyboard = [[InlineKeyboardButton("🔙 العودة للقائمة", callback_data="honors_achievements")]]
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
 # --------------------------------------------------------------------------
+# --- [ محرك ضبط قنوات الإشعارات ] ---
+
+# =============================================================
+# --- [ محرك ضبط قنوات الإشعارات - التنفيذي ] ---
+# =============================================================
+
+async def set_channel_id_flow(update, context, channel_type):
+    """بدء عملية طلب معرف القناة من المالك"""
+    query = update.callback_query
+    
+    # ربط المفاتيح البرمجية بالعناوين العربية للعرض
+    titles = {
+        "public_channel_id": "القناة الرسمية",
+        "honors_channel_id": "قناة الأوسمة والإنجازات"
+    }
+    
+    # تخزين الحالة في user_data لتوجيه الرسالة القادمة
+    context.user_data['awaiting_setting_key'] = channel_type
+    context.user_data['awaiting_setting_title'] = titles.get(channel_type)
+    
+    text = (
+        f"🛠 <b>إعداد {titles.get(channel_type)} :</b>\n\n"
+        f"يرجى إرسال بيانات القناة الآن بأي صيغة تفضلها:\n"
+        f"🔗 <b>رابط القناة:</b> <code>https://t.me/Afaq_Library</code>\n"
+        f"📧 <b>معرف القناة:</b> <code>@Afaq_Library</code>\n"
+        f"🆔 <b>الآيدي الرقمي:</b> <code>-1001197736144</code>\n\n"
+        f"━━━━━━━━━━━━━━\n"
+        f"⚠️ <b>تنبيهات هامة:</b>\n"
+        f"1️⃣ يجب أن يكون البوت <b>مشرفاً (Admin)</b> في القناة.\n"
+        f"2️⃣ تأكد من منح البوت صلاحية <b>'نشر الرسائل'</b>.\n"
+        f"3️⃣ سيقوم النظام بالتعرف على القناة وحفظها آلياً.\n\n"
+        f"<i>بانتظار إرسال الرابط أو المعرف...</i>"
+    )
+
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    keyboard = [[InlineKeyboardButton("🔙 إلغاء", callback_data="database_preparation")]]
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+async def save_channel_id_logic(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    دالة ذكية تستقبل (رابط، يوزر، أو ID) وتقوم بتحويله إلى ID رقمي 
+    ثم تحفظه في شيت الإعدادات مع تحديث الكاش.
+    """
+    user_input = update.message.text.strip()
+    setting_key = context.user_data.get('awaiting_setting_key')
+    setting_title = context.user_data.get('awaiting_setting_title')
+    bot_token = context.bot.token
+
+    # 1. المحرك الذكي لاستخراج المعرف (Username) من المدخلات
+    target_username = user_input
+    
+    # إذا كان الرابط كاملاً https://t.me/Afaq_Library
+    if "t.me/" in user_input:
+        target_username = user_input.split("t.me/")[-1].replace("@", "")
+    # إذا كان يوزر يبدأ بـ @
+    elif user_input.startswith("@"):
+        target_username = user_input.replace("@", "")
+    
+    try:
+        # 2. الاستعلام من تليجرام للحصول على البيانات الرسمية (get_chat)
+        # ملاحظة: يجب أن يكون البوت مشرفاً في القناة ليتمكن من جلب بياناتها
+        chat_data = await context.bot.get_chat(target_username)
+        final_chat_id = str(chat_data.id)
+        channel_name = chat_data.title
+        
+        # 3. التأكد من أن المعرف يبدأ بـ -100 (للقنوات والمجموعات الخارقة)
+        # تليجرام يعيد المعرف الرقمي كاملاً تلقائياً عبر get_chat
+        
+        # 4. عملية الحفظ في جوجل شيت (نفس المنطق الأصلي بدون تغيير)
+        from sheets import ss, update_global_version  # استيراد محلي للحفاظ على الهيكل
+        
+        try:
+            sheet = ss.worksheet("الإعدادات")
+            cell = sheet.find(setting_key)
+            row_index = cell.row
+            
+            # تحديث القيمة في العمود C (المعرف الرقمي الصافي)
+            sheet.update_cell(row_index, 3, final_chat_id)
+            
+            # مزامنة الكاش فوراً لضمان عمل البوتات الأخرى بالمعرف الجديد
+            update_global_version(bot_token)
+            
+            success_msg = (
+                f"✅ <b>تم الربط بنجاح!</b>\n\n"
+                f"📢 <b>القناة:</b> {channel_name}\n"
+                f"🆔 <b>المعرف الرقمي:</b> <code>{final_chat_id}</code>\n"
+                f"⚙️ <b>الإعداد:</b> {setting_title}\n\n"
+                f"<i>الآن سيقوم البوت باستخدام هذا المعرف لإرسال الأوسمة والتحقق من الاشتراك.</i>"
+            )
+            await update.message.reply_text(success_msg, parse_mode="HTML")
+            
+        except Exception as sheet_error:
+            logger.error(f"❌ Error updating sheet: {sheet_error}")
+            await update.message.reply_text(f"❌ فشل تحديث الشيت، تأكد من وجود المفتاح <code>{setting_key}</code>")
+
+    except Exception as telegram_error:
+        logger.warning(f"⚠️ Telegram API Error: {telegram_error}")
+        error_text = (
+            f"❌ <b>تعذر التعرف على القناة!</b>\n\n"
+            f"تأكد من الآتي:\n"
+            f"1. أن الرابط أو المعرف صحيح.\n"
+            f"2. أن البوت <b>مشرف (Admin)</b> في القناة ليتمكن من استخراج بياناتها."
+        )
+        await update.message.reply_text(error_text, parse_mode="HTML")
+
+    # تنظيف ذاكرة الجلسة
+    context.user_data.pop('awaiting_setting_key', None)
+    context.user_data.pop('awaiting_setting_title', None)
 
 # --------------------------------------------------------------------------
 # --------------------------------------------------------------------------

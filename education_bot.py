@@ -73,8 +73,12 @@ from sheets import (
     get_courses_knowledge_base
 )
 
+from educational_manager import (
+     manage_groups_main, 
+     start_add_question_flow, 
+     process_q_flow
+)
 
-from educational_manager import manage_groups_main
 
 # إعداد المفتاح الذي حصلت عليه
 genai.configure(api_key="AIzaSyCkpHbxvjZNqN_PT8O1yXUAIG-dMAGZj2Y")
@@ -851,7 +855,11 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
 # --------------------------------------------------------------------------
-
+# الربط مع الأسئلة
+    elif data == "add_question_bank":
+        # استدعاء دالة بدء التدفق من المدير التعليمي
+        await educational_manager.start_add_question_flow(update, context)
+ 
 
  
  
@@ -1651,7 +1659,12 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
                 InlineKeyboardButton("ضبط مبلغ السحب", callback_data="manage_branches"),
                 InlineKeyboardButton("معلومات الدفع الافتراضية", callback_data="default_payment_information"),
 
-            ], 
+            ],
+            [
+                InlineKeyboardButton("القناة الرسمية", callback_data="public_channel_idd"),
+                InlineKeyboardButton("قناة الأوسمة والإنجازات", callback_data="honors_channel_idd"),
+
+            ],             
             [InlineKeyboardButton("🔙 عودة", callback_data="back_to_admin")]
         ]
 
@@ -2191,6 +2204,24 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 
 
 # --------------------------------------------------------------------------
+    # 1. عرض القائمة الرئيسية (للأوسمة)
+    elif data == "honors_achievements":
+        # بما أننا اتفقنا أن الملف نظيف، نستدعي المحرك فقط
+        await course_engine.show_student_honors(update, context)
+# دالة الأسئلة 
+    elif data == "add_question_to_bank":
+        await educational_manager.start_add_question_flow(update, context)
+
+
+    elif data == "public_channel_idd":
+    await course_engine.set_channel_id_flow(update, context, "public_channel_id")
+
+    elif data == "honors_channel_idd":
+    await course_engine.set_channel_id_flow(update, context, "honors_channel_id")
+
+
+
+#©©©©©©©©©©©©©©©©©©©
 # معالجة الأوسمة والإنجازات
     elif data == "view_all_achievements":
         await course_engine.view_all_achievements_admin(update, context)
@@ -2203,6 +2234,17 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         context.user_data['action'] = 'awaiting_medal_student_id'
         await query.edit_message_text("🆔 يرجى إرسال <b>ID التيليجرام</b> للطالب المراد تكريمه:", parse_mode="HTML")
 
+    # 2. عرض تفاصيل إنجاز محدد للطالب (باستخدام معرف السجل)
+    elif data.startswith("st_medal_"):
+        record_id = data.replace("st_medal_", "")
+        await course_engine.view_single_achievement(update, context, record_id)
+
+
+
+
+
+
+#®®®®®®®®®®®®®®®®®®®
 # --------------------------------------------------------------------------
 
 # --------------------------------------------------------------------------
@@ -2474,28 +2516,43 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
 
 #داخل handle_contact_message (في البداية تماماً):
 #  //===========================================
+    # استخراج الحالة الحالية للمستخدم لسهولة الفحص
+    current_action = context.user_data.get('action')
 
-    # --- [ إضافة محرك معالجة الأوسمة ] ---
+    # //==============================================================
+    # // [1] محرك معالجة منح الأوسمة (Course Engine)
+    # // اعتراض الرسائل إذا كان المالك يقوم الآن بإدخال بيانات وسام لطالب
+    # //==============================================================
     medal_actions = ['awaiting_medal_student_id', 'awaiting_medal_name', 'awaiting_medal_reason']
-    if action in medal_actions:
+    if current_action in medal_actions:
         await course_engine.process_grant_medal_step(update, context)
         return
 
+    # //==============================================================
+    # // [2] ضبط قنوات الإشعارات (Course Engine)
+    # // اعتراض الرسائل إذا كان المالك يقوم بإرسال رابط أو ID قناة لضبط الإعدادات
+    # //==============================================================
+    if context.user_data.get('awaiting_setting_key'):
+        await course_engine.save_channel_id_logic(update, context)
+        return
 
-#  //===========================================
+    # //==============================================================
+    # // [3] إضافة أسئلة لبنك الأسئلة (Educational Manager)
+    # // التحقق مما إذا كان المستخدم (المالك/المدرب) في منتصف عملية إضافة سؤال جديد
+    # //==============================================================
+    if current_action and str(current_action).startswith('awaiting_q_'):
+        # استدعاء معالج الأسئلة (تأكد من استيراد الملف في بداية الملف الرئيسي)
+        await educational_manager.process_q_flow(update, context)
+        return
 
-
-
-
-
-
-
-
-#>>>>>>>>>>>>>>>>#>>>>>>>>>>>>>>>>
-    # تحويل الرسالة لمحرك التسجيل إذا كان المستخدم في حالة تسجيل
+    # //==============================================================
+    # // [4] محرك تسجيل الطلاب الجديد (Registration Flow)
+    # // تحويل الرسالة لمحرك التسجيل إذا كان المستخدم يقوم بملء بيانات انضمامه
+    # //==============================================================
     if context.user_data.get('reg_flow'):
         await course_engine.process_registration_steps(update, context)
         return
+
 
 
 #>>>>>>>>>>>>>>>>#>>>>>>>>>>>>>>>>
