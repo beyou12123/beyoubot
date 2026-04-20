@@ -1612,8 +1612,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
                 InlineKeyboardButton("🔄 المزامنة", callback_data="manual_cache_sync")
             ],
             [
-                InlineKeyboardButton(f"🛠 وضع الصيانة {m_status}", callback_data="toggle_maintenance"),            
-                InlineKeyboardButton("تجهيز قاعدة البيانات", callback_data="database_preparation")
+                InlineKeyboardButton(f"🛠 وضع الصيانة {m_status}", callback_data="toggle_maintenance")
             ],
             [
                 InlineKeyboardButton("إدارة الفروع", callback_data="manage_branches"),
@@ -1645,15 +1644,6 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
                 InlineKeyboardButton("📢 الإعلانات", callback_data="manage_ads"),
                 InlineKeyboardButton("أكواد الخصم", callback_data="discount_codes")
             ],
-            [InlineKeyboardButton("🔙 عودة", callback_data="back_to_admin")]
-        ]
-
-        await query.edit_message_text("👨‍🏫 <b>إدارة الشؤون التعليمية :</b>\nيمكنك إضافة مدربين جدد دورات جديدة او اقسام او مجموعات أو استعراض القائمة الحالية للحذف.", 
-                                      reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
-#>>>>>>>>>>>>>>>>
-
-    elif data == "database_preparation":
-        keyboard = [
             [
                 InlineKeyboardButton("ضبط نقاط الدخول", callback_data="referral_points_settings"), 
                 InlineKeyboardButton("ضبط وحدة العملة", callback_data="manual_cache_sync")
@@ -1671,13 +1661,13 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
                 InlineKeyboardButton("القناة الرسمية", callback_data="public_channel_idd"),
                 InlineKeyboardButton("قناة الأوسمة والإنجازات", callback_data="honors_channel_idd"),
 
-            ],             
+            ],                         
             [InlineKeyboardButton("🔙 عودة", callback_data="back_to_admin")]
         ]
 
         await query.edit_message_text("👨‍🏫 <b>إدارة الشؤون التعليمية :</b>\nيمكنك إضافة مدربين جدد دورات جديدة او اقسام او مجموعات أو استعراض القائمة الحالية للحذف.", 
                                       reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
-
+#>>>>>>>>>>>>>>>>
 
 #>>>>>>>>>>>>>>>>#>>>>>>>>>>>>>>>>
     elif data == "manage_financial":
@@ -2397,8 +2387,18 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
     elif data == "close_panel":
         await query.edit_message_text("🔒 تم إغلاق لوحة التحكم.")
 
+    # التصحيح: معالج العودة للوحة الإدارة (المالك)
     elif data == "back_to_admin":
-        await query.edit_message_text(f"<b>مرحباً بك مجدداً يا دكتور {query.from_user.first_name}</b>", reply_markup=get_admin_panel(), parse_mode="HTML")
+        # جلب الإعدادات لضمان عرض اسم الدكتور بشكل صحيح
+        config = get_bot_config(bot_token)
+        welcome_msg = config.get("welcome_morning", "مرحباً بك مجدداً في مركز قيادة منصتك")
+        
+        await query.edit_message_text(
+            text=f"<b>{welcome_msg}</b>\n\nمرحباً بك مجدداً في لوحة القيادة 🎓",
+            reply_markup=get_admin_panel(), 
+            parse_mode="HTML"
+        )
+
 # --------------------------------------------------------------------------
 # دالة توليد لوحة الصلاحيات (التي أرسلتها أنت)
 def get_permissions_keyboard(bot_token, employee_id, current_perms):
