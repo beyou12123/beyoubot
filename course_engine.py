@@ -721,80 +721,55 @@ async def set_channel_id_flow(update, context, channel_type):
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
 async def save_channel_id_logic(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    دالة ذكية تستقبل (رابط، يوزر، أو ID) وتقوم بتحويله إلى ID رقمي 
-    ثم تحفظه في شيت الإعدادات مع تحديث الكاش.
-    """
     user_input = update.message.text.strip()
     setting_key = context.user_data.get('awaiting_setting_key')
     setting_title = context.user_data.get('awaiting_setting_title')
     bot_token = context.bot.token
 
-    # 1. المحرك الذكي المطور لاستخراج المعرف (Username) بنقاء 100%
-    target_username = user_input
+    # 1. المحرك الذكي المطور (تنظيف المدخلات)
+    target = user_input.replace("https://", "").replace("http://", "").replace("t.me/", "").strip()
     
-    # تنظيف الرابط من البروتوكولات والمسافات
-    clean_input = user_input.strip().replace("https://", "").replace("http://", "")
-    
-    if "t.me/" in clean_input:
-        # استخراج ما بعد t.me/ وحذف أي سلاش زائد في النهاية
-        target_username = clean_input.split("t.me/")[1].split("/")[0].replace("@", "")
-    elif clean_input.startswith("@"):
-        target_username = clean_input.replace("@", "")
-    else:
-        target_username = clean_input
-
+    # التأكد من وجود @ إذا كان النص يوزرنيم وليس ID رقمي
+    if not target.startswith("-100") and not target.startswith("@"):
+        target = f"@{target}"
     
     try:
-        # 2. الاستعلام من تليجرام للحصول على البيانات الرسمية (get_chat)
-        # ملاحظة: يجب أن يكون البوت مشرفاً في القناة ليتمكن من جلب بياناتها
-        chat_data = await context.bot.get_chat(target_username)
+        # 2. محاولة جلب بيانات الدردشة
+        chat_data = await context.bot.get_chat(target)
         final_chat_id = str(chat_data.id)
         channel_name = chat_data.title
         
-        # 3. التأكد من أن المعرف يبدأ بـ -100 (للقنوات والمجموعات الخارقة)
-        # تليجرام يعيد المعرف الرقمي كاملاً تلقائياً عبر get_chat
+        # 3. الحفظ في الشيت
+        from sheets import ss, update_global_version
+        sheet = ss.worksheet("الإعدادات")
+        cell = sheet.find(setting_key)
         
-        # 4. عملية الحفظ في جوجل شيت (نفس المنطق الأصلي بدون تغيير)
-        from sheets import ss, update_global_version  # استيراد محلي للحفاظ على الهيكل
-        
-        try:
-            sheet = ss.worksheet("الإعدادات")
-            cell = sheet.find(setting_key)
-            row_index = cell.row
-            
-            # تحديث القيمة في العمود C (المعرف الرقمي الصافي)
-            sheet.update_cell(row_index, 3, final_chat_id)
-            
-            # مزامنة الكاش فوراً لضمان عمل البوتات الأخرى بالمعرف الجديد
+        if cell:
+            sheet.update_cell(cell.row, 3, final_chat_id)
             update_global_version(bot_token)
             
             success_msg = (
                 f"✅ <b>تم الربط بنجاح!</b>\n\n"
                 f"📢 <b>القناة:</b> {channel_name}\n"
                 f"🆔 <b>المعرف الرقمي:</b> <code>{final_chat_id}</code>\n"
-                f"⚙️ <b>الإعداد:</b> {setting_title}\n\n"
-                f"<i>الآن سيقوم البوت باستخدام هذا المعرف لإرسال الأوسمة والتحقق من الاشتراك.</i>"
+                f"⚙️ <b>الإعداد:</b> {setting_title}"
             )
             await update.message.reply_text(success_msg, parse_mode="HTML")
-            
-        except Exception as sheet_error:
-            logger.error(f"❌ Error updating sheet: {sheet_error}")
-            await update.message.reply_text(f"❌ فشل تحديث الشيت، تأكد من وجود المفتاح <code>{setting_key}</code>")
+        else:
+            await update.message.reply_text(f"❌ لم أجد مفتاح <code>{setting_key}</code> في شيت الإعدادات.")
 
-    except Exception as telegram_error:
-        logger.warning(f"⚠️ Telegram API Error: {telegram_error}")
-        error_text = (
-            f"❌ <b>تعذر التعرف على القناة!</b>\n\n"
-            f"تأكد من الآتي:\n"
-            f"1. أن الرابط أو المعرف صحيح.\n"
-            f"2. أن البوت <b>مشرف (Admin)</b> في القناة ليتمكن من استخراج بياناتها."
+    except Exception as e:
+        logger.error(f"Telegram Error: {e}")
+        await update.message.reply_text(
+            f"❌ <b>فشل التعرف على القناة!</b>\n\n"
+            f"<b>السبب التقني:</b> <code>{str(e)}</code>\n\n"
+            f"💡 تأكد أن البوت <b>مشرف</b> وأن القناة <b>عامة</b>، أو أرسل الآيدي الرقمي للقناة مباشرة (يبدأ بـ -100).",
+            parse_mode="HTML"
         )
-        await update.message.reply_text(error_text, parse_mode="HTML")
 
-    # تنظيف ذاكرة الجلسة
     context.user_data.pop('awaiting_setting_key', None)
     context.user_data.pop('awaiting_setting_title', None)
+
 
 # --------------------------------------------------------------------------
 # دالة المعلومات الشاملة للمالك 
