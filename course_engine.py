@@ -410,7 +410,177 @@ async def show_financial_settings(update, context):
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
 # --------------------------------------------------------------------------
+# =============================================================
+# --- [ محرك الأوسمة والإنجازات التحفيزي ] ---
+# =============================================================
 
+async def show_honors_main_menu(update, context):
+    """الواجهة الرئيسية للأوسمة (تختلف حسب الرتبة)"""
+    query = update.callback_query
+    user_id = query.from_user.id
+    bot_token = context.bot.token
+    
+    from sheets import get_bot_config
+    config = get_bot_config(bot_token)
+    is_admin = str(user_id) == str(config.get("admin_ids"))
+
+    if is_admin:
+        text = "🏆 <b>لوحة التحكم في الأوسمة والإنجازات:</b>\nيمكنك منح أوسمة جديدة للطلاب المتميزين أو استعراض سجل الإنجازات العام."
+        keyboard = [
+            [InlineKeyboardButton("🏅 منح وسام لطالب", callback_data="grant_medal_start")],
+            [InlineKeyboardButton("📜 سجل الإنجازات العام", callback_data="view_all_achievements")],
+            [InlineKeyboardButton("🔙 عودة", callback_data="tech_settings")]
+        ]
+    else:
+        # واجهة الطالب لاستعراض أوسمته الخاصة
+        from sheets import ss
+        sheet = ss.worksheet("الأوسمة")
+        my_medals = [r for r in sheet.get_all_records() 
+                     if str(r.get("bot_id")) == str(bot_token) and str(r.get("معرف_الطالب")) == str(user_id)]
+        
+        text = f"🏅 <b>خزانة أوسمتك الرقمية:</b>\nلديك حالياً ({len(my_medals)}) أوسمة تكريمية."
+        keyboard = []
+        for m in my_medals:
+            keyboard.append([InlineKeyboardButton(f"🎖 {m.get('اسم_الوسام')}", callback_data=f"view_medal_{m.get('معرف_الوسام')}")])
+        keyboard.append([InlineKeyboardButton("🔙 عودة", callback_data="main_menu")])
+
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+# استبدل الدالة القديمة في course_engine.py بهذه النسخة المحدثة
+async def process_grant_medal_step(update, context):
+    """معالجة خطوات منح (وسام/إنجاز) وربطها بالمحرك الموحد لـ 19 عموداً"""
+    text = update.message.text.strip()
+    action = context.user_data.get('action')
+    
+    if action == 'awaiting_medal_student_id':
+        # الخطوة 1: استقبال ID الطالب
+        context.user_data['temp_reward'] = {'student_id': text} # نستخدم temp_reward الموحد
+        context.user_data['action'] = 'awaiting_medal_name'
+        await update.message.reply_text("🏅 أرسل الآن <b>عنوان التكريم</b> (مثلاً: الطالب المثالي):", parse_mode="HTML")
+    
+    elif action == 'awaiting_medal_name':
+        # الخطوة 2: استقبال العنوان
+        context.user_data['temp_reward']['title'] = text
+        context.user_data['action'] = 'awaiting_medal_reason'
+        await update.message.reply_text("📝 أرسل <b>سبب المنح أو تفاصيل الإنجاز</b> باختصار:", parse_mode="HTML")
+        
+    elif action == 'awaiting_medal_reason':
+        # الخطوة 3: استقبال السبب والحفظ النهائي
+        context.user_data['temp_reward']['reason'] = text
+        
+        # استدعاء المحرك الموحد (الذي يحفظ الـ 19 عموداً)
+        success = await grant_reward_unified(update, context, reward_type="وسام")
+        
+        if success:
+            await update.message.reply_text(f"✅ تم منح وسام <b>{context.user_data['temp_reward']['title']}</b> وحفظه في السجل الموحد بنجاح!")
+        else:
+            await update.message.reply_text("❌ حدث خطأ أثناء الحفظ في الورقة المدمجة.")
+            
+        context.user_data['action'] = None
+        context.user_data.pop('temp_reward', None)
+
+# =============================================================
+# --- [ محرك الأوسمة والإنجازات المدمج - 19 عموداً ] ---
+# =============================================================
+
+async def grant_reward_unified(update, context, reward_type="وسام"):
+    """
+    منح وسام أو إنجاز وحفظه في الورقة المدمجة (19 عموداً)
+    reward_type: "وسام" أو "إنجاز"
+    """
+    bot_token = context.bot.token
+    admin_id = update.effective_user.id
+    # سحب البيانات من ذاكرة المحادثة المؤقتة
+    reward_data = context.user_data.get('temp_reward', {})
+    
+    from sheets import ss, get_system_time, update_global_version
+    
+    try:
+        # بناء الصف الموحد (19 عموداً) بمطابقة تامة للمخطط المدمج
+        row = [
+            str(bot_token),                            # 1. bot_id
+            "1001001",                                 # 2. معرف_الفرع
+            f"REW{str(uuid.uuid4().int)[:5]}",         # 3. معرف_السجل
+            str(reward_data.get('student_id')),        # 4. معرف_الطالب
+            str(reward_data.get('student_name', '-')), # 5. اسم_الطالب
+            str(reward_type),                          # 6. النوع (وسام/إنجاز)
+            str(reward_data.get('title')),             # 7. العنوان
+            str(reward_data.get('desc', '-')),         # 8. الوصف
+            str(reward_data.get('reason', '-')),       # 9. السبب_أو_المصدر
+            get_system_time("date"),                   # 10. تاريخ_الحدث
+            str(admin_id),                             # 11. منح_بواسطة
+            str(reward_data.get('course_id', '-')),    # 12. معرف_الدورة
+            str(reward_data.get('group_id', '-')),     # 13. معرف_المجموعة
+            str(reward_data.get('level', '-')),        # 14. المستوى
+            str(reward_data.get('points', '0')),       # 15. النقاط
+            "TRUE",                                    # 16. مرئي_للطالب
+            str(reward_data.get('notes', '-')),        # 17. ملاحظات
+            get_system_time("full"),                   # 18. تاريخ_التحديث
+            "نشط"                                      # 19. حالة_السجل
+        ]
+        
+        # التنفيذ الفعلي في جوجل شيت
+        ss.worksheet("الأوسمة_والإنجازات").append_row(row)
+        
+        # رفع الإصدار لتحديث الكاش فوراً
+        update_global_version(bot_token)
+        
+        return True
+    except Exception as e:
+        logger.error(f"❌ Error in grant_reward_unified: {e}")
+        return False
+# دالة عرض تفاصيل الوسام
+async def view_medal_details(update, context, record_id):
+    """عرض تفاصيل وسام أو إنجاز محدد من الكاش"""
+    query = update.callback_query
+    bot_token = context.bot.token
+    from sheets import get_bot_data_from_cache
+
+    # سحب البيانات من الكاش لسرعة استجابة فائقة
+    rewards = get_bot_data_from_cache(bot_token, "الأوسمة_والإنجازات")
+    medal = next((r for r in rewards if str(r.get("معرف_السجل")) == str(record_id)), None)
+
+    if not medal:
+        await query.answer("⚠️ تعذر العثور على تفاصيل هذا السجل.", show_alert=True)
+        return
+
+    text = (
+        f"{'🏅' if medal.get('النوع') == 'وسام' else '📜'} <b>تفاصيل الإنجاز:</b>\n"
+        f"━━━━━━━━━━━━━━\n"
+        f"👤 <b>الطالب:</b> {medal.get('اسم_الطالب')}\n"
+        f"🏷 <b>العنوان:</b> {medal.get('العنوان')}\n"
+        f"📝 <b>الوصف:</b> {medal.get('الوصف')}\n"
+        f"🎯 <b>السبب:</b> {medal.get('السبب_أو_المصدر')}\n"
+        f"💰 <b>النقاط المكتسبة:</b> {medal.get('النقاط')} نقطة\n"
+        f"📅 <b>التاريخ:</b> {medal.get('تاريخ_الحدث')}\n"
+        f"━━━━━━━━━━━━━━"
+    )
+    
+    keyboard = [[InlineKeyboardButton("🔙 عودة", callback_data="honors_achievements")]]
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+ 
+# عرض تفاصيل الوسام ادمن 
+async def view_all_achievements_admin(update, context):
+    """عرض سجل بكافة الأوسمة الممنوحة في البوت (للمالك)"""
+    query = update.callback_query
+    bot_token = context.bot.token
+    from sheets import get_bot_data_from_cache
+
+    rewards = get_bot_data_from_cache(bot_token, "الأوسمة_والإنجازات")
+    
+    if not rewards:
+        text = "📭 <b>سجل الإنجازات فارغ حالياً.</b>"
+        keyboard = [[InlineKeyboardButton("🔙 عودة", callback_data="honors_achievements")]]
+    else:
+        text = "📜 <b>السجل العام للأوسمة والإنجازات:</b>\nانقر على السجل للتفاصيل:"
+        keyboard = []
+        for r in rewards[-10:]: # عرض آخر 10 إنجازات فقط للسرعة
+            label = f"{r.get('اسم_الطالب')} - {r.get('العنوان')}"
+            keyboard.append([InlineKeyboardButton(label, callback_data=f"view_medal_{r.get('معرف_السجل')}")])
+        keyboard.append([InlineKeyboardButton("🔙 عودة", callback_data="honors_achievements")])
+
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+ 
 # --------------------------------------------------------------------------
 
 # --------------------------------------------------------------------------

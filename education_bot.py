@@ -1098,6 +1098,10 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         # استدعاء محرك الضبط من course_engine
         await course_engine.show_financial_settings(update, context)
 
+    elif data == "honors_achievements":
+        # عرض لوحة التحكم الموحدة للأوسمة والإنجازات
+        from course_engine import show_honors_main_menu
+        await show_honors_main_menu(update, context)
 
 
 
@@ -2187,6 +2191,17 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 
 
 # --------------------------------------------------------------------------
+# معالجة الأوسمة والإنجازات
+    elif data == "view_all_achievements":
+        await course_engine.view_all_achievements_admin(update, context)
+
+    elif data.startswith("view_medal_"):
+        record_id = data.replace("view_medal_", "")
+        await course_engine.view_medal_details(update, context, record_id)
+        
+    elif data == "grant_medal_start":
+        context.user_data['action'] = 'awaiting_medal_student_id'
+        await query.edit_message_text("🆔 يرجى إرسال <b>ID التيليجرام</b> للطالب المراد تكريمه:", parse_mode="HTML")
 
 # --------------------------------------------------------------------------
 
@@ -2458,6 +2473,23 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
     ]
 
 #داخل handle_contact_message (في البداية تماماً):
+#  //===========================================
+
+    # --- [ إضافة محرك معالجة الأوسمة ] ---
+    medal_actions = ['awaiting_medal_student_id', 'awaiting_medal_name', 'awaiting_medal_reason']
+    if action in medal_actions:
+        await course_engine.process_grant_medal_step(update, context)
+        return
+
+
+#  //===========================================
+
+
+
+
+
+
+
 
 #>>>>>>>>>>>>>>>>#>>>>>>>>>>>>>>>>
     # تحويل الرسالة لمحرك التسجيل إذا كان المستخدم في حالة تسجيل
@@ -2963,8 +2995,6 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
             else:
                 await update.message.reply_text("❌ فشل التحديث. تأكد من إضافة الأعمدة المطلوبة.")
             return
-
-
 
         # --- [ حفظ كليشة الترحيب الجديدة ] ---
         elif action == 'awaiting_new_welcome_text':
