@@ -8,7 +8,7 @@ import gspread
 import base64
 from telegram import Bot
 from telegram.constants import ParseMode
-from sheets import ss, get_system_time
+
 from cache_manager import FACTORY_GLOBAL_CACHE, save_cache_to_disk
 
 # ==========================================================================
@@ -398,6 +398,7 @@ async def sync_factory_to_sheets_smart():
     المحرك العملاق للمزامنة الذكية - مخصص للمصنع كامل
     الوقت المقترح: 03:30 فجراً
     """
+    from sheets import ss, get_system_time     
     print(f"🚀 [START] بدء ملحمة المزامنة الذكية للمصنع: {get_system_time('full')}")
     
     # 1. استخراج كافة البوتات لإرسال التنبيهات
