@@ -302,7 +302,7 @@ async def download_mirror_files(bot, user_id):
     is_developer = (str(user_id) == str(DEVELOPER_ID))
     bot_id_filter = None if is_developer else user_id
 
-    await bot.send_message(chat_id=user_id, text="🔐 جاري تجهيز النسخة الاحتياطية المشفرة...")
+    await bot.send_message(chat_id=user_id, text="🔐 جاري تجهيز النسخة الاحتياطية...")
 
     # توليد الملف الموحد المشفر فوراً
     file_path = generate_secure_backup(bot_id_filter)
@@ -331,24 +331,30 @@ async def download_mirror_files(bot, user_id):
 
 # --------------------------------------------------------------------------
 # دالة الاستعادة 
-def process_restore_logic(file_content, requester_id):
-    """المحرك الذكي: يقرأ الملف ويقرر نوع الاستبدال (شامل للمطور أو جزئي للعميل)"""
+async def process_restore_logic(file_content, requester_id):
+    """
+    المحرك المرن: استعادة شاملة للمطور (المصنع) أو جزئية للبوت الفرعي
+    """
     from sheets import ss
+    import json
+    import base64
     try:
         # 1. فك التشفير
         backup_data = json.loads(file_content)
         encoded_payload = backup_data.get("payload")
+        # فك تشفير Base64 للحصول على البيانات الحقيقية
         decoded_data = json.loads(base64.b64decode(encoded_payload).decode('utf-8'))
         
+        # معرفة هل المستعيد هو المطور الرئيسي
         is_developer = (str(requester_id) == str(DEVELOPER_ID))
         
-        # 2. حلقة المزامنة (التنفيذ على السيرفر + جوجل)
+        # 2. حلقة المزامنة لجميع الأوراق الموجودة في الملف
         for sheet_name, new_records in decoded_data.items():
             try:
                 sheet = ss.worksheet(sheet_name)
                 
                 if is_developer:
-                    # المطور: استبدال شامل للورقة
+                    # --- [ وضع المطور: استعادة المصنع الشاملة ] ---
                     sheet.clear()
                     if new_records:
                         headers = list(new_records[0].keys())
@@ -357,36 +363,37 @@ def process_restore_logic(file_content, requester_id):
                         sheet.append_rows(rows)
                     FACTORY_GLOBAL_CACHE["data"][sheet_name] = new_records
                 else:
-                    # العميل: استبدال أسطره فقط والحفاظ على البقية
+                    # --- [ وضع البوت الفرعي: استبدال أسطر العميل فقط ] ---
                     current_records = FACTORY_GLOBAL_CACHE["data"].get(sheet_name, [])
-                    # حذف أسطر العميل القديمة وإضافة الجديدة
-                    updated_list = [r for r in current_records if str(r.get("bot_id")) != str(requester_id)]
+                    # الفلترة الذكية: البحث في الأعمدة المحتملة لـ ID العميل
+                    updated_list = [
+                        r for r in current_records 
+                        if str(r.get("ID المالك")) != str(requester_id) and 
+                           str(r.get("bot_id")) != str(requester_id)
+                    ]
                     updated_list.extend(new_records)
                     
-                    # رفع القائمة المحدثة لجوجل (تحديث ذكي)
                     sheet.clear()
                     if updated_list:
                         headers = list(updated_list[0].keys())
                         rows = [list(r.values()) for r in updated_list]
                         sheet.append_row(headers)
                         sheet.append_rows(rows)
-                    
                     FACTORY_GLOBAL_CACHE["data"][sheet_name] = updated_list
 
-                # تحديث ملف الكاش الفيزيائي (JSON) لكل ورقة
+                # تحديث المرآة (الملف الفيزيائي على القرص)
                 file_path = os.path.join(CACHE_DIR, f"{sheet_name}.json")
                 with open(file_path, 'w', encoding='utf-8') as f:
                     json.dump(FACTORY_GLOBAL_CACHE["data"][sheet_name], f, ensure_ascii=False, indent=4)
 
             except Exception as e:
-                print(f"⚠️ خطأ أثناء معالجة الورقة {sheet_name}: {e}")
+                print(f"⚠️ تخطي الورقة {sheet_name}: {e}")
         
-        save_cache_to_disk() # حفظ نهائي
+        save_cache_to_disk() 
         return True
     except Exception as e:
-        print(f"❌ خطأ حرج في محرك الاستعادة: {e}")
+        print(f"❌ خطأ حرج في محرك الاستعادة الشامل: {e}")
         return False
- 
 
 # --------------------------------------------------------------------------
 logger = logging.getLogger(__name__)

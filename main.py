@@ -507,20 +507,28 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "confirm_restore":
         content = context.user_data.get('pending_restore_content')
         if not content:
-            await query.edit_message_text("❌ انتهت صلاحية الجلسة، يرجى رفع الملف مرة أخرى.")
+            await query.edit_message_text("❌ انتهت صلاحية الجلسة أو الملف غير موجود، يرجى المحاولة مجدداً.")
             return
 
+        # إظهار رسالة بدء العمليات
         await query.edit_message_text("⏳ <b>المرحلة 1:</b> جاري تحديث بيانات السيرفر المحلي وفك التشفير...", parse_mode="HTML")
         
         from cache_manager import process_restore_logic
-        # بدء التنفيذ المتسلسل
+        
+        # بدء التنفيذ المتسلسل للمحرك المرن (يعمل مع المصنع الشامل أو البوت الفرعي)
         if await process_restore_logic(content, user_id):
+            # المرحلة 2: تحديث السحابة (تتم داخل الدالة ولكن نظهرها هنا للتوضيح كما في كودك)
             await query.edit_message_text("📡 <b>المرحلة 2:</b> نجح تحديث السيرفر، جاري الآن مزامنة التحديث مع Google Sheets...", parse_mode="HTML")
-            await asyncio.sleep(2) # محاكاة المزامنة
+            
+            await asyncio.sleep(2) # محاكاة المزامنة لضمان استقرار الرسائل للمستخدم
+            
+            # الرسالة النهائية للنجاح
             await query.edit_message_text("🎊 <b>تمت الاستعادة والمزامنة بنجاح!</b>\nتم تحديث قاعدة البيانات بالكامل حسب صلاحياتك.", parse_mode="HTML")
         else:
-            await query.edit_message_text("❌ فشلت عملية الاستعادة. الملف قد يكون تالفاً.")
+            # في حال فشل المحرك في فك التشفير أو الوصول للأوراق
+            await query.edit_message_text("❌ فشلت عملية الاستعادة. الملف قد يكون تالفاً أو لا يخص هذا المصنع.")
         
+        # تنظيف الذاكرة المؤقتة بعد الانتهاء
         context.user_data.pop('pending_restore_content', None)
 
     elif data == "cancel_restore":
