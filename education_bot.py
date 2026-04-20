@@ -1068,9 +1068,16 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
  
 # --------------------------------------------------------------------------
     # عودة المالك ومدير النظام
+    # تصحيح زر العودة للوحة الإدارة الرئيسية
     elif data in ["back_to_admin", "get_admin_panel"]:
-        text = f"<b>{current_msg}</b>\n\nمرحباً بك مجدداً في لوحة القيادة 🎓"
-        await query.edit_message_text(text, reply_markup=get_admin_panel(), parse_mode="HTML")
+        # قمنا بحذف المتغير current_msg الذي يسبب التعليق ووضعنا نصاً مباشراً
+        welcome_text = "<b>مرحباً بك مجدداً في لوحة القيادة 🎓</b>\n\nاختر من الخيارات أدناه لإدارة النظام:"
+        await query.edit_message_text(
+            text=welcome_text, 
+            reply_markup=get_admin_panel(), # استدعاء الدالة التي تحتوي على الأزرار الـ 5
+            parse_mode="HTML"
+        )
+
 
     # عودة الموظف
     elif data == "get_employee_panel":
