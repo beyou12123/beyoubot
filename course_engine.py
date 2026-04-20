@@ -717,7 +717,7 @@ async def set_channel_id_flow(update, context, channel_type):
     )
 
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-    keyboard = [[InlineKeyboardButton("🔙 إلغاء", callback_data="database_preparation")]]
+    keyboard = [[InlineKeyboardButton("🔙 إلغاء", callback_data="tech_settings")]]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
 async def save_channel_id_logic(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -730,15 +730,20 @@ async def save_channel_id_logic(update: Update, context: ContextTypes.DEFAULT_TY
     setting_title = context.user_data.get('awaiting_setting_title')
     bot_token = context.bot.token
 
-    # 1. المحرك الذكي لاستخراج المعرف (Username) من المدخلات
+    # 1. المحرك الذكي المطور لاستخراج المعرف (Username) بنقاء 100%
     target_username = user_input
     
-    # إذا كان الرابط كاملاً https://t.me/Afaq_Library
-    if "t.me/" in user_input:
-        target_username = user_input.split("t.me/")[-1].replace("@", "")
-    # إذا كان يوزر يبدأ بـ @
-    elif user_input.startswith("@"):
-        target_username = user_input.replace("@", "")
+    # تنظيف الرابط من البروتوكولات والمسافات
+    clean_input = user_input.strip().replace("https://", "").replace("http://", "")
+    
+    if "t.me/" in clean_input:
+        # استخراج ما بعد t.me/ وحذف أي سلاش زائد في النهاية
+        target_username = clean_input.split("t.me/")[1].split("/")[0].replace("@", "")
+    elif clean_input.startswith("@"):
+        target_username = clean_input.replace("@", "")
+    else:
+        target_username = clean_input
+
     
     try:
         # 2. الاستعلام من تليجرام للحصول على البيانات الرسمية (get_chat)
