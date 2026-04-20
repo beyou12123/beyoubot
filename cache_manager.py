@@ -400,10 +400,13 @@ async def sync_factory_to_sheets_smart():
     from sheets import ss, get_system_time
     from telegram import Bot
     from telegram.constants import ParseMode     
+    from cache_manager import FACTORY_GLOBAL_CACHE, save_cache_to_disk
+    import asyncio
+
     print(f"🚀 [START] بدء ملحمة المزامنة الذكية للمصنع: {get_system_time('full')}")
     
-    # 1. استخراج كافة البوتات لإرسال التنبيهات
-    active_bots = FACTORY_GLOBAL_CACHE["data"].get("البوتات", [])
+    # 1. استخراج كافة البوتات لإرسال التنبيهات (تم تعديل المفتاح ليطابق ورقة البوتات_المصنوعة)
+    active_bots = FACTORY_GLOBAL_CACHE["data"].get("البوتات_المصنوعة", [])
     
     # --- [ الرسالة الجذابة قبل البدء ] ---
     pre_msg = (
@@ -415,15 +418,16 @@ async def sync_factory_to_sheets_smart():
     
     for bot_info in active_bots:
         try:
-            token = bot_info.get("token")
-            owner_id = bot_info.get("owner_id")
+            # تصحيح المفاتيح لتطابق أعمدة الجدول (التوكن و ID المالك)
+            token = bot_info.get("التوكن")
+            owner_id = bot_info.get("ID المالك")
             if token and owner_id:
                 async with Bot(token) as temp_bot:
                     await temp_bot.send_message(chat_id=owner_id, text=pre_msg, parse_mode=ParseMode.HTML)
         except: continue
 
     # 2. عملية المزامنة الفعلية (ورقة ورقة)
-    all_sheets = FACTORY_GLOBAL_CACHE["data"].keys()
+    all_sheets = list(FACTORY_GLOBAL_CACHE["data"].keys())
     total_updates = 0
     total_added = 0
 
@@ -437,23 +441,26 @@ async def sync_factory_to_sheets_smart():
             cache_rows = FACTORY_GLOBAL_CACHE["data"].get(sheet_name, [])
             headers = worksheet.row_values(1)
             
-            # تحديد العمود المفتاح (Key) للمطابقة (غالباً أول عمود أو bot_id)
+            if not headers:
+                continue
+
+            # تحديد العمود المفتاح (Key) للمطابقة (أول عمود في الجدول)
             match_key = headers[0] 
 
             # تحويل بيانات جوجل لقاموس للبحث السريع
             google_dict = {str(row.get(match_key)): row for row in google_data if row.get(match_key)}
 
-            for i, cache_row in enumerate(cache_rows):
+            for cache_row in cache_rows:
                 key_value = str(cache_row.get(match_key))
                 
                 # بناء الصف كقائمة (List) مطابقة للرؤوس
                 new_row_values = [cache_row.get(h, "") for h in headers]
 
                 if key_value in google_dict:
-                    # منطق المطابقة: هل هناك اختلاف؟
+                    # منطق المطابقة: هل هناك اختلاف في القيم؟
                     if list(google_dict[key_value].values()) != new_row_values:
-                        # تحديث الصف الموجود (row_index = index + 2 لأن الرؤوس تأخذ 1)
-                        # ملاحظة: للتوفير، يمكن تحديث الخلايا المتغيرة فقط، لكن تحديث الصف أضمن هنا
+                        # تحديث الصف الموجود (نبحث عن رقم السطر الحقيقي)
+                        # ملاحظة: تم استخدام index + 2 لأن الجداول في جوجل تبدأ من 1 والرأس يأخذ السطر 1
                         row_index = list(google_dict.keys()).index(key_value) + 2
                         worksheet.update(f"A{row_index}", [new_row_values])
                         total_updates += 1
@@ -462,7 +469,7 @@ async def sync_factory_to_sheets_smart():
                     worksheet.append_row(new_row_values)
                     total_added += 1
                 
-                # "التنفس البرمجي" لمنع Quota 429
+                # "التنفس البرمجي" لمنع Quota 429 (مهم جداً للـ 44 عمود)
                 await asyncio.sleep(0.6)
 
             print(f"✅ اكتملت الورقة: {sheet_name}")
@@ -485,15 +492,14 @@ async def sync_factory_to_sheets_smart():
 
     for bot_info in active_bots:
         try:
-            token = bot_info.get("token")
-            owner_id = bot_info.get("owner_id")
+            token = bot_info.get("التوكن")
+            owner_id = bot_info.get("ID المالك")
             if token and owner_id:
                 async with Bot(token) as temp_bot:
                     await temp_bot.send_message(chat_id=owner_id, text=post_msg, parse_mode=ParseMode.HTML)
         except: continue
 
     print(f"🎊 [FINISH] المزامنة اكتملت: {total_updates} تحديث، {total_added} إضافة جديدة.")
-
 
 # --------------------------------------------------------------------------
 
