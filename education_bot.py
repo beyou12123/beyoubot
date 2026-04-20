@@ -2387,18 +2387,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
     elif data == "close_panel":
         await query.edit_message_text("🔒 تم إغلاق لوحة التحكم.")
 
-    # التصحيح: معالج العودة للوحة الإدارة (المالك)
 
-    elif data == "back_to_admin":
-        # جلب الإعدادات لضمان وجود نص ترحيبي
-        config = get_bot_config(bot_token)
-        welcome = config.get("welcome_morning", "مرحباً بك مجدداً في مركز قيادة منصتك")
-        
-        await query.edit_message_text(
-            text=f"<b>{welcome}</b>\n\nمرحباً بك مجدداً في لوحة القيادة 🎓",
-            reply_markup=get_admin_panel(), # استدعاء اللوحة التي طلبتها
-            parse_mode="HTML"
-        )
 
 
 # --------------------------------------------------------------------------
