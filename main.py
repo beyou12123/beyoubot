@@ -312,6 +312,13 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     bot_type = context.user_data.get("type")
     bot_token = context.user_data.get("bot_token")
 
+    # تحديد المسمى العربي لنوع الوظيفة لضمان عدم ظهور الأكواد التقنية للمستخدم
+    bot_type_labels = {
+        "education_bot": "المنصة التعليمية الذكية",
+        # يمكن إضافة أنواع أخرى هنا مستقبلاً
+    }
+    friendly_type_name = bot_type_labels.get(bot_type, bot_type)
+
     msg = await update.message.reply_text("⏳ جاري تهيئة المحرك ...")
 
     try:
@@ -331,15 +338,14 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if success:
             # تشغيل البوت أوتوماتيكياً باستخدام المحرك الديناميكي الجديد
-            # ملاحظة: تم الحفاظ على استدعاء run_dynamic_bot كما هو في الكود الأصلي
-            from main import run_dynamic_bot # تأكد من صحة المسار حسب ملفك
+            from main import run_dynamic_bot 
             asyncio.create_task(run_dynamic_bot(bot_token, bot_type, user_id))
 
             # --- [الرسالة الأولى: إشعار النجاح للمستخدم في المصنع] ---
             user_success_text = (
                 f"<b>🎊 تمت العملية بنجاح!</b>\n\n"
                 f"لقد انتهينا من برمجة بوتك الجديد وإطلاقه في الفضاء الرقمي.\n\n"
-                f"📦 <b>نوع الموديول:</b> {bot_type}\n"
+                f"📦 <b>نوع الموديول:</b> {friendly_type_name}\n"
                 f"📛 <b>الاسم المخصص:</b> {bot_display_name}\n"
                 f"🤖 <b>يوزر البوت:</b> {bot_username}\n\n"
                 f"🚀 البوت الآن في وضع التشغيل، يمكنك التوجه إليه والبدء باستخدامه فوراً!"
@@ -355,7 +361,7 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
             congrats_text = (
                 f"<b>🎈 أهلاً بك في عالمك الخاص!</b>\n\n"
                 f"لقد تم ربط هذا البوت بنجاح بمصنع البوتات وقاعدة البيانات.\n\n"
-                f"📋 <b>الوظيفة الأساسية:</b> {friendly_type_name}\n" # سيظهر الاسم العربي الصحيح حسب النوع
+                f"📋 <b>الوظيفة الأساسية:</b> {friendly_type_name}\n"
                 f"📛 <b>الاسم:</b> {bot_display_name}\n"
                 f"⚙️ <b>الحالة:</b> مرتبط وجاهز للعمل\n"
                 f"-----------------------\n"
@@ -366,7 +372,6 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 # --- [ إضافة: إرسال دليل تهيئة النظام للمنصة التعليمية فقط ] ---
                 if bot_type == "education_bot":
-                    # نص الدليل الشامل الذي اتفقنا عليه
                     setup_guide_text = (
                         "🚀 <b>الدليل الشامل لتهيئة منصتك التعليمية</b>\n"
                         "━━━━━━━━━━━━━━━━━━\n"
@@ -389,7 +394,6 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         "━━━━━━━━━━━━━━━━━━\n"
                         "💡 <i>استخدم لوحة التحكم للبدء في التهيئة الآن.</i>"
                     )
-                    # إرسال الدليل كرسالة ثانية من البوت الجديد
                     await temp_bot.send_message(chat_id=user_id, text=setup_guide_text, parse_mode="HTML")
             except Exception as e:
                 print(f"⚠️ فشل إرسال رسائل الترحيب في البوت الجديد: {e}")
@@ -409,7 +413,7 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"-----------------------\n\n"
                 f"📈 <b>إجمالي إنتاج المصنع:</b> {total_bots} بوت"
             )
-            # ADMIN_ID يجب أن يكون معرفاً في ملفك
+            from main import ADMIN_ID
             await context.bot.send_message(chat_id=ADMIN_ID, text=admin_notification, parse_mode="HTML")
 
         else:
