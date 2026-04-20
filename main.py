@@ -825,25 +825,31 @@ app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message
 app.add_handler(MessageHandler(filters.Document.ALL, start_restore_process))
 
 # --- [ القسم 3: المحرك الرئيسي (نهاية الملف) ] ---
-
 async def main_factory_launcher():
-    """دالة داخلية لإدارة تسلسل الإقلاع بتركيز عالٍ"""
+    """دالة داخلية لإدارة تسلسل الإقلاع بتركيز عالٍ ومحمي"""
     try:
         # 1. تشغيل كافة البوتات التابعة أولاً لضمان جاهزيتها
+        # يتم استدعاء boot_all_bots التي تقوم بالفحص الأولي
         await boot_all_bots()
 
         # 2. --- [ إعداد محرك المزامنة الذكية للمصنع ] ---
-        from apscheduler.schedulers.asyncio import AsyncIOScheduler
-        from cache_manager import sync_factory_to_sheets_smart
-        from cache_manager import FACTORY_GLOBAL_CACHE, save_cache_to_disk
+        # حماية عملية الاستيراد لضمان عدم توقف السيرفر إذا نقصت مكتبة
+        try:
+            from apscheduler.schedulers.asyncio import AsyncIOScheduler
+            from cache_manager import sync_factory_to_sheets_smart
+            from cache_manager import FACTORY_GLOBAL_CACHE, save_cache_to_disk
 
-        scheduler = AsyncIOScheduler()
-        # ضبط المزامنة الساعة 3:30 فجراً بتوقيت السيرفر
-        scheduler.add_job(sync_factory_to_sheets_smart, 'cron', hour=3, minute=30)
-        scheduler.start()
-        print("⏰ تم تفعيل جدولة المزامنة الذكية: يومياً الساعة 03:30 فجراً")
+            scheduler = AsyncIOScheduler()
+            # ضبط المزامنة الساعة 3:30 فجراً بتوقيت السيرفر
+            scheduler.add_job(sync_factory_to_sheets_smart, 'cron', hour=3, minute=30)
+            scheduler.start()
+            print("⏰ تم تفعيل جدولة المزامنة الذكية: يومياً الساعة 03:30 فجراً")
+        except ImportError:
+            print("⚠️ تنبيه: مكتبة 'apscheduler' غير مثبتة. المصنع سيعمل ولكن بدون مزامنة فجرية.")
+        except Exception as sched_err:
+            print(f"⚠️ فشل تشغيل المجدول الزمني: {sched_err}")
 
-        # 3. تجهيز المهام الإضافية
+        # 3. تجهيز المهام الإضافية (تشغيل البوتات المصنوعة تتابعياً)
         asyncio.create_task(start_all_sub_bots()) 
         print("🚀 مصنع البوتات يعمل الآن بكافة محركاته...")
 
@@ -853,12 +859,14 @@ async def main_factory_launcher():
         await app.updater.start_polling(drop_pending_updates=True)
         await app.start()
         
-        # ابقاء البرنامج حياً
+        # حلقة الإبقاء على الحياة (Keep-Alive)
+        # ضرورية لضمان بقاء السيرفر حياً لتنفيذ المهام المجدولة (Scheduler)
         while True:
             await asyncio.sleep(3600)
 
     except Exception as e:
-        print(f"🔴 خطأ في إقلاع المصنع: {e}")
+        print(f"🔴 خطأ حرج في إقلاع المصنع: {e}")
+
 
 if __name__ == "__main__":
     import asyncio
