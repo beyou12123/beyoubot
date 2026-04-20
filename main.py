@@ -354,8 +354,8 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
             factory_info = await context.bot.get_me()
             congrats_text = (
                 f"<b>🎈 أهلاً بك في عالمك الخاص!</b>\n\n"
-                f"لقد تم ربط هذا البوت بنجاح بمصنع البوتات وقاعدة قاعدة البيانات.\n\n"
-                f"📋 <b>الوظيفة الأساسية:</b> {bot_type}\n"
+                f"لقد تم ربط هذا البوت بنجاح بمصنع البوتات وقاعدة البيانات.\n\n"
+                f"📋 <b>الوظيفة الأساسية:</b> {friendly_type_name}\n" # سيظهر الاسم العربي الصحيح حسب النوع
                 f"📛 <b>الاسم:</b> {bot_display_name}\n"
                 f"⚙️ <b>الحالة:</b> مرتبط وجاهز للعمل\n"
                 f"-----------------------\n"
