@@ -1864,7 +1864,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 #~~~~~~~~~~~~~~~~
 #ضبط زر 📢 الإعلانات
 #~~~~~~~~~~~~~~~~
-# --- [ محرك إدارة الإعلانات المطور ] ---
+# --- [ محرك إدارة الإعلانات المطور - النسخة المصححة ] ---
     elif data == "manage_ads":
         from course_engine import manage_ads_main_ui
         await manage_ads_main_ui(update, context)
@@ -1878,6 +1878,8 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         await ad_report_view(update, context)
 
     elif data.startswith("ad_set_crs_"):
+        # تصحيح: إضافة query لتعريفها داخل هذا النطاق
+        query = update.callback_query
         course_id = data.replace("ad_set_crs_", "")
         context.user_data['temp_ad'] = {'course_id': course_id}
         context.user_data['action'] = 'awaiting_ad_platform'
