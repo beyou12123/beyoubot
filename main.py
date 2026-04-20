@@ -933,6 +933,10 @@ async def main_factory_launcher():
         await app.initialize()
         await app.updater.start_polling(drop_pending_updates=True)
         await app.start()
+        # --- [ إشعار نجاح إعادة التشغيل ] ---
+        try:
+            await app.bot.send_message(chat_id=ADMIN_ID, text="✅ **تم إعادة تشغيل المحرك بنجاح!**\nكافة الأنظمة والروابط التسويقية تعمل الآن بنسخة نظيفة.")
+        except: pass
         
         # حلقة الإبقاء على الحياة (Keep-Alive)
         # ضرورية لضمان بقاء السيرفر حياً لتنفيذ المهام المجدولة (Scheduler)
