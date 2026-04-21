@@ -11,6 +11,7 @@ import re
 from sheets import (
     get_groups_by_course, 
     add_new_group, 
+    ss, 
     get_all_coaches, 
     get_employee_allowed_courses,
     get_employee_allowed_groups,
@@ -1150,7 +1151,91 @@ async def manage_categories_main(update, context):
     )
 
 # --------------------------------------------------------------------------
+#دالة الاختبار
 
+async def quiz_activation_start(update, context):
+    """جلب الدورات التدريبية التي لها أسئلة في البنك لعرضها للمدرب"""
+    query = update.callback_query
+    bot_id = str(context.bot.id)
+    
+    # 1. جلب بيانات الدورات من ورقة "الدورات_التدريبية"
+    courses_sheet = ss.worksheet("الدورات_التدريبية")
+    all_courses = courses_sheet.get_all_records()
+    
+    # 2. فلترة الدورات التابعة لهذا البوت فقط
+    my_courses = [c for c in all_courses if str(c.get('bot_id')) == bot_id]
+    
+    keyboard = []
+    for course in my_courses:
+        course_name = course.get('اسم_الدورة', 'دورة بدون اسم')
+        course_id = course.get('معرف_الدورة')
+        # إنشاء زر لكل دورة
+        keyboard.append([InlineKeyboardButton(f"📘 {course_name}", callback_data=f"act_q_crs_{course_id}")])
+    
+    keyboard.append([InlineKeyboardButton("🔙 عودة", callback_data="manage_control")])
+    
+    await query.edit_message_text(
+        "🎯 <b>تفعيل اختبار جديد:</b>\nاختر الدورة التي تريد تفعيل الاختبار لمجموعاتها:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="HTML"
+    )
+
+async def quiz_activation_groups(update, context, course_id):
+    """عرض المجموعات التابعة للدورة المختارة"""
+    query = update.callback_query
+    bot_id = str(context.bot.id)
+    
+    # 1. جلب المجموعات من ورقة "إدارة_المجموعات"
+    groups_sheet = ss.worksheet("إدارة_المجموعات")
+    all_groups = groups_sheet.get_all_records()
+    
+    # 2. فلترة المجموعات التي تتبع نفس البوت ونفس الدورة
+    relevant_groups = [
+        g for g in all_groups 
+        if str(g.get('bot_id')) == bot_id and str(g.get('معرف_الدورة')) == str(course_id)
+    ]
+    
+    keyboard = []
+    if not relevant_groups:
+        text = "⚠️ لا توجد مجموعات مفعلة لهذه الدورة حالياً."
+    else:
+        text = f"👥 <b>الدورة ID: {course_id}</b>\nاختر المجموعة المستهدفة لإطلاق الاختبار لها:"
+        for grp in relevant_groups:
+            g_name = grp.get('اسم_المجموعة', 'مجموعة غير مسمى')
+            g_id = grp.get('معرف_المجموعة')
+            keyboard.append([InlineKeyboardButton(f"👥 {g_name}", callback_data=f"act_q_final_{g_id}")])
+            
+    keyboard.append([InlineKeyboardButton("🔙 عودة للدورات", callback_data="manage_tests")])
+    
+    await query.edit_message_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="HTML"
+    )
+
+async def employee_quiz_view(update, context):
+    """عرض أرشيف الاختبارات من ورقة الاختبارات_الآلية"""
+    query = update.callback_query
+    bot_id = str(context.bot.id)
+    
+    tests_sheet = ss.worksheet("الاختبارات_الآلية")
+    all_tests = tests_sheet.get_all_records()
+    
+    my_tests = [t for t in all_tests if str(t.get('bot_id')) == bot_id]
+    
+    keyboard = []
+    for test in my_tests:
+        t_id = test.get('معرف_الاختبار')
+        t_status = "✅" if test.get('حالة_الاختبار') == "نشط" else "❌"
+        keyboard.append([InlineKeyboardButton(f"{t_status} اختبار ID: {t_id}", callback_data=f"q_toggle_vis_{t_id}")])
+        
+    keyboard.append([InlineKeyboardButton("🔙 عودة", callback_data="manage_control")])
+    
+    await query.edit_message_text(
+        "📂 <b>أرشيف الاختبارات الآلية:</b>\nيمكنك تبديل حالة الاختبار (نشط/متوقف) بالضغط عليه:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="HTML"
+    ) 
 # --------------------------------------------------------------------------
 
 # --------------------------------------------------------------------------
