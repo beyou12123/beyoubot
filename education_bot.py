@@ -341,11 +341,27 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 # --------------------------------------------------------------------------
     # --- [ أولوية محرك الإعلانات اللحظي ] ---
 
+    # --- [ ممرات إدارة الحملات الإعلانية ] ---
+    if data == "ad_create_start":
+        await course_engine.ad_create_start(update, context)
+        return
 
+    elif data == "ad_report_view":
+        await course_engine.generate_ad_report(update, context)
+        return
+
+    elif data == "manage_ads":
+        await course_engine.manage_ads_main_ui(update, context)
+        return
+        
+    elif data == "tech_settings":
+        # زر العودة يعود للقائمة الرئيسية
+        await start_handler(update, context)
+        return
 
 
     # 1. معالجة جداول المحاضرات
-    if data == "schedules_lectures":
+    elif data == "schedules_lectures":
         from educational_manager import show_lectures_logic
         await show_lectures_logic(update, context)
         
@@ -819,37 +835,9 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             parse_mode="HTML"
         )
 #~~~~~~~~~~~~~~~~
-    data = query.data
-    await query.answer()
-
 #~~~~~~~~~~~~~~~~
 
-    # --- أضف الكود هنا ليعمل زر إنشاء حملة والتقرير اللحظي ---
-    # --- [ معالجة أزرار الإعلانات الجديدة ] ---
-    if data == "manage_ads":
-        from course_engine import manage_ads_main_ui
-        await manage_ads_main_ui(update, context)
-        return
-
-    elif data == "ad_create_start":
-        from course_engine import ad_create_start
-        await ad_create_start(update, context)
-        return
-
-    elif data == "ad_report_view":
-        from course_engine import ad_report_view
-        await ad_report_view(update, context)
-        return
-
-    elif data.startswith("ad_set_crs_"):
-        course_id = data.replace("ad_set_crs_", "")
-        context.user_data['temp_ad'] = {'course_id': course_id}
-        context.user_data['action'] = 'awaiting_ad_platform'
-        await query.edit_message_text("🌐 <b>الخطوة 2:</b> أرسل اسم المنصة الإعلانية (مثلاً: فيسبوك):", parse_mode="HTML")
-        return
-
-
-
+    
 # --------------------------------------------------------------------------
     # --- [ معالج الدعم الفني ] ---
     if data == "contact_admin":
