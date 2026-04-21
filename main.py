@@ -715,8 +715,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 keyboard = [[InlineKeyboardButton("🔙 العودة للوحة التحكم", callback_data="open_admin_panel")]]
                 await query.edit_message_text(result_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
-                except: 
-                    pass
+
 # --- نهاية معالج الأزرار وبداية الدوال المستقلة ---
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
