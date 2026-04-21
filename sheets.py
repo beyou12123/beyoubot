@@ -1979,6 +1979,37 @@ def get_filtered_library_content(bot_token, user_id, course_id):
 
  
 # --------------------------------------------------------------------------
+# دالة حذف جميع الأوراق
+def reset_entire_database():
+    """
+    النسخة الاحترافية المعتمدة لتصفير مصنع البوتات
+    """
+    try:
+        # 1. جلب قائمة الأوراق قبل أي تغيير
+        old_sheets = ss.worksheets()
+        
+        # 2. التأكد من وجود ورقة 'الرئيسية' (إن لم تكن موجودة أنشئها)
+        try:
+            ss.worksheet("الرئيسية")
+            print("📝 ورقة 'الرئيسية' موجودة مسبقاً، سيتم الحفاظ عليها.")
+        except gspread.exceptions.WorksheetNotFound:
+            ss.add_worksheet(title="الرئيسية", rows="1000", cols="20")
+            print("🆕 تم إنشاء ورقة 'الرئيسية' لتكون مرجع النظام.")
+
+        # 3. تدمير كافة الأوراق الأخرى بلا استثناء
+        for sheet in old_sheets:
+            if sheet.title != "الرئيسية":
+                try:
+                    ss.del_worksheet(sheet)
+                    print(f"🗑️ تم تدمير الورقة: {sheet.title}")
+                except Exception as e:
+                    print(f"⚠️ فشل حذف {sheet.title}: {e}")
+
+        print("✅ تم تصفير قاعدة البيانات بنجاح. البوت الآن في وضع 'المصنع الفارغ'.")
+        return True
+    except Exception as e:
+        print(f"❌ خطأ حرج في تصفير النظام: {e}")
+        return False
 
 # --------------------------------------------------------------------------
 # اشعار التفعيل 

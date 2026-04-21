@@ -40,6 +40,7 @@ from sheets import (
     get_all_active_bots,
     setup_bot_factory_database, # أضف هذه أيضاً لأنها المحرك الرئيسي
     ensure_sheet_schema,
+    reset_entire_database, 
     ensure_all_sheets_schema
 )
 
@@ -451,7 +452,7 @@ async def owner_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton("📥 تحميل نسخة احتياطية", callback_data="download_cache_files")
         ],
         [InlineKeyboardButton("♻️ إعادة تشغيل المحرك", callback_data="reboot_system")],
-
+        [InlineKeyboardButton("⚠️ تصفير النظام بالكامل", callback_data="confirm_hard_reset")],
         [InlineKeyboardButton("بدء المزامنة ", callback_data="start_sync_shet")],
         [InlineKeyboardButton("📤 رفع نسخة احتياطية", callback_data="start_restore_request")],
         [InlineKeyboardButton("🔙 العودة", callback_data="back_to_main")]
@@ -505,9 +506,22 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     user_id = query.from_user.id
     await query.answer() # لإيقاف مؤشر التحميل في تليجرام
+    if data == "confirm_hard_reset":
+        keyboard = [
+            [InlineKeyboardButton("✅ نعم، متأكد", callback_data="execute_hard_reset")],
+            [InlineKeyboardButton("❌ تراجع", callback_data="dev_panel")]
+        ]
+        await query.edit_message_text("‼️ **تحذير حرج:**\nهذا الإجراء سيحذف كافة البيانات في جوجل شيت. هل أنت متأكد؟", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+
+    elif data == "execute_hard_reset":
+        await query.edit_message_text("⏳ جاري التصفير...")
+        if reset_entire_database():
+            await query.edit_message_text("✅ تم تصفير النظام بنجاح.\nيرجى إعادة تشغيل السيرفر الآن.")
+        else:
+            await query.edit_message_text("❌ فشلت العملية. راجع السجلات.")
 
     
-    if data == "restart_factory":
+    elif data == "restart_factory":
         await query.answer("🔄 جاري إعادة التشغيل...")
         from cache_manager import fetch_full_factory_data; await fetch_full_factory_data()        
         await query.edit_message_text("🔄 جاري إعادة تشغيل المصنع لتطبيق التحديثات...")
@@ -895,9 +909,10 @@ app = ApplicationBuilder().token(TOKEN).build()
 app.add_handler(CommandHandler("start", start))
 app.add_handler(create_bot_conv) 
 app.add_handler(admin_module_conv) # محادثة الرفع الجديدة
-app.add_handler(CallbackQueryHandler(button_callback))
+app.add_handler(CallbackQueryHandler(button_callback, handle_factory_callbacks, pattern="^(confirm_hard_reset|execute_hard_reset)"))
 app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
 app.add_handler(MessageHandler(filters.Document.ALL, start_restore_process))
+
 
 # --- [ القسم 3: المحرك الرئيسي (نهاية الملف) ] ---
 async def main_factory_launcher():

@@ -1131,7 +1131,8 @@ async def manage_categories_main(update, context):
     from sheets import get_all_categories
     
 
-    categories = get_all_categories() # تأكد أنها تعيد قائمة بالأقسام
+    categories = get_all_categories(bot_token) # تمرير التوكن المعرف في بداية الدالة
+
     
     keyboard = []
     if categories:
