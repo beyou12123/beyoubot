@@ -116,7 +116,6 @@ def get_sheets_structure():
     return sheets_config
 # --------------------------------------------------------------------------
 # [ نظام التحقق الذكي من الجداول والأعمدة بدون إعادة تهيئة ]
-
 def ensure_sheet_structure(sheet_name, required_headers):
     """
     التحقق من وجود الورقة + الأعمدة
@@ -125,17 +124,21 @@ def ensure_sheet_structure(sheet_name, required_headers):
     - يضيف فقط الأعمدة الناقصة
     """
     try:
+        # فاصل زمني لتهدئة API جوجل عند بدء التعامل مع كل ورقة
+        time.sleep(1.2) 
         try:
             sheet = ss.worksheet(sheet_name)
         except:
             # إنشاء الورقة إذا لم تكن موجودة
             sheet = ss.add_worksheet(title=sheet_name, rows="1000", cols="50")
+            time.sleep(1) # تأخير إضافي بعد عملية الإنشاء
             sheet.append_row(required_headers)
             print(f"✅ تم إنشاء الورقة: {sheet_name}")
             return True
 
         # جلب الصف الأول (العناوين)
         existing_headers = sheet.row_values(1)
+        time.sleep(0.5) # فاصل زمني بعد عملية القراءة
 
         # إذا كانت الورقة فارغة
         if not existing_headers:
@@ -149,6 +152,8 @@ def ensure_sheet_structure(sheet_name, required_headers):
         # إضافة الأعمدة الناقصة فقط
         if missing_headers:
             new_headers = existing_headers + missing_headers
+            # استخدام تأخير قبل التحديث المباشر
+            time.sleep(1) 
             sheet.update('1:1', [new_headers])
             print(f"⚙️ تم تحديث الأعمدة في {sheet_name} (إضافة الناقص فقط)")
         else:
