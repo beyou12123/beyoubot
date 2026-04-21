@@ -872,18 +872,7 @@ async def start_restore_process(update: Update, context: ContextTypes.DEFAULT_TY
 # --- [ القسم 1: الدوال التشغيلية (يجب أن تظل في الأعلى) ] ---
 
 # دالة تشغيل كافة البوتات عند الإقلاع لضمان التنفيذ المتسلسل
-async def boot_all_bots():
-    """هذه هي الدالة التي كانت تسبب خطأ name not defined، يجب التأكد من وجود محتواها هنا"""
-    from sheets import get_all_active_bots
-    active_bots = get_all_active_bots()
-    print(f"🔄 جاري تحضير إقلاع {len(active_bots)} بوت تابعة للمصنع...")
-    # هنا يتم تنفيذ منطق التشغيل الأولي إذا لزم الأمر
-    pass
-
-# --- دالة تشغيل البوتات المصنوعة تلقائياً بنظام التتابع الآمن ---
 async def start_all_sub_bots():
-    global app  # ✅ إضافة فقط
-
     from sheets import get_all_active_bots
     active_bots = get_all_active_bots()
     print(f"🔄 جاري محاولة تشغيل {len(active_bots)} بوت مصنوع...")
@@ -900,59 +889,47 @@ async def start_all_sub_bots():
 
     print("🎊 اكتملت عملية إقلاع كافة البوتات التابعة.")
 
-    # 🔴 هذا هو الجزء المهم
-    TOKEN = get_bot_config("TOKEN")
-    
-    app = ApplicationBuilder().token(TOKEN).build()
-
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(create_bot_conv) 
-    app.add_handler(admin_module_conv)
-    app.add_handler(CallbackQueryHandler(button_callback, pattern="^(stats_all|run_setup_db_now|broadcast_owners|restart_factory|download_cache_files|reboot_system|confirm_hard_reset|execute_hard_reset|start_sync_shet|start_restore_request|back_to_main|open_admin_dashboard)$"))
-    app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
-    app.add_handler(MessageHandler(filters.Document.ALL, start_restore_process))
-
 # --- [ القسم 3: المحرك الرئيسي (نهاية الملف) ] ---
 async def main_factory_launcher():
-    """دالة داخلية لإدارة تسلسل الإقلاع بتركيز عالٍ ومحمي"""
+    global app
     try:
-        # 1. تشغيل كافة البوتات التابعة أولاً لضمان جاهزيتها
-        # يتم استدعاء boot_all_bots التي تقوم بالفحص الأولي
-        await boot_all_bots()
+        # 🟢 الحل القسري: بناء التطبيق فوراً قبل أي عمليات أخرى
+        print("🔧 جاري بناء محرك البوت الرئيسي...")
+        app = ApplicationBuilder().token(TOKEN).build()
 
-        # 2. --- [ إعداد محرك المزامنة الذكية للمصنع ] ---
-        # حماية عملية الاستيراد لضمان عدم توقف السيرفر إذا نقصت مكتبة
+        # إضافة المعالجات (Handlers) هنا لضمان ربطها بالتطبيق المنشأ
+        app.add_handler(CommandHandler("start", start))
+        app.add_handler(create_bot_conv) 
+        app.add_handler(admin_module_conv)
+        app.add_handler(CallbackQueryHandler(button_callback, pattern="^(stats_all|run_setup_db_now|broadcast_owners|restart_factory|download_cache_files|reboot_system|confirm_hard_reset|execute_hard_reset|start_sync_shet|start_restore_request|back_to_main|open_admin_dashboard)$"))
+        app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
+        app.add_handler(MessageHandler(filters.Document.ALL, start_restore_process))
+
+        # 2. تشغيل البوتات التابعة في الخلفية
+        await boot_all_bots()
+        
+        # 3. إعداد المجدول الزمني
         try:
             from apscheduler.schedulers.asyncio import AsyncIOScheduler
             from cache_manager import sync_factory_to_sheets_smart
-            from cache_manager import FACTORY_GLOBAL_CACHE, save_cache_to_disk
-
             scheduler = AsyncIOScheduler()
-            # ضبط المزامنة الساعة 3:30 فجراً بتوقيت السيرفر
             scheduler.add_job(sync_factory_to_sheets_smart, 'cron', hour=3, minute=30)
             scheduler.start()
-            print("⏰ تم تفعيل جدولة المزامنة الذكية: يومياً الساعة 03:30 فجراً")
-        except ImportError:
-            print("⚠️ تنبيه: مكتبة 'apscheduler' غير مثبتة. المصنع سيعمل ولكن بدون مزامنة فجرية.")
-        except Exception as sched_err:
-            print(f"⚠️ فشل تشغيل المجدول الزمني: {sched_err}")
+        except: pass
 
-        # 3. تجهيز المهام الإضافية (تشغيل البوتات المصنوعة تتابعياً)
         asyncio.create_task(start_all_sub_bots()) 
-        print("🚀 مصنع البوتات يعمل الآن بكافة محركاته...")
 
-        # 4. تشغيل بوت المصنع الرئيسي
+        # 4. تشغيل البوت الرئيسي (الآن app لم يعد None)
         print("🚀 بوت المصنع الرئيسي قيد التشغيل الآن...")
         await app.initialize()
         await app.updater.start_polling(drop_pending_updates=True)
         await app.start()
-        # --- [ إشعار نجاح إعادة التشغيل ] ---
+        
+        # إشعار النجاح
         try:
-            await app.bot.send_message(chat_id=ADMIN_ID, text="✅ **تم إعادة تشغيل المحرك بنجاح!**\nكافة الأنظمة والروابط التسويقية تعمل الآن بنسخة نظيفة.")
+            await app.bot.send_message(chat_id=ADMIN_ID, text="✅ **تم إعادة تشغيل المحرك بنجاح!**")
         except: pass
         
-        # حلقة الإبقاء على الحياة (Keep-Alive)
-        # ضرورية لضمان بقاء السيرفر حياً لتنفيذ المهام المجدولة (Scheduler)
         while True:
             await asyncio.sleep(3600)
 
