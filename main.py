@@ -666,42 +666,38 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 color_index += 1
                 await asyncio.sleep(2.5) 
 
-                # 4. انتظار النتيجة النهائية
-                # 4. انتظار النتيجة النهائية
+                 # 4. انتظار النتيجة النهائية
                 try:
-                    # انتظار المهمة بشكل صحيح لالتقاط القيمة المعادة من sheets.py
                     result = await setup_task
                     
-                    # التحقق من نوع النتيجة لضمان عدم حدوث خطأ في await
                     if isinstance(result, (int, float)):
                         sheets_count = int(result)
                     else:
-                        # استخدام total_sheets المعرف في بداية الدالة
                         sheets_count = total_sheets if result else 0
-                         
-            if sheets_count > 0:
-                result_text = (
-                    "✅ <b>تمت العملية بنجاح!</b>\n"
-                    "━━━━━━━━━━━━━━\n"
-                    f"📦 تم إنشاء وتنسيق (<b>{sheets_count} ورقة</b>) بالكامل.\n"
-                    "🛡️ نظام الحماية والتحقق من المخطط (Schema) نشط الآن."
-                )
-            else:
-                result_text = "⚠️ <b>النظام مهيأ بالفعل!</b>\nالجداول موجودة ومحدثة."
-                    # تحديث الرام فوراً لضمان مطابقة البيانات الجديدة
-                from cache_manager import fetch_full_factory_data
-               await fetch_full_factory_data()
                         
-        except Exception as e:
-            print(f"❌ خطأ في التهيئة: {e}")
-            result_text = f"❌ <b>فشلت العملية!</b>\nحدث خطأ أثناء المعالجة: {str(e)}"
+                    if sheets_count > 0:
+                        result_text = (
+                            "✅ <b>تمت العملية بنجاح!</b>\n"
+                            "━━━━━━━━━━━━━━\n"
+                            f"📦 تم إنشاء وتنسيق (<b>{sheets_count} ورقة</b>) بالكامل.\n"
+                            "🛡️ نظام الحماية والتحقق من المخطط (Schema) نشط الآن."
+                        )
+                    else:
+                        result_text = "⚠️ <b>النظام مهيأ بالفعل!</b>\nالجداول موجودة ومحدثة."
                     
-        finally:
-            context.user_data["setup_running"] = False
+                    from cache_manager import fetch_full_factory_data
+                    await fetch_full_factory_data()
+                        
+                except Exception as e:
+                    print(f"❌ خطأ في التهيئة: {e}")
+                    result_text = f"❌ <b>فشلت العملية!</b>\nحدث خطأ أثناء المعالجة: {str(e)}"
+                    
+                finally:
+                    context.user_data["setup_running"] = False
 
-                # إرسال الرسالة النهائية وتوفير زر العودة (بمحاذاة الـ finally)
-        keyboard = [[InlineKeyboardButton("🔙 العودة للوحة التحكم", callback_data="open_admin_panel")]]
-        await query.edit_message_text(result_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+                keyboard = [[InlineKeyboardButton("🔙 العودة للوحة التحكم", callback_data="open_admin_panel")]]
+                await query.edit_message_text(result_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
 # --- نهاية معالج الأزرار وبداية الدوال المستقلة ---
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دالة إلغاء عملية إنشاء البوت والعودة للقائمة الرئيسية"""
