@@ -903,22 +903,22 @@ async def start_all_sub_bots():
             print(f"✅ تم إرسال أمر تشغيل للبوت: {bot_type}")
 
     print("🎊 اكتملت عملية إقلاع كافة البوتات التابعة.")
-
-# --- [ القسم 2: بناء التطبيق والمعالجات ] ---
-    # إنشاء التطبيق
+    # --- [ القسم 2: بناء التطبيق والمعالجات ] ---
+    # إنشاء التطبيق - تأكد من أن الحرف الأول صغير 'app'
     app = ApplicationBuilder().token(TOKEN).build()
 
-    # إضافة المعالجات (تأكد من وجود 4 مسافات بادئة لكل سطر)
+    # إضافة المعالجات (مع الحفاظ على كافة الوظائف والمسافات البادئة)
     app.add_handler(CommandHandler("start", start))
     app.add_handler(create_bot_conv) 
     app.add_handler(admin_module_conv) # محادثة الرفع الجديدة
     
-    # المعالج الشامل المحدث للأزرار
+    # المعالج الشامل المحدث للأزرار - تم إضافة open_admin_dashboard لضمان الاستجابة
     app.add_handler(CallbackQueryHandler(button_callback, pattern="^(stats_all|run_setup_db_now|broadcast_owners|restart_factory|download_cache_files|reboot_system|confirm_hard_reset|execute_hard_reset|start_sync_shet|start_restore_request|back_to_main|open_admin_dashboard)$"))
     
     # معالجة الرسائل والملفات
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
     app.add_handler(MessageHandler(filters.Document.ALL, start_restore_process))
+
 
 
 # --- [ القسم 3: المحرك الرئيسي (نهاية الملف) ] ---
