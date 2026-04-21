@@ -596,7 +596,8 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
                 if u_cell:
                     old_bal = float(sheet_users.cell(u_cell.row, 11).value or 0)
                     sheet_users.update_cell(u_cell.row, 11, old_bal + refund_amount)
-                
+               
+               
                 update_withdrawal_status(bot_token, req_id, "مرفوض", admin_note="تم الرفض وإعادة الرصيد")
                 await query.edit_message_text(f"❌ تم رفض الطلب <code>{req_id}</code> وإعادة {refund_amount} إلى رصيد المسوق.", parse_mode="HTML")
         except Exception as e:
@@ -756,7 +757,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             str(bot_token), "1001001", gift_code, str(user_id), "100", 
             "هدية دورة", "1", "نشط", get_system_time("date"), "2026-12-31", f"دورة_{course_id}"
         ]
-        sheet_coupons.append_row(new_row)
+        sheet_coupons.append_row(new_row, value_input_option='USER_ENTERED')
 
         update_global_version(bot_token)
 

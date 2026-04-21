@@ -133,7 +133,7 @@ def ensure_sheet_structure(sheet_name, required_headers):
             # إنشاء الورقة إذا لم تكن موجودة
             sheet = ss.add_worksheet(title=sheet_name, rows="1000", cols="50")
             time.sleep(1) # تأخير إضافي بعد عملية الإنشاء
-            sheet.append_row(required_headers)
+            sheet.append_row(required_headers, value_input_option='USER_ENTERED')
             print(f"✅ تم إنشاء الورقة: {sheet_name}")
             return True
 
@@ -143,7 +143,7 @@ def ensure_sheet_structure(sheet_name, required_headers):
 
         # إذا كانت الورقة فارغة
         if not existing_headers:
-            sheet.append_row(required_headers)
+            sheet.append_row(required_headers, value_input_option='USER_ENTERED')
             print(f"✅ تم إضافة العناوين للورقة الفارغة: {sheet_name}")
             return True
 
@@ -528,7 +528,8 @@ def save_bot(owner_id, bot_type, bot_name, bot_token):
             print(f"♻️ تم تحديث بيانات البوت {bot_id_only} وتفادي التكرار.")
         except:
             # إذا لم يجد التوكن، يضيف صفاً جديداً
-            bots_sheet.append_row(bot_row)
+            
+            bots_sheet.append_row(bot_row, value_input_option='USER_ENTERED')
             print(f"✨ تم تسجيل بوت جديد بنجاح: {bot_id_only}")
 
         # 6. إدارة ورقة "إعدادات_المحتوى" مع منع التكرار
@@ -543,7 +544,7 @@ def save_bot(owner_id, bot_type, bot_name, bot_token):
             # تحديث المالك فقط
             content_sheet.update_cell(cell_content.row, 10, str(owner_id))
         except:
-            content_sheet.append_row(content_row)
+            content_sheet.append_row(content_row, value_input_option='USER_ENTERED')
             print("📝 تم إنشاء سجل إعدادات المحتوى.")
 
         return True
@@ -590,7 +591,7 @@ def add_log_entry(bot_id, log_type, message):
         if not connect_to_google(): return False
     try:
         now = get_system_time("full")
-        logs_sheet.append_row([str(bot_id), log_type, message, now])
+        logs_sheet.append_row([str(bot_id), log_type, message, now], value_input_option='USER_ENTERED')
         return True
     except Exception as e:
         print(f"❌ خطأ تدوين سجل: {e}")
@@ -780,7 +781,7 @@ def setup_bot_factory_database(bot_token=None):
         for i in range(0, len(all_requests), BATCH_SIZE):  
             try:
                 safe_api_call(ss.batch_update, {"requests": all_requests[i:i+BATCH_SIZE]})  
-                time.sleep(3.5)
+                time.sleep(4.5)
             except: pass
 
     if bot_token:  
@@ -1005,7 +1006,8 @@ def add_new_category(bot_token, cat_id, cat_name):
                 "001",                        # 7. معرف_الفرع (افتراضي)
                 "إضافة عبر لوحة التحكم"       # 8. ملاحظات
             ]
-            departments_sheet.append_row(row)
+            
+            departments_sheet.append_row(row, value_input_option='USER_ENTERED')
             update_global_version(bot_token)
 
 
@@ -1097,7 +1099,7 @@ def add_new_course(bot_token, course_id, name, hours, start_date, end_date, c_ty
         ]
         
         # 3. تنفيذ عملية الحفظ الفعلية
-        courses_sheet.append_row(row)
+        courses_sheet.append_row(row, value_input_option='USER_ENTERED')
         update_global_version(bot_token)
 
 
@@ -1295,7 +1297,7 @@ def save_ai_setup(bot_token, user_id, username, institution_name=None, ai_instru
                 "نشط", "إداري", 0, now, "ar", "Direct", 
                 "", 0, institution_name or "", ai_instructions or ""
             ]
-            sheet.append_row(row)
+            sheet.append_row(row, value_input_option='USER_ENTERED')
             update_global_version(bot_token)
         return True
     except Exception as e:
@@ -1502,7 +1504,7 @@ def add_new_group(bot_token, group_id, name, course_id, days, timing, teacher_id
             kwargs.get('link', 'لم يحدد بعد'),          # 14. رابط_المجموعة
             get_system_time("date")        # 15. تاريخ_الإنشاء
         ]
-        sheet.append_row(row)
+        sheet.append_row(row, value_input_option='USER_ENTERED')
         update_global_version(bot_token)
         return True
     except Exception as e:
@@ -1547,7 +1549,7 @@ def save_group_to_db(bot_token, data):
             "لم يحدد",                     # 14. رابط_المجموعة
             now                            # 15. تاريخ_الإنشاء
         ]
-        sheet.append_row(row)
+        sheet.append_row(row, value_input_option='USER_ENTERED')
         update_global_version(bot_token)
         return True
     except Exception as e:
@@ -1626,7 +1628,7 @@ def add_question_to_bank(bot_token, q_data):
             get_system_time(),           # 20. تاريخ_الإضافة
             str(q_data['creator_id'])    # 21. معرف_منشئ_السؤال
         ]
-        sheet.append_row(row)
+        sheet.append_row(row, value_input_option='USER_ENTERED')
         
         # 🔥 أهم خطوة: تحديث الإصدار لإجبار الكاش على سحب البيانات الجديدة فوراً
         from cache_manager import update_global_version
@@ -1681,7 +1683,7 @@ def create_auto_quiz(bot_token, data):
             data.get('coach_id'),              # 15
             get_system_time()                  # 16
         ]
-        sheet.append_row(row)
+        sheet.append_row(row, value_input_option='USER_ENTERED')
         update_global_version(bot_token)
         return True, data.get('quiz_id')
     except Exception as e:
@@ -1717,7 +1719,7 @@ def ensure_permission_row_exists(bot_token, person_id):
         if not existing:
             # إنشاء صف بـ 14 عموداً: bot_id, ID, 9 صلاحيات (FALSE), نطاقات (فارغ), تحديث
             new_row = [str(bot_token), str(person_id)] + ["FALSE"] * 9 + ["", "", "FALSE"]
-            sheet.append_row(new_row)
+            sheet.append_row(new_row, value_input_option='USER_ENTERED')
             return True
 
     except Exception as e:
@@ -1948,7 +1950,7 @@ def save_discount_code_full(bot_token, data):
             "إضافة آلية"                # 15. ملاحظات
         ]
         
-        sheet.append_row(row)
+        sheet.append_row(row, value_input_option='USER_ENTERED')
         # رفع إصدار البوت لتحديث الرام فوراً ليعلم النظام بالكود الجديد
         update_global_version(bot_token)
         return True
@@ -2236,7 +2238,7 @@ def record_student_submission(bot_token, data):
             now_str,                       # آخر_تحديث
             "TRUE"                         # مرئي_للطالب
         ]
-        sheet.append_row(row)
+        sheet.append_row(row, value_input_option='USER_ENTERED')
         update_global_version(bot_token)
         return True
     except Exception as e:
@@ -2682,7 +2684,7 @@ def create_withdrawal_request(bot_token, user_id, username, amount, payment_meth
             "قيد الانتظار", "", "", ""
         ]
         
-        sheet_requests.append_row(row)
+        sheet_requests.append_row(row, value_input_option='USER_ENTERED')
         update_global_version(bot_token) # تحديث الكاش لضمان مزامنة الرصيد الجديد
         return True, request_id
     except Exception as e:
@@ -2785,7 +2787,7 @@ def add_new_ad_campaign(bot_token, branch_id, course_id, campaign_name, platform
             "نشط",       # الحالة الافتراضية
             str(marketer_id)
         ]
-        sheet.append_row(row)
+        sheet.append_row(row, value_input_option='USER_ENTERED')
         return True, campaign_id
     except Exception as e:
         print(f"❌ Error adding campaign: {e}")
@@ -2864,7 +2866,7 @@ def add_library_item_to_sheet(bot_token, course_id, file_name, file_link, status
             0                        # عدد_المشاركات
         ]
         
-        sheet.append_row(row)
+        sheet.append_row(row, value_input_option='USER_ENTERED')
         return True
     except Exception as e:
         print(f"❌ خطأ في إضافة ملف للمكتبة: {e}")

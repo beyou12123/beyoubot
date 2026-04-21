@@ -359,8 +359,8 @@ async def process_restore_logic(file_content, requester_id):
                     if new_records:
                         headers = list(new_records[0].keys())
                         rows = [list(r.values()) for r in new_records]
-                        sheet.append_row(headers)
-                        sheet.append_rows(rows)
+                        sheet.append_row(headers, value_input_option='USER_ENTERED')
+                        sheet.append_rows(rows, value_input_option='USER_ENTERED')
                     FACTORY_GLOBAL_CACHE["data"][sheet_name] = new_records
                 else:
                     # --- [ وضع البوت الفرعي: استبدال أسطر العميل فقط ] ---
@@ -377,8 +377,8 @@ async def process_restore_logic(file_content, requester_id):
                     if updated_list:
                         headers = list(updated_list[0].keys())
                         rows = [list(r.values()) for r in updated_list]
-                        sheet.append_row(headers)
-                        sheet.append_rows(rows)
+                        sheet.append_row(headers, value_input_option='USER_ENTERED')
+                        sheet.append_rows(rows, value_input_option='USER_ENTERED')
                     FACTORY_GLOBAL_CACHE["data"][sheet_name] = updated_list
 
                 # تحديث المرآة (الملف الفيزيائي على القرص)
@@ -473,7 +473,7 @@ async def sync_factory_to_sheets_smart():
                         total_updates += 1
                 else:
                     # إضافة صف جديد تماماً
-                    worksheet.append_row(new_row_values)
+                    worksheet.append_row(new_row_values, value_input_option='USER_ENTERED')
                     total_added += 1
                 
                 # "التنفس البرمجي" لمنع Quota 429 (مهم جداً للـ 44 عمود)

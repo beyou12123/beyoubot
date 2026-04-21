@@ -138,7 +138,7 @@ async def finalize_and_save(update: Update, context: ContextTypes.DEFAULT_TYPE):
         row_db[4], row_db[5], row_db[7], row_db[9], row_db[10] = state['name_en'], state['name_ar'], state['country'], state['phone'], state['email']
         row_db[13], row_db[16], row_db[17], row_db[37] = "نشط", state['course_id'], state['course_name'], user.username
         
-        ss.worksheet("قاعدة_بيانات_الطلاب").append_row(row_db)
+        ss.worksheet("قاعدة_بيانات_الطلاب").append_row(row_db, value_input_option='USER_ENTERED')
 
         # ب: تجهيز سجل_التسجيلات (مطابقة لـ 37 عموداً التي أرسلتها)
         reg_id = f"REG{str(uuid.uuid4().int)[:5]}"
@@ -163,7 +163,7 @@ async def finalize_and_save(update: Update, context: ContextTypes.DEFAULT_TYPE):
         row_reg[13] = state['pay_method']     # طريقة_التسجيل
         row_reg[20] = "قيد الانتظار"            # حالة_الدفع
         
-        ss.worksheet("سجل_التسجيلات").append_row(row_reg)
+        ss.worksheet("سجل_التسجيلات").append_row(row_reg, value_input_option='USER_ENTERED')
 
 
         # تفرقة المسار المالي
@@ -550,7 +550,7 @@ async def grant_reward_unified(update, context, reward_type="وسام"):
         ]
         
         # 1. التنفيذ الفعلي في جوجل شيت
-        ss.worksheet("الأوسمة_والإنجازات").append_row(row)
+        ss.worksheet("الأوسمة_والإنجازات").append_row(row, value_input_option='USER_ENTERED')
         
         # 2. رفع الإصدار لتحديث الكاش فوراً
         update_global_version(bot_token)
