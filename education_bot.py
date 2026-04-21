@@ -345,7 +345,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 
 
     # 1. معالجة جداول المحاضرات
-    elif data == "schedules_lectures":
+    if data == "schedules_lectures":
         from educational_manager import show_lectures_logic
         await show_lectures_logic(update, context)
         
@@ -825,7 +825,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 #~~~~~~~~~~~~~~~~
 
     # --- أضف الكود هنا ليعمل زر إنشاء حملة والتقرير اللحظي ---
-    if data == "manage_ads":
+    elif data == "manage_ads":
         from course_engine import manage_ads_main_ui
         await manage_ads_main_ui(update, context)
         return
@@ -847,12 +847,6 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         await query.edit_message_text("🌐 <b>الخطوة 2:</b> أرسل اسم المنصة الإعلانية (مثلاً: فيسبوك):", parse_mode="HTML")
         return
     # --- نهاية الإضافة ---
-
-    if data == "contact_admin":
-        # ... بقية الكود الأصلي في الملف
-
-
-
 
 # --------------------------------------------------------------------------
     # --- [ معالج الدعم الفني ] ---
