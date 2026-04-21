@@ -883,6 +883,8 @@ async def start_restore_process(update: Update, context: ContextTypes.DEFAULT_TY
 # --- [ القسم 1: الدوال التشغيلية (يجب أن تظل في الأعلى) ] ---
 
 # دالة تشغيل كافة البوتات عند الإقلاع لضمان التنفيذ المتسلسل
+RUNNING_BOTS = set()
+
 async def start_all_sub_bots():
     from sheets import get_all_active_bots
     active_bots = get_all_active_bots()
@@ -894,6 +896,13 @@ async def start_all_sub_bots():
         bot_type = bot_data.get("نوع البوت")
         
         if token and bot_type:
+            # 🔒 إضافة حماية لمنع تشغيل نفس البوت مرتين (سبب 409 Conflict)
+            if token in RUNNING_BOTS:
+                print(f"⚠️ البوت يعمل مسبقًا: {bot_type}")
+                continue
+
+            RUNNING_BOTS.add(token)
+
             await asyncio.sleep(1.5) 
             asyncio.create_task(run_dynamic_bot(token, bot_type, owner_id))
             print(f"✅ تم إرسال أمر تشغيل للبوت: {bot_type}")
