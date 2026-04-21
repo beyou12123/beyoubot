@@ -819,7 +819,8 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             parse_mode="HTML"
         )
 #~~~~~~~~~~~~~~~~
-
+    data = query.data
+    await query.answer()
 
 #~~~~~~~~~~~~~~~~
 
