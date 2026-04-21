@@ -197,32 +197,31 @@ async def manage_control_ui(update, context):
     user_id = update.effective_user.id
     bot_token = context.bot.token
     
-    # 1. استدعاء السينك مانجر للوصول للبيانات اللحظية
-    from cache_manager import sync_manager
+    # 1. استدعاء الكاش المركزي وإعدادات البوت
+    from cache_manager import FACTORY_GLOBAL_CACHE
     from sheets import get_bot_config
     
-    # جلب إعدادات البوت لمعرفة ID المالك
     config = get_bot_config(bot_token)
     bot_owner_id = int(config.get("admin_ids", 0))
 
-    # 2. تحديد وجهة زر العودة الافتراضية (للأمان)
+    # 2. تحديد وجهة زر العودة الافتراضية
     back_callback = "main_menu" 
 
-    # 3. فحص الرتبة (التسلسل الهرمي باستغلال الكاش)
+    # 3. فحص الرتبة (التسلسل الهرمي)
     if user_id == bot_owner_id:
-        # المالك يعود لإعدادات النظام
         back_callback = "tech_settings"
     else:
-        # استخراج بيانات ورقة إدارة الموظفين من الكاش
-        employees_data = sync_manager.get_sheet_data("إدارة_الموظفين")
+        # استخراج بيانات الموظفين من الكاش (كتلة البيانات)
+        employees_data = FACTORY_GLOBAL_CACHE["data"].get("إدارة_الموظفين", [])
         
         if employees_data:
-            # البحث عن صف الموظف بناءً على user_id (نفترض الـ ID في العمود 4 - فهرس 3)
-            # ونبحث عن الرتبة في العمود 42 (فهرس 41)
-            user_row = next((row for row in employees_data if str(row[3]) == str(user_id)), None)
+            # البحث الذكي: نحول الـ ID لنص لضمان المطابقة
+            # نستخدم .get() للوصول للقيم بأسماء الأعمدة لضمان الدقة
+            user_row = next((row for row in employees_data if str(row.get('معرف_الموظف')) == str(user_id)), None)
             
-            if user_row and len(user_row) >= 42:
-                user_role = str(user_row[41]).strip() # العمود 42: الرتبة
+            if user_row:
+                # جلب الرتبة من العمود المخصص (الرتبة)
+                user_role = str(user_row.get('الرتبة', '')).strip()
                 if user_role == "مدير النظام":
                     back_callback = "get_admin_panel"
                 elif user_role == "مدرب":
@@ -230,13 +229,13 @@ async def manage_control_ui(update, context):
                 elif user_role == "موظف":
                     back_callback = "get_employee_panel"
 
-    # 4. بناء لوحة المفاتيح بالزر الديناميكي
+    # 4. بناء لوحة المفاتيح
     keyboard = [
         [InlineKeyboardButton("📝 إدارة الاختبارات", callback_data="manage_quizzes"),
          InlineKeyboardButton("📚 بنك الأسئلة", callback_data="manage_q_bank")],
         [InlineKeyboardButton("📝 سجل الإجابات", callback_data="view_exam_logs"),
          InlineKeyboardButton("📑 إدارة الواجبات", callback_data="manage_homeworks")],
-        [InlineKeyboardButton("🔙 عودة", callback_data=back_callback)] # هنا الزر الذكي
+        [InlineKeyboardButton("🔙 عودة", callback_data=back_callback)]
     ]
 
     await query.edit_message_text(
@@ -361,53 +360,70 @@ async def start_add_question_ui(update, context):
 # --------------------------------------------------------------------------
 # واجهة لعرض الأسئلة كأزرار 
 async def browse_q_bank_ui(update, context):
-    """عرض قائمة الأسئلة الموجودة في البنك لاختيار أحدها"""
+    """عرض قائمة الأسئلة الموجودة في البنك لاختيار أحدها - تعتمد على الكاش المركزي"""
     query = update.callback_query
     bot_token = context.bot.token
     
-    from sheets import get_all_questions_from_bank
-    questions = get_all_questions_from_bank(bot_token)
+    # جلب البيانات من الكاش المركزي مباشرة
+    from cache_manager import FACTORY_GLOBAL_CACHE
+    all_questions = FACTORY_GLOBAL_CACHE["data"].get("بنك_الأسئلة", [])
+    
+    # تصفية الأسئلة الخاصة بهذا البوت فقط
+    questions = [q for q in all_questions if str(q.get('bot_id')) == str(bot_token)]
     
     if not questions:
-        await query.edit_message_text("🗄 <b>بنك الأسئلة فارغ حالياً.</b>\nابدأ بإضافة أسئلة أولاً لتظهر هنا.", 
-                                     reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 عودة", callback_data="manage_q_bank")]]), parse_mode="HTML")
+        await query.edit_message_text(
+            "🗄 <b>بنك الأسئلة فارغ حالياً.</b>\nابدأ بإضافة أسئلة أولاً لتظهر هنا.", 
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 عودة", callback_data="manage_q_bank")]]), 
+            parse_mode="HTML"
+        )
         return
 
     keyboard = []
-    # عرض أول 10 أسئلة (لضمان عدم تجاوز حجم الرسالة)
-    for q in questions[:10]:
-        # نأخذ أول 30 حرف من السؤال كعنوان للزر
-        q_text = (q['نص_السؤال'][:30] + '..') if len(q['نص_السؤال']) > 30 else q['نص_السؤال']
-        keyboard.append([InlineKeyboardButton(f"❓ {q_text}", callback_data=f"view_q_det_{q['معرف_السؤال']}")])
+    # عرض آخر 10 أسئلة مضافة (لضمان السرعة ومواكبة التحديثات)
+    for q in questions[-10:]:
+        q_text_val = q.get('نص_السؤال', 'بدون نص')
+        q_id = q.get('معرف_السؤال')
+        
+        display_text = (q_text_val[:30] + '..') if len(q_text_val) > 30 else q_text_val
+        keyboard.append([InlineKeyboardButton(f"❓ {display_text}", callback_data=f"view_q_det_{q_id}")])
     
     keyboard.append([InlineKeyboardButton("🔙 عودة", callback_data="manage_q_bank")])
-    await query.edit_message_text(f"🔍 <b>استعراض الأسئلة ({len(questions)} سؤال):</b>\nاختر سؤالاً لعرض تفاصيله أو حذفه:", 
-                                 reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+    
+    await query.edit_message_text(
+        f"🔍 <b>استعراض الأسئلة ({len(questions)} سؤال):</b>\nاختر سؤالاً لعرض تفاصيله أو حذفه:", 
+        reply_markup=InlineKeyboardMarkup(keyboard), 
+        parse_mode="HTML"
+    )
 
 async def view_question_details_ui(update, context, q_id):
-    """عرض تفاصيل السؤال مع زر الحذف"""
+    """عرض تفاصيل السؤال مع زر الحذف - قراءة من الكاش"""
     query = update.callback_query
     bot_token = context.bot.token
     
-    from sheets import get_all_questions_from_bank
-    all_q = get_all_questions_from_bank(bot_token)
-    q = next((item for item in all_q if str(item['معرف_السؤال']) == str(q_id)), None)
+    # جلب البيانات من الكاش المركزي
+    from cache_manager import FACTORY_GLOBAL_CACHE
+    all_questions = FACTORY_GLOBAL_CACHE["data"].get("بنك_الأسئلة", [])
+    
+    # البحث عن السؤال المطابق لمعرف السؤال وتوكن البوت
+    q = next((item for item in all_questions if str(item.get('معرف_السؤال')) == str(q_id) 
+              and str(item.get('bot_id')) == str(bot_token)), None)
     
     if not q:
-        await query.answer("⚠️ تعذر العثور على السؤال.")
+        await query.answer("⚠️ تعذر العثور على بيانات السؤال في الكاش.")
         return
 
     text = (
         f"📝 <b>تفاصيل السؤال:</b>\n"
         f"━━━━━━━━━━━━━━\n"
-        f"❓ <b>السؤال:</b> {q['نص_السؤال']}\n"
-        f"🅰️ الخيار A: {q['الخيار_A']}\n"
-        f"🅱️ الخيار B: {q['الخيار_B']}\n"
-        f"🆃 الخيار C: {q['الخيار_C']}\n"
-        f"🅳 الخيار D: {q['الخيار_D']}\n\n"
-        f"✅ <b>الإجابة الصحيحة:</b> {q['الإجابة_الصحيحة']}\n"
-        f"🎯 الدرجة: {q['الدرجة']} | 📊 المستوى: {q['مستوى_الصعوبة']}\n"
-        f"📚 الدورة: <code>{q['معرف_الدورة']}</code>\n"
+        f"❓ <b>السؤال:</b> {q.get('نص_السؤال')}\n"
+        f"🅰️ الخيار A: {q.get('الخيار_A')}\n"
+        f"🅱️ الخيار B: {q.get('الخيار_B')}\n"
+        f"🆃 الخيار C: {q.get('الخيار_C')}\n"
+        f"🅳 الخيار D: {q.get('الخيار_D')}\n\n"
+        f"✅ <b>الإجابة الصحيحة:</b> {q.get('الإجابة_الصحيحة')}\n"
+        f"🎯 الدرجة: {q.get('الدرجة')} | 📊 المستوى: {q.get('مستوى_الصعوبة')}\n"
+        f"📚 الدورة: <code>{q.get('معرف_الدورة')}</code>\n"
         f"━━━━━━━━━━━━━━"
     )
     

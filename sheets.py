@@ -6,6 +6,7 @@ import time
 import logging
 import uuid 
 import random
+
 # استيراد محرك الذاكرة المؤقتة للمصنع كامل
 
 from cache_manager import get_bot_data_from_cache, smart_sync_check, update_global_version, ensure_bot_sync_row
@@ -1503,74 +1504,96 @@ def update_group_field(bot_token, group_id, col_name, new_value):
 
 # --------------------------------------------------------------------------
 # بنك الأسئلة وإنشاء الاختبارات
-def add_question_to_bank(bot_token, data):
-    """إضافة سؤال لبنك الأسئلة بناءً على الأعمدة الـ 21 المعتمدة"""
+def add_question_to_bank(bot_token, q_data):
+    """إضافة سؤال للبنك مع تحديث نبضة النظام للمزامنة اللحظية"""
     try:
         sheet = ss.worksheet("بنك_الأسئلة")
+        # الترتيب بناءً على أعمدة ورقة بنك_الأسئلة (21 عمود)
         row = [
-            str(bot_token),                    # 1. bot_id
-            data.get('branch_id', '1001001'),      # 2. معرف_الفرع
-            data.get('quiz_id', 'GENERAL'),    # 3. معرف_الاختبار
-            data.get('course_id'),             # 4. معرف_الدورة
-            data.get('group_id', 'ALL'),       # 5. معرف_المجموعة
-            data.get('q_id'),                  # 6. معرف_السؤال
-            data.get('text'),                  # 7. نص_السؤال
-            data.get('a'),                     # 8. الخيار_A
-            data.get('b'),                     # 9. الخيار_B
-            data.get('c'),                     # 10. الخيار_C
-            data.get('d'),                     # 11. الخيار_D
-            data.get('correct'),               # 12. الإجابة_الصحيحة
-            data.get('grade', '1'),            # 13. الدرجة
-            data.get('duration', '30'),        # 14. مدة_السؤال
-            data.get('level', 'متوسط'),         # 15. مستوى_الصعوبة
-            data.get('type', 'اختيار'),         # 16. نوع_السؤال
-            data.get('explanation', ''),       # 17. شرح_الإجابة
-            data.get('tag', 'عام'),            # 18. الوسم_التصنيفي
-            "نشط",                             # 19. حالة_السؤال
-            get_system_time("date"),     # 20. تاريخ_الإضافة
-            data.get('creator_id')             # 21. معرف_المنشئ
+            str(bot_token),              # 1. bot_id
+            "1001001",                   # 2. معرف_الفرع
+            "AUTO",                      # 3. معرف_الاختبار (سيتم ربطه لاحقاً)
+            str(q_data['course_id']),    # 4. معرف_الدورة
+            "ALL",                       # 5. معرف_المجموعة
+            str(q_data['q_id']),         # 6. معرف_السؤال
+            str(q_data['text']),         # 7. نص_السؤال
+            str(q_data['a']),            # 8. الخيار_A
+            str(q_data['b']),            # 9. الخيار_B
+            str(q_data['c']),            # 10. الخيار_C
+            str(q_data['d']),            # 11. الخيار_D
+            str(q_data['correct']),      # 12. الإجابة_الصحيحة
+            str(q_data['grade']),        # 13. الدرجة
+            "30",                        # 14. مدة السؤال (افتراضي)
+            str(q_data['level']),        # 15. مستوى_الصعوبة
+            "اختيار من متعدد",            # 16. نوع_السؤال
+            "",                          # 17. شرح الإجابة
+            "عام",                       # 18. الوسم
+            "نشط",                       # 19. حالة_السؤال
+            get_system_time(),           # 20. تاريخ_الإضافة
+            str(q_data['creator_id'])    # 21. معرف_منشئ_السؤال
         ]
         sheet.append_row(row)
-                # إبلاغ النظام برفع رقم الإصدار لتحديث بنك الأسئلة في الرام فوراً
+        
+        # 🔥 أهم خطوة: تحديث الإصدار لإجبار الكاش على سحب البيانات الجديدة فوراً
+        from cache_manager import update_global_version
         update_global_version(bot_token)
+        
         return True
     except Exception as e:
-        print(f"❌ خطأ في بنك الأسئلة: {e}")
+        print(f"❌ خطأ حفظ السؤال في الشيت: {e}")
         return False
 
 
 # --- [ قسم الكنترول والاختبارات الآلية ] ---
 
+
+
 def create_auto_quiz(bot_token, data):
-    """إنشاء اختبار جديد مع وضع الحالة الافتراضية FALSE (مخفي عن الموظفين)"""
+    """إنشاء اختبار وسحب أسئلة عشوائية من البنك بناءً على المعايير"""
     try:
+        # 1. جلب كافة الأسئلة من البنك المخصصة لهذه الدورة
+        all_questions = get_all_questions_from_bank(bot_token)
+        course_questions = [
+            str(q.get('معرف_السؤال')) for q in all_questions 
+            if str(q.get('معرف_الدورة')) == str(data.get('course_id'))
+        ]
+        
+        # 2. التأكد من توفر أسئلة كافية
+        required_count = int(data.get('q_count', 0))
+        if len(course_questions) < required_count:
+            print(f"⚠️ نقص في الأسئلة: المطلوب {required_count} والموفر {len(course_questions)}")
+            return False, "نقص أسئلة"
+
+        # 3. اختيار الأسئلة عشوائياً وتحويلها لنص مفصول بفاصلة
+        selected_qs = random.sample(course_questions, required_count)
+        q_list_str = ",".join(selected_qs)
+
         sheet = ss.worksheet("الاختبارات_الآلية")
-        # الترتيب بناءً على الـ 16 عموداً التي حددتها
         row = [
             str(bot_token),                    # 1
-            data.get('branch_id', '1001001'),      # 2
+            data.get('branch_id', '1001001'),  # 2
             data.get('quiz_id'),               # 3
             data.get('course_id'),             # 4
-            data.get('target_groups', 'ALL'),  # 5. المجموعات_المستهدفة
-            data.get('q_list'),                # 6
-            data.get('q_count'),               # 7
+            data.get('target_groups_str'),     # 5. المجموعات المستهدفة
+            q_list_str,                        # 6. قائمة_الأسئلة (تم سحبها عشوائياً هنا)
+            required_count,                    # 7
             data.get('pass_score'),            # 8
             data.get('duration'),              # 9
-            data.get('timer_type'),            # 10
+            data.get('timer_type', 'كلي'),     # 10
             data.get('random', 'TRUE'),        # 11
             data.get('attempts', 1),           # 12
             data.get('show_res', 'TRUE'),      # 13
-            "FALSE",                           # 14. حالة_الاختبار (تبدأ مخفية)
+            "FALSE",                           # 14. حالة الاختبار
             data.get('coach_id'),              # 15
-            get_system_time("date")         # 16
+            get_system_time()                  # 16
         ]
         sheet.append_row(row)
-                # إبلاغ النظام برفع رقم الإصدار لتحديث بنك الأسئلة في الرام فوراً
         update_global_version(bot_token)
-        return True
+        return True, data.get('quiz_id')
     except Exception as e:
         print(f"❌ خطأ إنشاء اختبار: {e}")
-        return False
+        return False, str(e)
+
 
 def toggle_quiz_visibility(bot_token, quiz_id):
     """تبديل حالة الاختبار بين TRUE و FALSE (العمود 14)"""
@@ -1623,23 +1646,40 @@ def get_all_questions_from_bank(bot_token):
     except Exception as e:
         print(f"❌ خطأ جلب الأسئلة: {e}")
         return []
+       
+  #~~~~~~~~~~~~~~~~
+
+     
 #حذف الأسئلة 
 def delete_question_from_bank(bot_token, q_id):
-    """حذف سؤال محدد من البنك بناءً على معرفه"""
+    """حذف سؤال من الشيت وتحديث نبضة النظام لتطهير الكاش"""
     try:
         sheet = ss.worksheet("بنك_الأسئلة")
-        all_rows = sheet.get_all_values()
-        for i, row in enumerate(all_rows):
-            # العمود 1 توكن، العمود 6 معرف السؤال (Index 5)
-            if row[0] == str(bot_token) and str(row[5]) == str(q_id):
-                sheet.delete_rows(i + 1)
-                                # رفع إصدار البوت فوراً لتحديث الرام وحذف السؤال من الكاش
+        # جلب عمود معرفات الأسئلة فقط (العمود 6) لتقليل استهلاك البيانات
+        q_ids = sheet.col_values(6) 
+        
+        try:
+            # البحث عن رقم السطر (نضيف 1 لأن المصفوفة تبدأ من 0)
+            row_index = q_ids.index(str(q_id)) + 1
+            
+            # التأكد أن السؤال يتبع لنفس البوت (أمان إضافي)
+            bot_id_in_sheet = sheet.cell(row_index, 1).value
+            if str(bot_id_in_sheet) == str(bot_token):
+                sheet.delete_rows(row_index)
+                
+                # 🔥 تحديث التوكن فوراً ليعلم الكاش أن هناك حذفاً تم
+                from cache_manager import update_global_version
                 update_global_version(bot_token)
                 return True
+        except ValueError:
+            print(f"⚠️ السؤال {q_id} غير موجود أصلاً في الشيت.")
+            return False
+            
         return False
     except Exception as e:
         print(f"❌ خطأ حذف سؤال: {e}")
         return False
+
 
 # --------------------------------------------------------------------------
 

@@ -1995,48 +1995,45 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 
 #~~~~~~~~~~~~~~~~
 
-#~~~~~~~~~~~~~~~~
-
- 
-#~~~~~~~~~~~~~~~~
-
-#~~~~~~~~~~~~~~~~
-
-#~~~~~~~~~~~~~~~~
-
-
-
-
-
-
 # --------------------------------------------------------------------------
     # --- [ قسم إدارة الكنترول والاختبارات ] ---
     
     # 1. الدخول لغرفة الكنترول الرئيسية
     # --- [ الخطوة الثانية: معالجة الدخول والعودة الذكية ] ---
 
-    # 1. توحيد الدخول إلى الكنترول للرتب الثلاث
-    elif data in ["manage_control", "manage_control_employee", "manage_control_coach"]:
-       
+    # 1. إدارة الكنترول التعليمي (مدير، مدرب، موظف)
+    if data == "manage_control":
         await manage_control_ui(update, context)
+        return
 
-    # 2. تفعيل مفتاح العودة للوحة الموظفين
+    # 2. إدارة الاختبارات وبنك الأسئلة
+    elif data == "manage_quizzes":
+        await quiz_create_start_ui(update, context)
+        return
+
+    elif data == "manage_q_bank":
+        await q_bank_manager_ui(update, context)
+        return
+
+    # 3. معالجة عمليات بنك الأسئلة (إضافة/استعراض)
+    elif data == "add_q_manual":
+        await start_add_question_ui(update, context)
+        return
+
+    elif data == "browse_q_bank":
+        await browse_q_bank_ui(update, context)
+        return
+
+    # 4. ممرات العودة للوحات الفرعية
     elif data == "get_employee_panel":
-        # استدعاء الدالة التي قمنا بتجهيزها مسبقاً للوحة الموظف
         text = "👨‍🏫 <b>إدارة الشؤون التعليمية :</b>\nيمكنك إضافة مدربين جدد دورات جديدة او اقسام او مجموعات أو استعراض القائمة الحالية للحذف."
         await query.edit_message_text(text, reply_markup=get_employee_panel(), parse_mode="HTML")
+        return
 
-    # 3. تفعيل مفتاح العودة للوحة المدربين
     elif data == "get_coach_panel":
-        # استدعاء الدالة التي قمنا بتجهيزها مسبقاً للوحة المدرب
         text = "👨‍🏫 <b>غرفة الإدارة الأكاديمية (المدرب):</b>\nمرحباً بك! يمكنك إدارة مجموعاتك، متابعة طلابك، وتصحيح الواجبات من هنا."
         await query.edit_message_text(text, reply_markup=get_coach_panel(), parse_mode="HTML")
-
-        
-#إنشاء الاختبارات الآلية 
-    elif data == "manage_quizzes":
-
-        await quiz_create_start_ui(update, context)
+        return
 
     elif data.startswith("q_gen_crs_"):
         course_id = data.replace("q_gen_crs_", "")
@@ -2179,34 +2176,45 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 
     # التنفيذ الفعلي للحفظ في القاعدة
     elif data == "exec_save_question":
-
         import uuid
         q_data = context.user_data.get('temp_q')
+        
+        if not q_data:
+            await query.answer("⚠️ حدث خطأ، فقدت البيانات المؤقتة.")
+            return
+
+        # توليد معرف فريد للسؤال
         q_data['q_id'] = f"Q{str(uuid.uuid4().int)[:5]}"
         q_data['creator_id'] = str(user_id)
         
+        from sheets import add_question_to_bank
         if add_question_to_bank(bot_token, q_data):
-            await query.answer("✅ تم حفظ السؤال في بنك الأسئلة بنجاح", show_alert=True)
-
+            await query.answer("", show_alert=True)
             await q_bank_manager_ui(update, context)
             context.user_data.pop('temp_q', None)
         else:
-            await query.answer("❌ فشل الحفظ في القاعدة")
+            await query.answer("❌ فشل الحفظ في القاعدة.")
+
 
     elif data == "exec_create_quiz_final":
-
         quiz_data = context.user_data.get('temp_quiz')
-        # تحويل القائمة لنص لحفظها في القاعدة
-        quiz_data['target_groups'] = ",".join(quiz_data['target_groups'])
-        quiz_data['coach_id'] = str(user_id)
         
-        if create_auto_quiz(bot_token, quiz_data):
-            await query.answer("🚀 تم إنشاء الاختبار بنجاح وهو الآن في حالة (مخفي).", show_alert=True)
+        # تحويل القائمة لنص مفصول بفاصلة ليتناسب مع العمود 5 في الشيت
+        quiz_data['target_groups_str'] = ",".join(quiz_data.get('target_groups', []))
+        quiz_data['coach_id'] = str(user_id)
 
+        from sheets import create_auto_quiz
+        # الدالة الآن تعيد قيمتين (نجاح، رسالة)
+        success, result = create_auto_quiz(bot_token, quiz_data)
+        
+        if success:
+            await query.answer(f"🚀 تم إنشاء الاختبار (ID: {result}) بنجاح!", show_alert=True)
             await manage_control_ui(update, context)
             context.user_data.pop('temp_quiz', None)
         else:
-            await query.answer("❌ فشل الحفظ في القاعدة.")
+            msg = "⚠️ عذراً: بنك الأسئلة لا يحتوي على عدد كافٍ من الأسئلة لهذه الدورة." if result == "نقص أسئلة" else f"❌ فشل: {result}"
+            await query.answer(msg, show_alert=True)
+
 
 
     # 3. بدء تفعيل/إنشاء الاختبارات (اختيار الدورة)
@@ -2772,10 +2780,10 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
 
     # //==============================================================
     # // [3] إضافة أسئلة لبنك الأسئلة (Educational Manager)
-    # // التحقق مما إذا كان المستخدم (المالك/المدرب) في منتصف عملية إضافة سؤال جديد
+
     # //==============================================================
     if current_action and str(current_action).startswith('awaiting_q_'):
-        # استدعاء معالج الأسئلة (تأكد من استيراد الملف في بداية الملف الرئيسي)
+
         await educational_manager.process_q_flow(update, context)
         return
 
@@ -2874,7 +2882,7 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
 
 
 # --------------------------------------------------------------------------
-#معالجة المستندات 
+        # --- [ معالج استيراد بنك الأسئلة المستقل - مضاف بدون تعديل القديم ] --- 
     if update.message.document:
         action = context.user_data.get('action')
         doc = update.message.document
@@ -2883,7 +2891,6 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
             import pandas as pd
             import os, uuid
 
-            
             file = await context.bot.get_file(doc.file_id)
             file_path = f"temp_{uuid.uuid4().hex}_{doc.file_name}"
             await file.download_to_drive(file_path)
@@ -2934,24 +2941,31 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
                             course_map[c_name] = c_id
                             results["الدورات"] += 1
 
-                # 4️⃣ معالجة المجموعات والطلاب (الربط باسم الدورة)
-                # يتم تكرار نفس النمط لبقية الـ 11 ورقة باستخدام course_map للربط
+                # --- تحديث الكاش المركزي بعد اكتمال الرفع الشامل ---
+                from cache_manager import update_global_version
+                update_global_version(bot_token)
                 
-                report = "✅ <b>اكتمل الرفع والربط الشامل:</b>\n\n" + "\n".join([f"🔹 {k}: {v}" for k, v in results.items() if v > 0])
-                await update.message.reply_text(report, parse_mode="HTML")
+                # بناء تقرير النتائج بناءً على ما تم معالجته فعلياً
+                report_lines = [f"🔹 {k}: {v}" for k, v in results.items() if v > 0]
+                report_text = "✅ <b>اكتمل الرفع والربط الشامل:</b>\n\n" + "\n".join(report_lines)
+                report_text += "\n\n🔄 <b>حالة الكاش:</b> تمت المزامنة اللحظية بنجاح."
+                
+                await update.message.reply_text(report_text, parse_mode="HTML")
 
             except Exception as e:
                 await update.message.reply_text(f"❌ خطأ حرج في المعالجة: {str(e)}")
             finally:
-                if os.path.exists(file_path): os.remove(file_path)
+                if os.path.exists(file_path): 
+                    os.remove(file_path)
             
             context.user_data['action'] = None
-            return
+            return 
 
-            
             
            
 # --------------------------------------------------------------------------
+
+
 
 # --------------------------------------------------------------------------
 
