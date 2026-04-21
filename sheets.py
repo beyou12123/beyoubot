@@ -166,6 +166,81 @@ def ensure_sheet_structure(sheet_name, required_headers):
         print(f"❌ خطأ في التحقق من الورقة {sheet_name}: {e}")
         return False
 
+#~~~~~~~~~~~~~~~~
+def setup_sheet_format(sheet, wrap_columns=None):
+    """
+    تهيئة تنسيق أي ورقة:
+    - ضبط عرض الأعمدة
+    - تفعيل التفاف النص
+    - ضبط ارتفاع الصفوف
+    
+    wrap_columns: قائمة أرقام الأعمدة (index يبدأ من 0)
+    """
+    try:
+        sheet_id = sheet._properties['sheetId']
+
+        requests = []
+
+        # ✅ 1- ضبط عرض الأعمدة المطلوبة
+        if wrap_columns:
+            for col in wrap_columns:
+                requests.append({
+                    "updateDimensionProperties": {
+                        "range": {
+                            "sheetId": sheet_id,
+                            "dimension": "COLUMNS",
+                            "startIndex": col,
+                            "endIndex": col + 1
+                        },
+                        "properties": {
+                            "pixelSize": 250
+                        },
+                        "fields": "pixelSize"
+                    }
+                })
+
+            # ✅ 2- تفعيل التفاف النص
+            requests.append({
+                "repeatCell": {
+                    "range": {
+                        "sheetId": sheet_id,
+                        "startColumnIndex": min(wrap_columns),
+                        "endColumnIndex": max(wrap_columns) + 1
+                    },
+                    "cell": {
+                        "userEnteredFormat": {
+                            "wrapStrategy": "WRAP"
+                        }
+                    },
+                    "fields": "userEnteredFormat.wrapStrategy"
+                }
+            })
+
+        # ✅ 3- ضبط ارتفاع الصفوف
+        requests.append({
+            "updateDimensionProperties": {
+                "range": {
+                    "sheetId": sheet_id,
+                    "dimension": "ROWS",
+                    "startIndex": 0,
+                    "endIndex": 1000
+                },
+                "properties": {
+                    "pixelSize": 120
+                },
+                "fields": "pixelSize"
+            }
+        })
+
+        # تنفيذ
+        sheet.spreadsheet.batch_update({"requests": requests})
+
+        print(f"✅ تم تنسيق الورقة: {sheet.title}")
+
+    except Exception as e:
+        print(f"❌ خطأ في تنسيق {sheet.title}: {e}")
+#~~~~~~~~~~~~~~~~
+
 
 
 # --------------------------------------------------------------------------
@@ -605,10 +680,24 @@ def setup_bot_factory_database(bot_token=None):
         try:  
             sheet_name = config["name"]  
             headers = config["cols"]  
+           
+            safe_api_call(worksheet.append_row, headers)
+            time.sleep(1)
+        try:  
+            wrap_cols = get_wrap_columns(sheet_name)
+            if wrap_cols:
+            setup_sheet_format(worksheet, wrap_columns=wrap_cols)
+            time.sleep(1.5)
+            except Exception as e:
+            print(f"⚠️ فشل تنسيق الورقة {sheet_name}: {e}")
+         
+         
             if sheet_name not in _ws_cache:  
                 worksheet = safe_api_call(ss.add_worksheet, title=sheet_name, rows="500", cols=str(len(headers) + 2))  
                 _ws_cache[sheet_name] = worksheet  
-                time.sleep(1) # تأخير إضافي عند إنشاء ورقة جديدة  
+                time.sleep(1) # تأخير إضافي عند إنشاء ورقة جديدة 
+               
+               
             else:  
                 worksheet = _ws_cache[sheet_name]  
 

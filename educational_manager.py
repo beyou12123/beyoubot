@@ -1253,6 +1253,51 @@ async def employee_quiz_view(update, context):
         parse_mode="HTML"
     ) 
 # --------------------------------------------------------------------------
+# دالة عرض الاختبار للطالب 
+async def student_quizzes_list_ui(update, context):
+    """عرض الاختبارات المتاحة للطالب بناءً على مجموعته ودورته من الكاش"""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    bot_token = context.bot.token
+    
+    from cache_manager import FACTORY_GLOBAL_CACHE
+    
+    # 1. جلب بيانات الطالب لمعرفة مجموعته ودورته
+    all_students = FACTORY_GLOBAL_CACHE["data"].get("قاعدة_بيانات_الطلاب", [])
+    student_info = next((s for s in all_students if str(s.get("ID_المستخدم_تيليجرام")) == str(user_id)), None)
+    
+    if not student_info:
+        await query.answer("⚠️ بياناتك غير مسجلة في قاعدة الطلاب.")
+        return
+
+    s_group = str(student_info.get("معرف_المجموعة"))
+    s_course = str(student_info.get("معرف_الدورة"))
+
+    # 2. جلب الاختبارات المتاحة لهذه المجموعة والدورة وتكون حالتها TRUE
+    all_quizzes = FACTORY_GLOBAL_CACHE["data"].get("الاختبارات_الآلية", [])
+    available_quizzes = [
+        q for q in all_quizzes 
+        if str(q.get("bot_id")) == str(bot_token) and 
+        str(q.get("معرف_الدورة")) == s_course and 
+        (s_group in str(q.get("المجموعات_المستهدفة")) or str(q.get("المجموعات_المستهدفة")) == "ALL") and
+        str(q.get("حالة_الاختبار")).upper() == "TRUE"
+    ]
+
+    if not available_quizzes:
+        await query.edit_message_text("🔔 لا توجد اختبارات متاحة لك حالياً.", 
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 عودة", callback_data="main_menu")]]))
+        return
+
+    keyboard = []
+    for quiz in available_quizzes:
+        q_title = quiz.get("معرف_الاختبار") # أو اسم الاختبار إذا أضفته
+        q_id = quiz.get("معرف_الاختبار")
+        keyboard.append([InlineKeyboardButton(f"✍️ ابدأ: {q_title}", callback_data=f"start_quiz_{q_id}")])
+    
+    keyboard.append([InlineKeyboardButton("🔙 عودة", callback_data="main_menu")])
+    
+    await query.edit_message_text("📝 <b>الاختبارات المتاحة لك:</b>\nاختر الاختبار للبدء:", 
+                                 reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
 # --------------------------------------------------------------------------
 
