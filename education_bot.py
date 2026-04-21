@@ -127,7 +127,7 @@ def get_employee_panel():
     keyboard = [
         [InlineKeyboardButton("📁 إدارة الأقسام", callback_data="manage_cats"), 
          InlineKeyboardButton("📚 إدارة الدورات", callback_data="manage_courses")],
-        [InlineKeyboardButton("المكتبة الشاملة", callback_data="manage_library"), 
+        [InlineKeyboardButton("المكتبة الشاملة", callback_data="manage_library"),
          InlineKeyboardButton("الأوسمة والإنجازات", callback_data="honors_achievements")],
         [InlineKeyboardButton("إدارة المجموعات", callback_data="manage_group"), 
          InlineKeyboardButton("الأسئلة الشائعة", callback_data="frequently_guestions")],
@@ -818,10 +818,15 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 # ==========================================
 # الكود الجديد الذي تضعه هنا (من السطر 180 تقريباً)
 # ==========================================
+    # الإصلاح: معالجة الزر العام للمكتبة
+    elif data == "manage_library":
+        from educational_manager import manage_library_selector
+        await manage_library_selector(update, context)
+        
     elif data.startswith("manage_library_"):
         course_id = data.replace("manage_library_", "")
         await course_engine.show_library_menu(update, context, course_id)
-    
+
     elif data.startswith("view_file_"):
         file_id = data.replace("view_file_", "")
         await course_engine.view_file_details(update, context, file_id)

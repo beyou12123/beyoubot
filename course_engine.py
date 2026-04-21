@@ -1371,6 +1371,7 @@ async def view_file_details(update: Update, context: ContextTypes.DEFAULT_TYPE, 
 
     await query.edit_message_text(caption, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
+
 # --------------------------------------------------------------------------
 
 # --------------------------------------------------------------------------

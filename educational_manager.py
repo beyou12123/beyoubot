@@ -1105,6 +1105,23 @@ async def save_library_file_logic(update, context):
             )
 
 # --------------------------------------------------------------------------
+async def manage_library_selector(update, context):
+    query = update.callback_query
+    bot_token = context.bot.token
+    from sheets import courses_sheet
+    
+    # جلب الدورات لاختيار المكتبة المناسبة
+    all_courses = courses_sheet.get_all_records()
+    bot_courses = [c for c in all_courses if str(c.get('bot_id')) == str(bot_token)]
+    
+    if not bot_courses:
+        await query.edit_message_text("⚠️ لا توجد دورات مضافة حالياً لفتح مكتباتها.")
+        return
+
+    keyboard = [[InlineKeyboardButton(f"📚 مكتبة: {c['اسم_الدورة']}", callback_data=f"manage_library_{c['معرف_الدورة']}")] for c in bot_courses]
+    keyboard.append([InlineKeyboardButton("🔙 عودة", callback_data="main_menu")])
+    
+    await query.edit_message_text("🎯 **اختر الدورة لفتح مكتبتها الشاملة:**", reply_markup=InlineKeyboardMarkup(keyboard))
 
 
 # --------------------------------------------------------------------------

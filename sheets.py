@@ -1949,38 +1949,34 @@ def redeem_points_for_course(bot_token, user_id, course_price):
 def get_filtered_library_content(bot_token, user_id, course_id):
     """جلب المحتوى المخصص للطالب بناءً على حالة الدفع والدورة"""
     try:
-        # ضمان تحديث البيانات في الرام قبل البدء (نبضة الـ 15 دقيقة)
+        # ضمان تحديث البيانات في الرام
         smart_sync_check(bot_token)
         
-        # 1. جلب بيانات الطلاب من الرام (بدلاً من الاتصال المباشر بجوجل)
+        # 1. جلب بيانات الطلاب من الكاش
         student_records = get_bot_data_from_cache(bot_token, "قاعدة_بيانات_الطلاب")
-        
-        # البحث عن سجل الطالب المطابق للتوكن والآيدي
         student_data = next((r for r in student_records if str(r.get("ID_المستخدم_تيليجرام")) == str(user_id)), None)
         
-        # منطق التحقق من الدفع (لم يتغير لضمان الوظيفة)
         is_paid = False
         if student_data and str(student_data.get("الحالة")).strip() in ["مدفوع", "دافع", "مقبول"]:
             is_paid = True
 
-        # 2. جلب محتوى المكتبة كامل المصنع من الرام وتصفيته
+        # 2. جلب محتوى المكتبة وتصفيته
         all_content = get_bot_data_from_cache(bot_token, "المكتبة")
         
         filtered_content = []
         for item in all_content:
-            # فلترة المحتوى بناءً على الدورة المحددة (التي مررها البوت)
-            if str(item.get("الدورة")) == str(course_id):
+            # القيد الهام: يجب التأكد أن الملف يخص هذا البوت تحديداً وهذه الدورة
+            if str(item.get("bot_id")) == str(bot_token) and str(item.get("الدورة")) == str(course_id):
                 status = str(item.get("الحالة")).strip()
                 
-                # السماح بالوصول بناءً على القواعد المذكورة في التعليمات
                 if status == "مجاني" or (status == "مدفوع" and is_paid):
                     filtered_content.append(item)
         
         return filtered_content
-
     except Exception as e:
         print(f"❌ خطأ في تصفية محتوى المكتبة: {e}")
         return []
+
  
 # --------------------------------------------------------------------------
 
