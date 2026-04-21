@@ -884,6 +884,7 @@ async def start_restore_process(update: Update, context: ContextTypes.DEFAULT_TY
 
 # دالة تشغيل كافة البوتات عند الإقلاع لضمان التنفيذ المتسلسل
 RUNNING_BOTS = set()
+RUNNING_LOCK = asyncio.Lock()
 
 async def start_all_sub_bots():
     from sheets import get_all_active_bots
@@ -896,19 +897,23 @@ async def start_all_sub_bots():
         bot_type = bot_data.get("نوع البوت")
         
         if token and bot_type:
-            # 🔒 إضافة حماية لمنع تشغيل نفس البوت مرتين (سبب 409 Conflict)
-            if token in RUNNING_BOTS:
-                print(f"⚠️ البوت يعمل مسبقًا: {bot_type}")
-                continue
+            
+            # 🔒 حماية ذرّية (هذا هو الحل الحقيقي لمشكلتك)
+            async with RUNNING_LOCK:
+                if token in RUNNING_BOTS:
+                    print(f"⚠️ البوت يعمل مسبقًا: {bot_type}")
+                    continue
+                
+                RUNNING_BOTS.add(token)
 
-            RUNNING_BOTS.add(token)
+            await asyncio.sleep(1.5)
 
-            await asyncio.sleep(1.5) 
-            asyncio.create_task(run_dynamic_bot(token, bot_type, owner_id))
+            task = asyncio.create_task(run_dynamic_bot(token, bot_type, owner_id))
+            
             print(f"✅ تم إرسال أمر تشغيل للبوت: {bot_type}")
 
     print("🎊 اكتملت عملية إقلاع كافة البوتات التابعة.")
-
+    
 async def boot_all_bots():
     from sheets import get_all_active_bots
     active_bots = get_all_active_bots()
