@@ -339,10 +339,10 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
     await query.answer()
 # --------------------------------------------------------------------------
     # --- [ أولوية محرك الإعلانات اللحظي ] ---
-    if data == "manage_ads":
+    if data == "manage_ads": # هل الكلمة هنا مطابقة تماماً لما في الزر؟
         from course_engine import manage_ads_main_ui
         await manage_ads_main_ui(update, context)
-        return # ضروري جداً لإنهاء التنفيذ هنا
+        return
 
     elif data == "ad_create_start":
         from course_engine import ad_create_start
