@@ -885,9 +885,14 @@ async def start_restore_process(update: Update, context: ContextTypes.DEFAULT_TY
 # دالة تشغيل كافة البوتات عند الإقلاع لضمان التنفيذ المتسلسل
 RUNNING_BOTS = set()
 RUNNING_LOCK = asyncio.Lock()
+_running_bot_tokens = set()  # حماية من تشغيل نفس البوت أكثر من مرة
+
+# 🆕 طبقة إضافية: تتبع البوتات التي تم تفعيلها فعليًا في هذا التشغيل
+ACTIVE_RUNTIME_BOTS = set()
 
 async def start_all_sub_bots():
     from sheets import get_all_active_bots
+    
     active_bots = get_all_active_bots()
     print(f"🔄 جاري محاولة تشغيل {len(active_bots)} بوت مصنوع...")
     
@@ -896,23 +901,41 @@ async def start_all_sub_bots():
         owner_id = bot_data.get("ID المالك")
         bot_type = bot_data.get("نوع البوت")
         
-        if token and bot_type:
-            
-            # 🔒 حماية ذرّية (هذا هو الحل الحقيقي لمشكلتك)
-            async with RUNNING_LOCK:
-                if token in RUNNING_BOTS:
-                    print(f"⚠️ البوت يعمل مسبقًا: {bot_type}")
-                    continue
-                
-                RUNNING_BOTS.add(token)
+        if not token or not bot_type:
+            continue
+        
+        # 🔒 حماية كاملة ذرّية
+        async with RUNNING_LOCK:
 
-            await asyncio.sleep(1.5)
+            # ❗ منع تشغيل نفس التوكن مرتين (نظام 1)
+            if token in RUNNING_BOTS:
+                print(f"⚠️ البوت يعمل مسبقًا (RUNNING_BOTS): {bot_type}")
+                continue
 
-            task = asyncio.create_task(run_dynamic_bot(token, bot_type, owner_id))
-            
-            print(f"✅ تم إرسال أمر تشغيل للبوت: {bot_type}")
+            # ❗ منع التكرار الداخلي (نظام 2)
+            if token in _running_bot_tokens:
+                print(f"⚠️ تم تجاهل تشغيل بوت مكرر بنفس التوكن (_running_bot_tokens): {bot_type}")
+                continue
+
+            # ❗ حماية إضافية ضد إعادة التشغيل داخل نفس runtime
+            if token in ACTIVE_RUNTIME_BOTS:
+                print(f"⚠️ البوت نشط فعليًا داخل الرن تايم: {bot_type}")
+                continue
+
+            # ✅ تسجيل كل الحالات
+            RUNNING_BOTS.add(token)
+            _running_bot_tokens.add(token)
+            ACTIVE_RUNTIME_BOTS.add(token)
+
+        await asyncio.sleep(1.5)
+
+        # 🚀 تشغيل البوت بدون أي تغيير في منطقك الأصلي
+        asyncio.create_task(run_dynamic_bot(token, bot_type, owner_id))
+        
+        print(f"✅ تم إرسال أمر تشغيل للبوت: {bot_type}")
 
     print("🎊 اكتملت عملية إقلاع كافة البوتات التابعة.")
+    
     
 async def boot_all_bots():
     from sheets import get_all_active_bots
