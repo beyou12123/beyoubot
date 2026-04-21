@@ -1411,7 +1411,11 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             await query.edit_message_text("❌ فشل الحفظ في قاعدة البيانات، تأكد من إعدادات دالة add_new_course.")
 
     # --- 5. إدارة الأقسام (عرض القائمة) ---
+    # إضافة معالج زر إدارة الأقسام
     elif data == "manage_cats":
+        from educational_manager import manage_categories_main
+        await manage_categories_main(update, context)
+
 
         # نتحقق هل لديه صلاحية الأقسام؟
         if not check_user_permission(bot_token, user_id, "صلاحية_الأقسام"):

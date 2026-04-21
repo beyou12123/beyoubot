@@ -1125,6 +1125,28 @@ async def manage_library_selector(update, context):
 
 
 # --------------------------------------------------------------------------
+    # جلب الأقسام من قاعدة البيانات
+async def manage_categories_main(update, context):
+    query = update.callback_query
+    from sheets import get_all_categories
+    
+
+    categories = get_all_categories() # تأكد أنها تعيد قائمة بالأقسام
+    
+    keyboard = []
+    if categories:
+        for cat in categories:
+            # افتراض أن cat عبارة عن dict يحتوي على 'id' و 'name'
+            keyboard.append([InlineKeyboardButton(f"📂 {cat['name']}", callback_data=f"view_cat_{cat['id']}")])
+    
+    keyboard.append([InlineKeyboardButton("➕ إضافة قسم جديد", callback_data="add_new_cat")])
+    keyboard.append([InlineKeyboardButton("🔙 عودة للقائمة الرئيسية", callback_data="main_menu")])
+    
+    await query.edit_message_text(
+        "🛠️ **إدارة الأقسام الدراسية:**\n\nيمكنك إضافة أو تعديل أو حذف الأقسام من هنا.",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="Markdown"
+    )
 
 # --------------------------------------------------------------------------
 
