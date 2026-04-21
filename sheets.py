@@ -661,7 +661,6 @@ def safe_api_call(func, *args, **kwargs):
 # --------------------------------------------------------------------------
 # دالة إنشاء وتجهيز الورق - النسخة المعززة بالفواصل الزمنية
 # دالة إنشاء وتجهيز الورق - النسخة المحدثة مع تعطيل الحجم التلقائي وإضافة فواصل زمنية
-
 def setup_bot_factory_database(bot_token=None):
     """المحرك الشامل: ينشئ الجداول، ينسق الهيدرز، يزرع الإعدادات، ويعيد عدد الأوراق ديناميكياً"""
     global ss, _ws_cache
@@ -681,25 +680,30 @@ def setup_bot_factory_database(bot_token=None):
             sheet_name = config["name"]  
             headers = config["cols"]  
            
-            safe_api_call(worksheet.append_row, headers)
-            time.sleep(1)
-        try:  
-            wrap_cols = get_wrap_columns(sheet_name)
-            if wrap_cols:
-            setup_sheet_format(worksheet, wrap_columns=wrap_cols)
-            time.sleep(1.5)
-            except Exception as e:
-            print(f"⚠️ فشل تنسيق الورقة {sheet_name}: {e}")
-         
-         
+            # التحقق من وجود الورقة أو إنشاؤها
             if sheet_name not in _ws_cache:  
                 worksheet = safe_api_call(ss.add_worksheet, title=sheet_name, rows="500", cols=str(len(headers) + 2))  
                 _ws_cache[sheet_name] = worksheet  
                 time.sleep(1) # تأخير إضافي عند إنشاء ورقة جديدة 
-               
-               
+                # إضافة الهيدرز للورقة الجديدة فور إنشائها
+                safe_api_call(worksheet.append_row, headers)
+                time.sleep(1)
             else:  
                 worksheet = _ws_cache[sheet_name]  
+
+            # نظام التنسيق التلقائي (التفاف النص)
+            try:  
+                # تأكد من وجود دالة get_wrap_columns أو استبدالها بالمنطق المناسب
+                wrap_cols = [] # افتراضي إذا لم تكن الدالة موجودة، أو استدعها إذا كانت معرفة
+                # إذا كانت الدالة get_wrap_columns معرفة في مكان آخر:
+                try: wrap_cols = get_wrap_columns(sheet_name)
+                except: pass
+                
+                if wrap_cols:
+                    setup_sheet_format(worksheet, wrap_columns=wrap_cols)
+                    time.sleep(1.5)
+            except Exception as e:
+                print(f"⚠️ فشل تنسيق الورقة {sheet_name}: {e}")
 
             # قراءة العناوين الحالية  
             current_headers = worksheet.row_values(1)  
@@ -717,11 +721,8 @@ def setup_bot_factory_database(bot_token=None):
                         current_col_count = 0
 
                     try:
-                        required_cols = current_col_count + len(new_columns)
-                        safe_api_call(
-                            worksheet.add_cols,
-                            len(new_columns)
-                        )
+                        # طلب إضافة أعمدة جديدة (توسيع الشيت)
+                        safe_api_call(worksheet.add_cols, len(new_columns))
                         time.sleep(1)
                     except Exception as e:
                         print(f"⚠️ فشل في توسيع الأعمدة في {sheet_name}: {e}")
@@ -734,17 +735,10 @@ def setup_bot_factory_database(bot_token=None):
                     updated_headers = refreshed_headers + new_columns
 
                     try:
-                        safe_api_call(
-                            worksheet.update,
-                            '1:1',
-                            [updated_headers]
-                        )
+                        safe_api_call(worksheet.update, '1:1', [updated_headers])
                         print(f"✅ تمت إضافة الأعمدة الجديدة في {sheet_name}")
                         time.sleep(1)
-
-                        # ✅ تحديث current_headers لمنع التحديث المزدوج
                         current_headers = updated_headers
-
                     except Exception as e:
                         print(f"❌ فشل تحديث الهيدرز بعد الإضافة في {sheet_name}: {e}")
 
@@ -764,25 +758,25 @@ def setup_bot_factory_database(bot_token=None):
                 {"updateSheetProperties": {"properties": {"sheetId": sheet_id, "gridProperties": {"frozenRowCount": 1}}, "fields": "gridProperties.frozenRowCount"}}  
             ])  
 
-            # تم تعطيل هذا الجزء آلياً بناءً على قيمة AUTO_RESIZE = False في الأعلى  
             if AUTO_RESIZE and (not current_headers or set(current_headers) != set(headers)):  
-                safe_api_call(worksheet.columns_auto_resize, 0, len(headers))  
-                time.sleep(0.8)   
+                try:
+                    safe_api_call(worksheet.columns_auto_resize, 0, len(headers))  
+                    time.sleep(0.8)
+                except: pass
 
-            # الفاصل الزمني الأساسي داخل الحلقة لمنع الاصطدام بالحدود  
-            time.sleep(3.5)  
+            time.sleep(3.5) # الفاصل الزمني الأساسي لمنع حظر API
 
         except Exception as e:   
             print(f"❌ خطأ تهيئة {sheet_name}: {e}")  
-            time.sleep(2) # انتظار أطول في حال حدوث خطأ  
+            time.sleep(2) 
 
     if all_requests:  
         for i in range(0, len(all_requests), BATCH_SIZE):  
-            safe_api_call(ss.batch_update, {"requests": all_requests[i:i+BATCH_SIZE]})  
-            # تأخير بين دفعات التحديث الجماعي  
-            time.sleep(3.5)   
+            try:
+                safe_api_call(ss.batch_update, {"requests": all_requests[i:i+BATCH_SIZE]})  
+                time.sleep(3.5)
+            except: pass
 
-    # --- [ إضافة: زرع الإعدادات الافتراضية ضمن عملية التهيئة ] ---  
     if bot_token:  
         seed_default_settings(bot_token)  
         time.sleep(2.2)  
@@ -790,10 +784,10 @@ def setup_bot_factory_database(bot_token=None):
     update_meta_info()  
     time.sleep(2)  
 
-    # الحفاظ على وظيفة التحقق مع إرجاع العدد الديناميكي في حال النجاح  
     if verify_setup(structures):  
         return total_sheets  
     return 0
+
 
 
 # --------------------------------------------------------------------------    
