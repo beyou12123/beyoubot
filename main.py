@@ -46,7 +46,7 @@ from sheets import (
 
 
 # --- الإعدادات الأساسية ---
-TOKEN = "8796082287:AAEdKaI22UpWDo0O86y4Fza1JNevVV1xTww"
+TOKEN = "1657415602:AAFZzxVc9ECvdJ5WwmzVyM219ilLhjUDgLM"
 ADMIN_ID = 873158772  # معرف المطور والمالك
 
 # تعريف مراحل محادثة إنشاء البوت (حالات الـ ConversationHandler)
