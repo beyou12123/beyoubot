@@ -665,20 +665,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                 color_index += 1
                 await asyncio.sleep(2.5) 
-        # 4. انتظار النتيجة النهائية
-                try:
-                    # تحديث الرسالة كل 2.5 ثانية (التوقيت الذهبي)
-                    await query.edit_message_text(
-                        status_text, 
-                        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ إلغاء", callback_data="cancel_setup")]]),
-                        parse_mode="HTML"
-                    )
-                except: 
-                    pass
-
-                color_index += 1
-                await asyncio.sleep(2.5) 
-
                 # 4. انتظار النتيجة النهائية
                 try:
                     # انتظار المهمة بشكل صحيح لالتقاط القيمة المعادة من sheets.py
@@ -713,7 +699,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     # إنهاء حالة التشغيل للسماح بالعمليات المستقبلية
                     context.user_data["setup_running"] = False
 
-                # إرسال الرسالة النهائية وتوفير زر العودة (يجب أن يتبع الـ finally)
+                # إرسال الرسالة النهائية وتوفير زر العودة
                 keyboard = [[InlineKeyboardButton("🔙 العودة للوحة التحكم", callback_data="open_admin_panel")]]
                 await query.edit_message_text(result_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
