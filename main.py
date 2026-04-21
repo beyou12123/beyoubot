@@ -914,7 +914,7 @@ async def start_all_sub_bots():
     app.add_handler(admin_module_conv) # محادثة الرفع الجديدة
     
     # المعالج الشامل المحدث للأزرار
-    app.add_handler(CallbackQueryHandler(button_callback, pattern="^(stats_all|run_setup_db_now|broadcast_owners|restart_factory|download_cache_files|reboot_system|confirm_hard_reset|execute_hard_reset|start_sync_shet|start_restore_request|back_to_main)$"))
+    app.add_handler(CallbackQueryHandler(button_callback, pattern="^(stats_all|run_setup_db_now|broadcast_owners|restart_factory|download_cache_files|reboot_system|confirm_hard_reset|execute_hard_reset|start_sync_shet|start_restore_request|back_to_main|open_admin_dashboard)$"))
     
     # معالجة الرسائل والملفات
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
