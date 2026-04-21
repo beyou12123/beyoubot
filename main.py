@@ -607,7 +607,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # --------------------------------------------------------------------------
 
     # تهيئة الورق والإعدادات - النسخة الاحترافية النهائية
-elif data == "run_setup_db_now":
+    elif data == "run_setup_db_now":
         # 1. نظام الحماية من التشغيل المزدوج
         if context.user_data.get("setup_running"):
             await query.answer("⚠️ العملية قيد التنفيذ بالفعل...", show_alert=True)
