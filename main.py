@@ -48,7 +48,7 @@ from sheets import (
 # --- الإعدادات الأساسية ---
 TOKEN = "8796082287:AAEdKaI22UpWDo0O86y4Fza1JNevVV1xTww"
 ADMIN_ID = 873158772  # معرف المطور والمالك
-app = None
+
 # تعريف مراحل محادثة إنشاء البوت (حالات الـ ConversationHandler)
 CHOOSING_TYPE, GETTING_TOKEN, GETTING_NAME = range(3)
 # تعريف حالة انتظار اسم الموديول الجديد (خاصة بالمطور)
@@ -350,7 +350,7 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
         success = save_bot(user_id, bot_type, friendly_name, bot_token)
 
         if success:
-            from main import run_dynamic_bot 
+            #from main--import run_dynamic_bot 
             asyncio.create_task(run_dynamic_bot(bot_token, bot_type, user_id))
 
             # --- [ الرسالة الأولى: في بوت المصنع ] ---
@@ -362,7 +362,7 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"🚀 البوت الآن جاهز للعمل!"
             )
             # تم إضافة استيراد get_main_menu_inline لضمان عدم حدوث خطأ
-            from main import get_main_menu_inline
+            #from main--import get_main_menu_inline
             await msg.edit_text(text=user_success_text, reply_markup=get_main_menu_inline(user_id), parse_mode="HTML")
 
             # --- [ الرسالة الثانية: داخل البوت الجديد ] ---
@@ -421,7 +421,7 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"-----------------------\n\n"
                 f"📈 <b>إجمالي إنتاج المصنع:</b> {total_bots} بوت"
             )
-            from main import ADMIN_ID
+            #from main--import ADMIN_ID
             await context.bot.send_message(chat_id=ADMIN_ID, text=admin_notification, parse_mode="HTML")
 
         else:
@@ -889,15 +889,23 @@ async def start_all_sub_bots():
 
     print("🎊 اكتملت عملية إقلاع كافة البوتات التابعة.")
 
+async def boot_all_bots():
+    from sheets import get_all_active_bots
+    active_bots = get_all_active_bots()
+    print(f"🔄 جاري تحضير إقلاع {len(active_bots)} بوت تابعة للمصنع...")
+
+
+
+
 # --- [ القسم 3: المحرك الرئيسي (نهاية الملف) ] ---
 async def main_factory_launcher():
     global app
     try:
-        # 🟢 الحل القسري: بناء التطبيق فوراً قبل أي عمليات أخرى
+        # 1. بناء التطبيق أولاً (TOKEN يجب أن يكون معرفاً في الأعلى)
         print("🔧 جاري بناء محرك البوت الرئيسي...")
         app = ApplicationBuilder().token(TOKEN).build()
 
-        # إضافة المعالجات (Handlers) هنا لضمان ربطها بالتطبيق المنشأ
+        # 2. إضافة المعالجات (تأكد من وجود handlers المعرفة سابقاً)
         app.add_handler(CommandHandler("start", start))
         app.add_handler(create_bot_conv) 
         app.add_handler(admin_module_conv)
@@ -905,27 +913,17 @@ async def main_factory_launcher():
         app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
         app.add_handler(MessageHandler(filters.Document.ALL, start_restore_process))
 
-        # 2. تشغيل البوتات التابعة في الخلفية
-        await boot_all_bots()
-        
-        # 3. إعداد المجدول الزمني
-        try:
-            from apscheduler.schedulers.asyncio import AsyncIOScheduler
-            from cache_manager import sync_factory_to_sheets_smart
-            scheduler = AsyncIOScheduler()
-            scheduler.add_job(sync_factory_to_sheets_smart, 'cron', hour=3, minute=30)
-            scheduler.start()
-        except: pass
-
+        # 3. استدعاء البوتات التابعة (الآن لن يظهر خطأ Not Defined)
+        await boot_all_bots() 
         asyncio.create_task(start_all_sub_bots()) 
 
-        # 4. تشغيل البوت الرئيسي (الآن app لم يعد None)
-        print("🚀 بوت المصنع الرئيسي قيد التشغيل الآن...")
+        # 4. تشغيل محرك المصنع
+        print("🚀 مصنع البوتات يعمل الآن بكافة محركاته...")
         await app.initialize()
         await app.updater.start_polling(drop_pending_updates=True)
         await app.start()
         
-        # إشعار النجاح
+        # إشعار المطور بالنجاح
         try:
             await app.bot.send_message(chat_id=ADMIN_ID, text="✅ **تم إعادة تشغيل المحرك بنجاح!**")
         except: pass
