@@ -670,6 +670,8 @@ def setup_bot_factory_database(bot_token=None):
     # جلب الهيكل وحساب عدد الأوراق الكلي بشكل ديناميكي  
     structures = get_sheets_structure()  
     total_sheets = len(structures)   
+    
+    print(f"⚙️ بدء محرك تهيئة الجداول ({total_sheets} ورقة)...")
 
     # إضافة تأخير بسيط قبل البدء بجلب كافة الأوراق لتجنب الضغط الأولي  
     time.sleep(1)  
@@ -682,6 +684,7 @@ def setup_bot_factory_database(bot_token=None):
            
             # التحقق من وجود الورقة أو إنشاؤها
             if sheet_name not in _ws_cache:  
+                print(f"🆕 إنشاء ورقة جديدة: {sheet_name}")
                 worksheet = safe_api_call(ss.add_worksheet, title=sheet_name, rows="500", cols=str(len(headers) + 2))  
                 _ws_cache[sheet_name] = worksheet  
                 time.sleep(1) # تأخير إضافي عند إنشاء ورقة جديدة 
@@ -689,17 +692,17 @@ def setup_bot_factory_database(bot_token=None):
                 safe_api_call(worksheet.append_row, headers)
                 time.sleep(1)
             else:  
+                print(f"🛠️ تهيئة: {sheet_name} | الحالة: موجودة")
                 worksheet = _ws_cache[sheet_name]  
 
             # نظام التنسيق التلقائي (التفاف النص)
             try:  
-                # تأكد من وجود دالة get_wrap_columns أو استبدالها بالمنطق المناسب
-                wrap_cols = [] # افتراضي إذا لم تكن الدالة موجودة، أو استدعها إذا كانت معرفة
-                # إذا كانت الدالة get_wrap_columns معرفة في مكان آخر:
+                wrap_cols = [] 
                 try: wrap_cols = get_wrap_columns(sheet_name)
                 except: pass
                 
                 if wrap_cols:
+                    print(f"✨ جاري تطبيق نظام التفاف النص لـ: {sheet_name}")
                     setup_sheet_format(worksheet, wrap_columns=wrap_cols)
                     time.sleep(1.5)
             except Exception as e:
@@ -749,6 +752,7 @@ def setup_bot_factory_database(bot_token=None):
 
             if set(current_headers) != set(headers):  
                 if STRICT_SCHEMA:  
+                    print(f"🛡️ نظام STRICT_SCHEMA: تحديث عناوين {sheet_name}")
                     safe_api_call(worksheet.update, '1:1', [headers])  
                     time.sleep(1.5) # تأخير بعد تحديث العناوين  
 
@@ -758,11 +762,12 @@ def setup_bot_factory_database(bot_token=None):
                 {"updateSheetProperties": {"properties": {"sheetId": sheet_id, "gridProperties": {"frozenRowCount": 1}}, "fields": "gridProperties.frozenRowCount"}}  
             ])  
 
-            if AUTO_RESIZE and (not current_headers or set(current_headers) != set(headers)):  
-                try:
-                    safe_api_call(worksheet.columns_auto_resize, 0, len(headers))  
-                    time.sleep(0.8)
-                except: pass
+        #    if AUTO_RESIZE and (not current_headers or set(current_headers) != set(headers)):  
+            #    try:
+          #          print(f"📏 ضبط أبعاد الأعمدة تلقائياً: {sheet_name}")
+         #           safe_api_call(worksheet.columns_auto_resize, 0, len(headers))  
+         #           time.sleep(0.8)
+        #        except: pass
 
             time.sleep(3.5) # الفاصل الزمني الأساسي لمنع حظر API
 
@@ -771,6 +776,7 @@ def setup_bot_factory_database(bot_token=None):
             time.sleep(2) 
 
     if all_requests:  
+        print(f"🚀 جاري دفع التحديثات الجماعية للتنسيق (Batch Update)...")
         for i in range(0, len(all_requests), BATCH_SIZE):  
             try:
                 safe_api_call(ss.batch_update, {"requests": all_requests[i:i+BATCH_SIZE]})  
@@ -778,14 +784,19 @@ def setup_bot_factory_database(bot_token=None):
             except: pass
 
     if bot_token:  
+        print(f"🌱 زرع الإعدادات الافتراضية للبوت الرئيسي...")
         seed_default_settings(bot_token)  
         time.sleep(2.2)  
 
+    print(f"📊 تحديث ورقة البيانات الوصفية (Meta Info)...")
     update_meta_info()  
     time.sleep(2)  
 
     if verify_setup(structures):  
+        print(f"🎊 اكتملت تهيئة كافة الجداول ({total_sheets} ورقة) بنجاح باهر!")
         return total_sheets  
+    
+    print(f"⚠️ فشل التحقق النهائي من التهيئة!")
     return 0
 
 

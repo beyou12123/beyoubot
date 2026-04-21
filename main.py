@@ -668,43 +668,55 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await asyncio.sleep(2.5) 
 
             # 4. انتظار النتيجة النهائية  ← تم إخراجها خارج while فقط بالمسافات
-            try:
-                # انتظار المهمة بشكل صحيح لالتقاط القيمة المعادة من sheets.py
-                result = await setup_task
-                
-                # التحقق من نوع النتيجة لضمان عدم حدوث خطأ في await
-                if isinstance(result, (int, float)):
-                    sheets_count = int(result)
-                else:
-                    # استخدام total_sheets المعرف في بداية الدالة
-                    sheets_count = total_sheets if result else 0
+                # 4. انتظار النتيجة النهائية
+                try:
+                    # تشغيل محرك التهيئة في خيط منفصل لضمان عدم تجميد البوت
+                    # الدالة ensure_all_sheets_schema تعيد عدد الأوراق المعالجة (int)
+                    result = await asyncio.to_thread(ensure_all_sheets_schema)
                     
-                if sheets_count > 0:
-                    result_text = (
-                        "✅ <b>تمت العملية بنجاح!</b>\n"
-                        "━━━━━━━━━━━━━━\n"
-                        f"📦 تم إنشاء وتنسيق (<b>{sheets_count} ورقة</b>) بالكامل.\n"
-                        "🛡️ نظام الحماية والتحقق من المخطط (Schema) نشط الآن."
-                    )
-                else:
-                    result_text = "⚠️ <b>النظام مهيأ بالفعل!</b>\nالجداول موجودة ومحدثة."
-                
-                # تحديث الرام فوراً لضمان مطابقة البيانات الجديدة
-                from cache_manager import fetch_full_factory_data
-                await fetch_full_factory_data()
+                    # --- [ نظام الحساب الديناميكي المرن ] ---
+                    # إذا كانت النتيجة رقماً (عدد الأوراق)، نستخدمها مباشرة
+                    if isinstance(result, (int, float)):
+                        sheets_count = int(result)
+                    # إذا كانت النتيجة منطقية (True)، نجلب العدد ديناميكياً من دالة الهيكل
+                    elif result is True:
+                        try:
+                            from sheets import get_sheets_structure
+                            dynamic_structure = get_sheets_structure()
+                            sheets_count = len(dynamic_structure)
+                        except:
+                            sheets_count = "غير محدد"
+                    else:
+                        sheets_count = 0
                     
-            except Exception as e:
-                print(f"❌ خطأ في التهيئة: {e}")
-                result_text = f"❌ <b>فشلت العملية!</b>\nحدث خطأ أثناء المعالجة: {str(e)}"
-                
-            finally:
-                # إنهاء حالة التشغيل للسماح بالعمليات المستقبلية
-                context.user_data["setup_running"] = False
-            # إرسال الرسالة النهائية
-            keyboard = [[InlineKeyboardButton("🔙 العودة للوحة التحكم", callback_data="open_admin_panel")]]
-            await query.edit_message_text(result_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
-        except:
-            pass            
+                    if sheets_count != 0:
+                        result_text = (
+                            "✅ <b>تمت العملية بنجاح!</b>\n"
+                            "━━━━━━━━━━━━━━\n"
+                            f"📦 تم إنشاء وتنسيق (<b>{sheets_count} ورقة</b>) بالكامل.\n"
+                            "🛡️ نظام الحماية والتحقق من المخطط (Schema) نشط الآن."
+                        )
+                    else:
+                        result_text = "⚠️ <b>النظام مهيأ بالفعل!</b>\nالجداول موجودة ومحدثة."
+                    
+                    # تحديث الرام فوراً لضمان مطابقة البيانات الجديدة (وظيفة أساسية)
+                    from cache_manager import fetch_full_factory_data
+                    await fetch_full_factory_data()
+                        
+                except Exception as e:
+                    print(f"❌ خطأ في التهيئة: {e}")
+                    result_text = f"❌ <b>فشلت العملية!</b>\nحدث خطأ أثناء المعالجة: {str(e)}"
+                    
+                finally:
+                    # إنهاء حالة التشغيل للسماح بالعمليات المستقبلية (وظيفة أساسية)
+                    context.user_data["setup_running"] = False
+
+                # إرسال الرسالة النهائية وتوفير زر العودة
+                keyboard = [[InlineKeyboardButton("🔙 العودة للوحة التحكم", callback_data="open_admin_panel")]]
+                await query.edit_message_text(result_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+                except: 
+                    pass
 # --- نهاية معالج الأزرار وبداية الدوال المستقلة ---
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
