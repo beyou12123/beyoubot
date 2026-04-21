@@ -909,7 +909,7 @@ app = ApplicationBuilder().token(TOKEN).build()
 app.add_handler(CommandHandler("start", start))
 app.add_handler(create_bot_conv) 
 app.add_handler(admin_module_conv) # محادثة الرفع الجديدة
-app.add_handler(CallbackQueryHandler(button_callback, handle_factory_callbacks, pattern="^(confirm_hard_reset|execute_hard_reset)"))
+app.add_handler(CallbackQueryHandler(button_callback, pattern="^(confirm_hard_reset|execute_hard_reset)$"))
 app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
 app.add_handler(MessageHandler(filters.Document.ALL, start_restore_process))
 
