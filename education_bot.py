@@ -825,6 +825,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 #~~~~~~~~~~~~~~~~
 
     # --- أضف الكود هنا ليعمل زر إنشاء حملة والتقرير اللحظي ---
+    # --- [ معالجة أزرار الإعلانات الجديدة ] ---
     if data == "manage_ads":
         from course_engine import manage_ads_main_ui
         await manage_ads_main_ui(update, context)
@@ -846,7 +847,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         context.user_data['action'] = 'awaiting_ad_platform'
         await query.edit_message_text("🌐 <b>الخطوة 2:</b> أرسل اسم المنصة الإعلانية (مثلاً: فيسبوك):", parse_mode="HTML")
         return
-    # --- نهاية الإضافة ---
+
 
 
 # --------------------------------------------------------------------------
