@@ -669,33 +669,24 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # 4. انتظار النتيجة النهائية
             try:
-                #result = await setup_task
-                result = await asyncio.to_thread(setup_bot_factory_database)
-                
+                result = await setup_task
                 if isinstance(result, int) and result > 0:
-      #          if isinstance(result, (int, float)):
                     sheets_count = int(result)
                 else:
                     sheets_count = total_sheets if result else 0
-                try:
-                    result = await setup_task
-                    if isinstance(result, int):
-                        sheets_count = result
-                    else:
-                        from sheets import get_sheets_structure
-                        sheets_count = len(get_sheets_structure()) if result else 0
-                except:
-                   sheets_count > 0:
+                                    	if                  sheets_count > 0:
                     result_text = (
                         "✅ <b>تمت العملية بنجاح!</b>\n"
                         "━━━━━━━━━━━━━━\n"
                         f"📦 تم إنشاء وتنسيق (<b>{sheets_count} ورقة</b>) بالكامل.\n"
                         "🛡️ نظام الحماية والتحقق من المخطط (Schema) نشط الآن."
                     )
+
                 else:
                     result_text = "⚠️ <b>النظام مهيأ بالفعل!</b>\nالجداول موجودة ومحدثة."
-                    # تأخير ذهبي (5 ثوانٍ) لمنع خطأ Quota 429 قبل بدء المزامنة
-                    await asyncio.sleep(5)                
+                    # التأخير يكون سطر برمجي مستقل وليس داخل علامات التنصيص
+                    await asyncio.sleep(5)
+
                 from cache_manager import fetch_full_factory_data
                 await fetch_full_factory_data()
                     
