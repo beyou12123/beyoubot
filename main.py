@@ -48,7 +48,7 @@ from sheets import (
 # --- الإعدادات الأساسية ---
 TOKEN = "8796082287:AAEdKaI22UpWDo0O86y4Fza1JNevVV1xTww"
 ADMIN_ID = 873158772  # معرف المطور والمالك
-
+app = None
 # تعريف مراحل محادثة إنشاء البوت (حالات الـ ConversationHandler)
 CHOOSING_TYPE, GETTING_TOKEN, GETTING_NAME = range(3)
 # تعريف حالة انتظار اسم الموديول الجديد (خاصة بالمطور)
@@ -882,7 +882,8 @@ async def boot_all_bots():
 
 # --- دالة تشغيل البوتات المصنوعة تلقائياً بنظام التتابع الآمن ---
 async def start_all_sub_bots():
-    """جلب وتشغيل كافة البوتات النشطة مع إضافة فاصل زمني لمنع التصادم 409"""
+    global app  # ✅ إضافة فقط
+
     from sheets import get_all_active_bots
     active_bots = get_all_active_bots()
     print(f"🔄 جاري محاولة تشغيل {len(active_bots)} بوت مصنوع...")
@@ -893,33 +894,23 @@ async def start_all_sub_bots():
         bot_type = bot_data.get("نوع البوت")
         
         if token and bot_type:
-            # إضافة تأخير بسيط (ثانية واحدة) بين كل عملية تشغيل 
-            # هذا هو "السر" الذي سيمنع التهنيج وتصادم التوكينات
             await asyncio.sleep(1.5) 
-            
-            # تشغيل البوت في مهمة مستقلة
-            # ملاحظة: يجب أن تكون دالة run_dynamic_bot معرفة في ملفك
             asyncio.create_task(run_dynamic_bot(token, bot_type, owner_id))
             print(f"✅ تم إرسال أمر تشغيل للبوت: {bot_type}")
 
     print("🎊 اكتملت عملية إقلاع كافة البوتات التابعة.")
-    # --- [ القسم 2: بناء التطبيق والمعالجات ] ---
-    # إنشاء التطبيق - تأكد من أن الحرف الأول صغير 'app'
+
+    # 🔴 هذا هو الجزء المهم
+    TOKEN = get_bot_config("TOKEN")
+    
     app = ApplicationBuilder().token(TOKEN).build()
 
-    # إضافة المعالجات (مع الحفاظ على كافة الوظائف والمسافات البادئة)
     app.add_handler(CommandHandler("start", start))
     app.add_handler(create_bot_conv) 
-    app.add_handler(admin_module_conv) # محادثة الرفع الجديدة
-    
-    # المعالج الشامل المحدث للأزرار - تم إضافة open_admin_dashboard لضمان الاستجابة
+    app.add_handler(admin_module_conv)
     app.add_handler(CallbackQueryHandler(button_callback, pattern="^(stats_all|run_setup_db_now|broadcast_owners|restart_factory|download_cache_files|reboot_system|confirm_hard_reset|execute_hard_reset|start_sync_shet|start_restore_request|back_to_main|open_admin_dashboard)$"))
-    
-    # معالجة الرسائل والملفات
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
     app.add_handler(MessageHandler(filters.Document.ALL, start_restore_process))
-
-
 
 # --- [ القسم 3: المحرك الرئيسي (نهاية الملف) ] ---
 async def main_factory_launcher():
