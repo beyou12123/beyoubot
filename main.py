@@ -666,9 +666,18 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 color_index += 1
                 await asyncio.sleep(2.5) 
 
-            # 4. انتظار النتيجة النهائية
-            sheets_count = await setup_task
+        # 4. انتظار النتيجة النهائية
+        try:
+            # انتظار المهمة بشكل صحيح لالتقاط القيمة المعادة من sheets.py
+            result = await setup_task
             
+            # التحقق من نوع النتيجة لضمان عدم حدوث خطأ "object bool/int can't be used in await"
+            if isinstance(result, (int, float)):
+                sheets_count = int(result)
+            else:
+                # في حال كانت النتيجة كائن غير متوقع، نحاول الحصول على الطول من الهيكل
+                sheets_count = total_sheets if result else 0
+                
             if sheets_count > 0:
                 result_text = (
                     "✅ <b>تمت العملية بنجاح!</b>\n"
@@ -678,11 +687,14 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
             else:
                 result_text = "⚠️ <b>النظام مهيأ بالفعل!</b>\nالجداول موجودة ومحدثة."
-            from cache_manager import fetch_full_factory_data; await fetch_full_factory_data()
+            
+            # تحديث الرام فوراً لضمان مطابقة البيانات الجديدة
+            from cache_manager import fetch_full_factory_data
+            await fetch_full_factory_data()
                 
         except Exception as e:
             print(f"❌ خطأ في التهيئة: {e}")
-            result_text = "❌ <b>فشلت العملية!</b>\nحدث خطأ أثناء الاتصال بجوجل شيت."
+            result_text = f"❌ <b>فشلت العملية!</b>\nحدث خطأ أثناء المعالجة: {str(e)}"
             
         finally:
             context.user_data["setup_running"] = False
