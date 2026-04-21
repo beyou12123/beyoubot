@@ -448,14 +448,16 @@ async def owner_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("⚙️ تهيئة الجداول", callback_data="run_setup_db_now")],
         [InlineKeyboardButton("📢 إذاعة للمشتركين", callback_data="broadcast_owners")],
         [
-            InlineKeyboardButton("🔄 تحديث السيرفر", callback_data="restart_factory"), 
-            InlineKeyboardButton("📥 تحميل نسخة احتياطية", callback_data="download_cache_files")
+            InlineKeyboardButton("📥 تحميل نسخة", callback_data="download_cache_files"),
+            InlineKeyboardButton("📤 رفع نسخة", callback_data="start_restore_request")
         ],
-        [InlineKeyboardButton("♻️ إعادة تشغيل المحرك", callback_data="reboot_system")],
+        [
+            InlineKeyboardButton("🔄 تحديث السيرفر", callback_data="restart_factory"), 
+            InlineKeyboardButton("♻️ إعادة تشغيل", callback_data="reboot_system")
+        ],
+        [InlineKeyboardButton("⏳ بدء المزامنة اليدوية", callback_data="start_sync_shet")],
         [InlineKeyboardButton("⚠️ تصفير النظام بالكامل", callback_data="confirm_hard_reset")],
-        [InlineKeyboardButton("بدء المزامنة ", callback_data="start_sync_shet")],
-        [InlineKeyboardButton("📤 رفع نسخة احتياطية", callback_data="start_restore_request")],
-        [InlineKeyboardButton("🔙 العودة", callback_data="back_to_main")]
+        [InlineKeyboardButton("🔙 العودة للقائمة الرئيسية", callback_data="back_to_main")]
     ]
 
     
@@ -903,15 +905,20 @@ async def start_all_sub_bots():
     print("🎊 اكتملت عملية إقلاع كافة البوتات التابعة.")
 
 # --- [ القسم 2: بناء التطبيق والمعالجات ] ---
+    # إنشاء التطبيق
+    app = ApplicationBuilder().token(TOKEN).build()
 
-app = ApplicationBuilder().token(TOKEN).build()
-
-app.add_handler(CommandHandler("start", start))
-app.add_handler(create_bot_conv) 
-app.add_handler(admin_module_conv) # محادثة الرفع الجديدة
-app.add_handler(CallbackQueryHandler(button_callback, pattern="^(confirm_hard_reset|execute_hard_reset)$"))
-app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
-app.add_handler(MessageHandler(filters.Document.ALL, start_restore_process))
+    # إضافة المعالجات (تأكد من وجود 4 مسافات بادئة لكل سطر)
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(create_bot_conv) 
+    app.add_handler(admin_module_conv) # محادثة الرفع الجديدة
+    
+    # المعالج الشامل المحدث للأزرار
+    app.add_handler(CallbackQueryHandler(button_callback, pattern="^(stats_all|run_setup_db_now|broadcast_owners|restart_factory|download_cache_files|reboot_system|confirm_hard_reset|execute_hard_reset|start_sync_shet|start_restore_request|back_to_main)$"))
+    
+    # معالجة الرسائل والملفات
+    app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
+    app.add_handler(MessageHandler(filters.Document.ALL, start_restore_process))
 
 
 # --- [ القسم 3: المحرك الرئيسي (نهاية الملف) ] ---
