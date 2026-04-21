@@ -75,9 +75,78 @@ from sheets import (
 )
 
 from educational_manager import (
-     manage_groups_main, 
-     start_add_question_flow, 
-     process_q_flow
+    list_all_discounts_ui,
+    process_dsc_ask_desc,
+    process_dsc_check,
+    add_discount_start,
+    manage_control_ui,
+    validate_dsc_max,
+    validate_dsc_expiry,
+    validate_dsc_value,
+    validate_dsc_desc,
+    show_lectures_logic,
+    view_discount_details_ui,
+    show_discount_codes_logic,
+    manage_library_selector,
+    manage_groups_main,
+    manage_categories_main,
+    quiz_create_start_ui,
+    start_add_question_flow, 
+    process_q_flow,
+    quiz_gen_select_groups_ui,
+    q_bank_manager_ui,
+    browse_q_bank_ui,
+    view_question_details_ui,
+    start_add_question_ui,
+    quiz_activation_start,
+    quiz_activation_groups,
+    employee_quiz_view,
+    quiz_options_ui,
+    start_add_group,
+    confirm_group_save,
+    group_options_ui,
+    confirm_delete_group_ui,
+    process_grp_name,
+    process_grp_days,
+    process_grp_time
+)
+
+
+from course_engine import (
+    # --- إدارة الإعلانات والحملات ---
+    ad_create_start, 
+    ad_report_view, 
+    manage_ads_main_ui,
+    process_ad_campaign_flow,
+
+    # --- إعدادات النظام والعملة ---
+    show_system_setup_information,
+    set_currency_unit_flow,
+    save_currency_unit_logic,
+    set_default_payment_flow,
+    save_payment_info_logic,
+
+    # --- نظام التسويق بالعمولة والنقاط ---
+    set_marketers_commission_flow,
+    save_marketers_commission_logic,
+    set_ref_points_join_flow,
+    save_ref_points_join_logic,
+    set_ref_points_purchase_flow,
+    save_ref_points_purchase_logic,
+    set_min_payout_flow,
+    save_min_payout_logic,
+
+    # --- إدارة الواجبات والدرجات ---
+    set_homework_grade_flow,
+    save_homework_grade_logic,
+    set_min_passing_grade_flow,
+    save_min_passing_grade_logic,
+    set_max_passing_grade_flow,
+    save_max_passing_grade_logic,
+
+    # --- عرض المحتوى ولوحة الشرف ---
+    show_honors_main_menu,
+    show_course_content_ui
 )
 
 
@@ -342,24 +411,24 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 
     # 1. معالجة جداول المحاضرات
     if data == "schedules_lectures":
-        from educational_manager import show_lectures_logic
+
         await show_lectures_logic(update, context)
         
     # 2. فتح لوحة إدارة أكواد الخصم الرئيسية
     elif data == "discount_codes":
-        from educational_manager import show_discount_codes_logic
+
         await show_discount_codes_logic(update, context)
 
     # 3. زر "إضافة كود جديد" (هذا الزر كان مفقوداً في ملفك)
     elif data == "add_discount_start":
-        from educational_manager import add_discount_start
+
         await add_discount_start(update, context)
 
     # 4. معالجة خطوات التحقق من الدورة والاستمرار
     # التعديل المطلوب لضمان الاستجابة وعدم التجمد:
     elif data.startswith("d_ch_"): # استخدمنا d_ch_ بدلاً من dsc_check_
         course_id = data.replace("d_ch_", "")
-        from educational_manager import process_dsc_check
+
         await process_dsc_check(update, context, course_id)
     #>>>>>>>>>>>>>>>>    
 # داخل contact_callback_handler (عند اختيار "أريدها لي"):
@@ -380,23 +449,23 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 #©©©©©©©©©©
 # المناداة لدالة معلومات تهيئة البوت 
     elif data == "system_setup_information":
-        from course_engine import show_system_setup_information
+
         await show_system_setup_information(update, context)
 
 
     elif data == "dsc_continue":
-        from educational_manager import process_dsc_ask_desc
+
         await process_dsc_ask_desc(update, context)
 
     # 5. عرض وإدارة الأكواد للمالك
     elif data == "list_all_discounts":
-        from educational_manager import list_all_discounts_ui
+        
         await list_all_discounts_ui(update, context)
 
     # 6. عرض تفاصيل كود محدد
     elif data.startswith("view_disc_"):
         disc_id = data.replace("view_disc_", "")
-        from educational_manager import view_discount_details_ui
+
         await view_discount_details_ui(update, context, disc_id)
 #>>>>>>>>>>>>>>>>
     # 7. معالج حذف الكود
@@ -409,7 +478,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             if cell:
                 sheet.delete_rows(cell.row)
                 await query.answer("✅ تم حذف كود الخصم بنجاح!", show_alert=True)
-                from educational_manager import list_all_discounts_ui
+
                 await list_all_discounts_ui(update, context)
         except:
             await query.answer("❌ فشل الحذف.", show_alert=True)
@@ -555,7 +624,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
                 await query.answer(f"✅ تم تغيير حالة الكود إلى: {new_status}", show_alert=True)
                 
                 # إعادة تحديث الواجهة لإظهار الحالة الجديدة
-                from educational_manager import view_discount_details_ui
+
                 await view_discount_details_ui(update, context, disc_id)
         except Exception as e:
             await query.answer("❌ فشل تحديث الحالة.")
@@ -756,7 +825,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
     # --- [ محرك فتح محتوى الدورة ] ---
     elif data.startswith("open_content_"):
         course_id = data.replace("open_content_", "")
-        from course_engine import show_course_content_ui
+
         # استدعاء الواجهة البرمجية لعرض الدروس (الموجودة في ملف course_engine.py)
         await show_course_content_ui(update, context, course_id)
 
@@ -820,7 +889,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 # ==========================================
     # الإصلاح: معالجة الزر العام للمكتبة
     elif data == "manage_library":
-        from educational_manager import manage_library_selector
+
         await manage_library_selector(update, context)
         
     elif data.startswith("manage_library_"):
@@ -840,6 +909,30 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 
 
 #~~~~~~~~~~~~~~~~
+
+    data = query.data
+    await query.answer()
+
+    # --- [ ممرات إدارة الحملات الإعلانية - الإضافة هنا ] ---
+    if data == "manage_ads":
+        await manage_ads_main_ui(update, context)
+        return
+
+    elif data == "ad_create_start":
+        await ad_create_start(update, context)
+        return
+
+    elif data == "ad_report_view":
+        await ad_report_view(update, context)
+        return
+
+    elif data.startswith("ad_set_crs_"):
+        course_id = data.replace("ad_set_crs_", "")
+        context.user_data['temp_ad'] = {'course_id': course_id}
+        context.user_data['action'] = 'awaiting_ad_platform'
+        await query.edit_message_text("🌐 <b>الخطوة 2:</b> أرسل اسم المنصة الإعلانية (مثلاً: فيسبوك):", parse_mode="HTML")
+        return
+    # --- [ نهاية الإضافة ] ---
 
 
 #~~~~~~~~~~~~~~~~
@@ -943,7 +1036,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
     # معالجة اختيار الدورة للانتقال لملف المجموعات
     elif data.startswith("sel_course_groups_"):
         course_id = data.replace("sel_course_groups_", "")
-        from educational_manager import manage_groups_main
+
         await manage_groups_main(update, context, course_id)
 
 
@@ -1154,7 +1247,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 
     elif data == "honors_achievements":
         # عرض لوحة التحكم الموحدة للأوسمة والإنجازات
-        from course_engine import show_honors_main_menu
+
         await show_honors_main_menu(update, context)
 
 
@@ -1413,7 +1506,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
     # --- 5. إدارة الأقسام (عرض القائمة) ---
     # إضافة معالج زر إدارة الأقسام
     elif data == "manage_cats":
-        from educational_manager import manage_categories_main
+
         await manage_categories_main(update, context)
 
 
@@ -1850,50 +1943,50 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
    #®®®®®®®®®®
 #عند الضغط على زر معلومات الدفع
     elif data == "default_payment_information":
-        from course_engine import set_default_payment_flow
+
         await set_default_payment_flow(update, context)
 #~~~~~~~~~~~~~~~~
 # عنج الضغط على رز درجة الواجبات 
     elif data == "homework_grade":
-        from course_engine import set_homework_grade_flow
+
         await set_homework_grade_flow(update, context)
 
 #~~~~~~~~~~~~~~~~
 # عند الضغط على رز ضبط وحدة العملة
     elif data == "currency_unit":
-        from course_engine import set_currency_unit_flow
+
         await set_currency_unit_flow(update, context)
 #~~~~~~~~~~~~~~~~
 # عند الضغط على رز ضبط نقاط الاحالة
     elif data == "entry_points_settings":
-        from course_engine import set_ref_points_join_flow
+
         await set_ref_points_join_flow(update, context)
 # عند الضغط على رز ضبط نقاط التسجيل 
     elif data == "registration_points_settings":
-        from course_engine import set_ref_points_purchase_flow
+
         await set_ref_points_purchase_flow(update, context)
 
 #~~~~~~~~~~~~~~~~
 # عند الضغط على رز الحد الأدنى للسحب الأرباح للمسوقين
     elif data == "minimum_withdrawal_amount":
-        from course_engine import set_min_payout_flow
+        
         await set_min_payout_flow(update, context)
 
 #~~~~~~~~~~~~~~~~
 # ضبط درجات النجاح الصغرى والكبرى
     elif data == "minimum_passing_grade":
-        from course_engine import set_min_passing_grade_flow
+        
         await set_min_passing_grade_flow(update, context)
 
     elif data == "greatest_success_grade":
-        from course_engine import set_max_passing_grade_flow
+        
         await set_max_passing_grade_flow(update, context)
 
 
 #~~~~~~~~~~~~~~~~
 # ضبط عمولات المسوقين
     elif data == "percentage_marketers":
-        from course_engine import set_marketers_commission_flow
+        
         await set_marketers_commission_flow(update, context)
 
 #~~~~~~~~~~~~~~~~
@@ -1924,7 +2017,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 
     # 1. توحيد الدخول إلى الكنترول للرتب الثلاث
     elif data in ["manage_control", "manage_control_employee", "manage_control_coach"]:
-        from educational_manager import manage_control_ui
+       
         await manage_control_ui(update, context)
 
     # 2. تفعيل مفتاح العودة للوحة الموظفين
@@ -1942,12 +2035,12 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         
 #إنشاء الاختبارات الآلية 
     elif data == "manage_quizzes":
-        from educational_manager import quiz_create_start_ui
+
         await quiz_create_start_ui(update, context)
 
     elif data.startswith("q_gen_crs_"):
         course_id = data.replace("q_gen_crs_", "")
-        from educational_manager import quiz_gen_select_groups_ui
+
         await quiz_gen_select_groups_ui(update, context, course_id)
 
     elif data.startswith("q_gen_grp_"):
@@ -1966,7 +2059,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             else:
                 context.user_data['temp_quiz']['target_groups'].append(g_id)
         
-        from educational_manager import quiz_gen_select_groups_ui
+
         await quiz_gen_select_groups_ui(update, context, course_id)
 
     elif data == "q_gen_next_settings":
@@ -1980,7 +2073,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 
     # 2. الدخول لبنك الأسئلة
     elif data == "manage_q_bank":
-        from educational_manager import q_bank_manager_ui
+
         await q_bank_manager_ui(update, context)
         #استيراد الأسئلة 
     elif data == "import_q_excel":
@@ -2027,12 +2120,12 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         )
 
     elif data == "browse_q_bank":
-        from educational_manager import browse_q_bank_ui
+
         await browse_q_bank_ui(update, context)
 
     elif data.startswith("view_q_det_"):
         q_id = data.replace("view_q_det_", "")
-        from educational_manager import view_question_details_ui
+
         await view_question_details_ui(update, context, q_id)
 
     elif data.startswith("exec_del_q_"):
@@ -2040,14 +2133,14 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 
         if delete_question_from_bank(bot_token, q_id):
             await query.answer("🗑️ تم حذف السؤال من البنك بنجاح", show_alert=True)
-            from educational_manager import browse_q_bank_ui
+
             await browse_q_bank_ui(update, context)
         else:
             await query.answer("❌ فشل حذف السؤال.")
 
 #ربط  اضافة السؤال اليدوي
     elif data == "add_q_manual":
-        from educational_manager import start_add_question_ui
+
         await start_add_question_ui(update, context)
 
     elif data.startswith("sel_q_crs_"):
@@ -2094,7 +2187,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         
         if add_question_to_bank(bot_token, q_data):
             await query.answer("✅ تم حفظ السؤال في بنك الأسئلة بنجاح", show_alert=True)
-            from educational_manager import q_bank_manager_ui
+
             await q_bank_manager_ui(update, context)
             context.user_data.pop('temp_q', None)
         else:
@@ -2109,7 +2202,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         
         if create_auto_quiz(bot_token, quiz_data):
             await query.answer("🚀 تم إنشاء الاختبار بنجاح وهو الآن في حالة (مخفي).", show_alert=True)
-            from educational_manager import manage_control_ui
+
             await manage_control_ui(update, context)
             context.user_data.pop('temp_quiz', None)
         else:
@@ -2118,18 +2211,18 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 
     # 3. بدء تفعيل/إنشاء الاختبارات (اختيار الدورة)
     elif data == "manage_tests":
-        from educational_manager import quiz_activation_start
+
         await quiz_activation_start(update, context)
 
     # 4. اختيار المجموعات المستهدفة للاختبار
     elif data.startswith("act_q_crs_"):
         course_id = data.replace("act_q_crs_", "")
-        from educational_manager import quiz_activation_groups
+
         await quiz_activation_groups(update, context, course_id)
 
     # 5. عرض الاختبارات المتاحة للموظف (الأرشيف)
     elif data == "manage_archiveaq":
-        from educational_manager import employee_quiz_view
+
         await employee_quiz_view(update, context)
 
     # 6. تبديل حالة ظهور الاختبار (TRUE/FALSE)
@@ -2145,7 +2238,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         await query.answer(f"✅ تم تغيير الحالة إلى: {new_status}")
         
         # 3. تحديث واجهة الخيارات فوراً لإظهار الأيقونة المحدثة (عين أو قفل)
-        from educational_manager import quiz_options_ui
+
         await quiz_options_ui(update, context, quiz_id)
 
     # 7. إدارة صلاحيات الموظف (التأسيس الصامت + عرض اللوحة)
@@ -2188,13 +2281,13 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
     # استدعاء واجهة المجموعات الرئيسية لدورة معينة
     elif data.startswith("manage_group_"):
         course_id = data.replace("manage_group_", "")
-        from educational_manager import manage_groups_main
+
         await manage_groups_main(update, context, course_id)
 
     # بدء إضافة مجموعة جديدة
     elif data.startswith("grp_add_start_"):
         course_id = data.replace("grp_add_start_", "")
-        from educational_manager import start_add_group
+
         await start_add_group(update, context, course_id)
 
     # اختيار المعلم أثناء الإضافة
@@ -2206,7 +2299,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         coaches = get_all_coaches(bot_token)
         teacher_name = next((c['name'] for c in coaches if str(c['id']) == str(teacher_id)), "مدرب")
         
-        from educational_manager import confirm_group_save
+
         await confirm_group_save(update, context, teacher_id, teacher_name)
 
     # التنفيذ الفعلي للحفظ
@@ -2216,7 +2309,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         if save_group_to_db(bot_token, group_data):
             await query.answer("✅ تم إنشاء المجموعة بنجاح", show_alert=True)
             # العودة لواجهة المجموعات
-            from educational_manager import manage_groups_main
+
             await manage_groups_main(update, context, group_data['course_id'])
             context.user_data.pop('temp_grp', None)
         else:
@@ -2225,13 +2318,13 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
     # عرض خيارات مجموعة معينة (تعديل/حذف)
     elif data.startswith("grp_show_"):
         group_id = data.replace("grp_show_", "")
-        from educational_manager import group_options_ui
+
         await group_options_ui(update, context, group_id)
 
     # تأكيد الحذف
     elif data.startswith("grp_confirm_del_"):
         group_id = data.replace("grp_confirm_del_", "")
-        from educational_manager import confirm_delete_group_ui
+
         await confirm_delete_group_ui(update, context, group_id)
 
     # التنفيذ الفعلي للحذف
@@ -2252,7 +2345,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         # تبديل الحالة بين نشطة ومغلقة
         update_group_field(bot_token, group_id, "حالة_المجموعة", "مغلقة")
         await query.answer("✅ تم تغيير حالة المجموعة إلى مغلقة")
-        from educational_manager import group_options_ui
+
         await group_options_ui(update, context, group_id)
 
 # --------------------------------------------------------------------------
@@ -2877,34 +2970,34 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
     	
     # --- [ معالجة خطوات إضافة كود الخصم نصياً ] ---
         if action == 'awaiting_dsc_desc':
-            from educational_manager import validate_dsc_desc
+
             await validate_dsc_desc(update, context)
             return
 
         elif action == 'awaiting_dsc_value':
-            from educational_manager import validate_dsc_value
+
             await validate_dsc_value(update, context)
             return
 
         elif action == 'awaiting_dsc_expiry':
-            from educational_manager import validate_dsc_expiry
+        
             await validate_dsc_expiry(update, context)
             return
 
         elif action == 'awaiting_dsc_max':
-            from educational_manager import validate_dsc_max
+            
             await validate_dsc_max(update, context)
             return
 #~~~~~~~~~~~~~~~~
         # --- [ حفظ معلومات الدفع الافتراضية ] ---
         elif action == 'awaiting_payment_info_text':
-            from course_engine import save_payment_info_logic
+            
             await save_payment_info_logic(update, context)
             return
 #~~~~~~~~~~~~~~~~
         # --- [ حفظ درجة الواجبات ] ---
         elif action == 'awaiting_homework_grade_value':
-            from course_engine import save_homework_grade_logic
+  
             await save_homework_grade_logic(update, context)
             return
 
@@ -2913,52 +3006,52 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
 #~~~~~~~~~~~~~~~~
         # --- [ حفظ وحدة العملة ] ---
         elif action == 'awaiting_currency_unit_value':
-            from course_engine import save_currency_unit_logic
+
             await save_currency_unit_logic(update, context)
             return
 
 #~~~~~~~~~~~~~~~~
         # --- [ حفظ نقاط الإحالة عند الانضمام ] ---
         elif action == 'awaiting_ref_points_join_value':
-            from course_engine import save_ref_points_join_logic
+
             await save_ref_points_join_logic(update, context)
             return
 #~~~~~~~~~~~~~~~~
         # --- [ حفظ نقاط الإحالة عند شراء دورة ] ---
         elif action == 'awaiting_ref_points_purchase_value':
-            from course_engine import save_ref_points_purchase_logic
+
             await save_ref_points_purchase_logic(update, context)
             return
 
 #~~~~~~~~~~~~~~~~
         # --- [ حفظ الحد الأدنى لمبلغ السحب ] ---
         elif action == 'awaiting_min_payout_value':
-            from course_engine import save_min_payout_logic
+
             await save_min_payout_logic(update, context)
             return
 
 #~~~~~~~~~~~~~~~~
         # --- [ حفظ درجات النجاح ] ---
         elif action == 'awaiting_min_passing_grade_value':
-            from course_engine import save_min_passing_grade_logic
+
             await save_min_passing_grade_logic(update, context)
             return
 
         elif action == 'awaiting_max_passing_grade_value':
-            from course_engine import save_max_passing_grade_logic
+
             await save_max_passing_grade_logic(update, context)
             return
 #~~~~~~~~~~~~~~~~
         # --- [ حفظ نسبة عمولة المسوقين ] ---
         elif action == 'awaiting_marketers_commission_value':
-            from course_engine import save_marketers_commission_logic
+
             await save_marketers_commission_logic(update, context)
             return
 
 #~~~~~~~~~~~~~~~~
         # --- [ إدارة الحملات الإعلانية ] ---
         elif action and action.startswith('awaiting_ad_'):
-            from course_engine import process_ad_campaign_flow
+
             await process_ad_campaign_flow(update, context)
             return
 
@@ -2967,6 +3060,7 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
 #~~~~~~~~~~~~~~~~
 
 #~~~~~~~~~~~~~~~~
+
 
 
 
@@ -3198,17 +3292,17 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
 # أضف هذا الجزء داخل handle_contact_message في education_bot.py
 
         elif action == 'awaiting_grp_name':
-            from educational_manager import process_grp_name
+
             await process_grp_name(update, context)
             return
 
         elif action == 'awaiting_grp_days':
-            from educational_manager import process_grp_days
+
             await process_grp_days(update, context)
             return
 
         elif action == 'awaiting_grp_time':
-            from educational_manager import process_grp_time
+
             await process_grp_time(update, context)
             return
 
