@@ -666,13 +666,16 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 color_index += 1
                 await asyncio.sleep(2.5) 
 
-                 # 4. انتظار النتيجة النهائية
+                # 4. انتظار النتيجة النهائية
                 try:
+                    # انتظار المهمة بشكل صحيح لالتقاط القيمة المعادة من sheets.py
                     result = await setup_task
                     
+                    # التحقق من نوع النتيجة لضمان عدم حدوث خطأ في await
                     if isinstance(result, (int, float)):
                         sheets_count = int(result)
                     else:
+                        # استخدام total_sheets المعرف في بداية الدالة
                         sheets_count = total_sheets if result else 0
                         
                     if sheets_count > 0:
@@ -685,6 +688,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     else:
                         result_text = "⚠️ <b>النظام مهيأ بالفعل!</b>\nالجداول موجودة ومحدثة."
                     
+                    # تحديث الرام فوراً لضمان مطابقة البيانات الجديدة
                     from cache_manager import fetch_full_factory_data
                     await fetch_full_factory_data()
                         
@@ -693,12 +697,15 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     result_text = f"❌ <b>فشلت العملية!</b>\nحدث خطأ أثناء المعالجة: {str(e)}"
                     
                 finally:
+                    # إنهاء حالة التشغيل للسماح بالعمليات المستقبلية
                     context.user_data["setup_running"] = False
 
+                # إرسال الرسالة النهائية وتوفير زر العودة (يتبع الـ finally بنفس الإزاحة)
                 keyboard = [[InlineKeyboardButton("🔙 العودة للوحة التحكم", callback_data="open_admin_panel")]]
                 await query.edit_message_text(result_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
 # --- نهاية معالج الأزرار وبداية الدوال المستقلة ---
+
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دالة إلغاء عملية إنشاء البوت والعودة للقائمة الرئيسية"""
     user_id = update.effective_user.id
@@ -712,7 +719,6 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     context.user_data.clear()
     return ConversationHandler.END
-
 
 # --------------------------------------------------------------------------
 # دالة رفع ملف بوت جديد (تحديث تفاعلي للمطور)
