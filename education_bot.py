@@ -825,7 +825,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 #~~~~~~~~~~~~~~~~
 
     # --- أضف الكود هنا ليعمل زر إنشاء حملة والتقرير اللحظي ---
-    elif data == "manage_ads":
+    if data == "manage_ads":
         from course_engine import manage_ads_main_ui
         await manage_ads_main_ui(update, context)
         return
