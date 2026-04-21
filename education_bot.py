@@ -337,8 +337,33 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
     bot_owner_id = int(config.get("admin_ids", 0))
     await query.answer()
 # --------------------------------------------------------------------------
+    # --- [ أولوية محرك الإعلانات اللحظي ] ---
+    if data == "manage_ads":
+        from course_engine import manage_ads_main_ui
+        await manage_ads_main_ui(update, context)
+        return # ضروري جداً لإنهاء التنفيذ هنا
+
+    elif data == "ad_create_start":
+        from course_engine import ad_create_start
+        await ad_create_start(update, context)
+        return
+
+    elif data == "ad_report_view":
+        from course_engine import ad_report_view
+        await ad_report_view(update, context)
+        return
+
+    elif data.startswith("ad_set_crs_"):
+        course_id = data.replace("ad_set_crs_", "")
+        context.user_data['temp_ad'] = {'course_id': course_id}
+        context.user_data['action'] = 'awaiting_ad_platform'
+        await query.edit_message_text("🌐 <b>الخطوة 2:</b> أرسل اسم المنصة الإعلانية (مثلاً: فيسبوك):", parse_mode="HTML")
+        return
+
+
+
     # 1. معالجة جداول المحاضرات
-    if data == "schedules_lectures":
+    elif data == "schedules_lectures":
         from educational_manager import show_lectures_logic
         await show_lectures_logic(update, context)
         
@@ -1864,26 +1889,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 #~~~~~~~~~~~~~~~~
 #ضبط زر 📢 الإعلانات
 #~~~~~~~~~~~~~~~~
-# --- [ محرك إدارة الإعلانات المطور - النسخة المصححة ] ---
-    elif data == "manage_ads":
-        from course_engine import manage_ads_main_ui
-        await manage_ads_main_ui(update, context)
 
-    elif data == "ad_create_start":
-        from course_engine import ad_create_start
-        await ad_create_start(update, context)
-
-    elif data == "ad_report_view":
-        from course_engine import ad_report_view
-        await ad_report_view(update, context)
-
-    elif data.startswith("ad_set_crs_"):
-        # تصحيح: إضافة query لتعريفها داخل هذا النطاق
-        query = update.callback_query
-        course_id = data.replace("ad_set_crs_", "")
-        context.user_data['temp_ad'] = {'course_id': course_id}
-        context.user_data['action'] = 'awaiting_ad_platform'
-        await query.edit_message_text("🌐 <b>الخطوة 2:</b> أرسل اسم المنصة الإعلانية (مثلاً: فيسبوك، سناب):", parse_mode="HTML")
 #~~~~~~~~~~~~~~~~
 
 #~~~~~~~~~~~~~~~~
