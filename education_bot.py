@@ -814,10 +814,30 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode="HTML"
         )
+
+# ==========================================
+# الكود الجديد الذي تضعه هنا (من السطر 180 تقريباً)
+# ==========================================
+    elif data.startswith("manage_library_"):
+        course_id = data.replace("manage_library_", "")
+        await course_engine.show_library_menu(update, context, course_id)
+    
+    elif data.startswith("view_file_"):
+        file_id = data.replace("view_file_", "")
+        await course_engine.view_file_details(update, context, file_id)
+# ==========================================
 #~~~~~~~~~~~~~~~~
+#المكتبة 
+    elif data.startswith("add_lib_file_"):
+        course_id = data.replace("add_lib_file_", "")
+        await educational_manager.prompt_add_library_file(update, context, course_id)
 #~~~~~~~~~~~~~~~~
 
-    
+
+#~~~~~~~~~~~~~~~~
+
+
+#~~~~~~~~~~~~~~~~
 # --------------------------------------------------------------------------
     # --- [ معالج الدعم الفني ] ---
     elif data == "contact_admin":
@@ -2624,7 +2644,13 @@ async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_T
 #  //===========================================
     # استخراج الحالة الحالية للمستخدم لسهولة الفحص
     current_action = context.user_data.get('action')
-
+   
+    # //==============================================================
+# فحص بيانت المكتبة  
+    if 'awaiting_lib_file' in context.user_data:
+        import educational_manager
+        await educational_manager.save_library_file_logic(update, context)
+        return
     # //==============================================================
     # // [1] محرك معالجة منح الأوسمة (Course Engine)
     # // اعتراض الرسائل إذا كان المالك يقوم الآن بإدخال بيانات وسام لطالب

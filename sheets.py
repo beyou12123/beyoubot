@@ -1983,41 +1983,6 @@ def get_filtered_library_content(bot_token, user_id, course_id):
         return []
  
 # --------------------------------------------------------------------------
-# فحص حالة الطالب 
-def get_filtered_library_content(bot_token, user_id, course_id):
-    """جلب المحتوى المخصص للطالب بناءً على حالة الدفع والدورة"""
-    try:
-        # 1. التحقق من حالة الطالب في قاعدة بيانات الطلاب
-        student_sheet = ss.worksheet("قاعدة_بيانات_الطلاب")
-        student_records = student_sheet.get_all_records()
-        
-        # البحث عن سجل الطالب المطابق للتوكن والآيدي
-        student_data = next((r for r in student_records if str(r.get("ID_المستخدم_تيليجرام")) == str(user_id) 
-                             and str(r.get("bot_id")) == str(bot_token)), None)
-        
-        # نعتبره "دافع" فقط إذا كانت حالته (مدفوع) أو (دافع)
-        is_paid = False
-        if student_data and str(student_data.get("الحالة")).strip() in ["مدفوع", "دافع"]:
-            is_paid = True
-
-        # 2. جلب وتصفية محتوى المكتبة
-        library_sheet = ss.worksheet("المكتبة")
-        all_content = library_sheet.get_all_records()
-        
-        filtered_content = []
-        for item in all_content:
-            # التحقق من أن الملف يخص هذا البوت وهذه الدورة تحديداً
-            if str(item.get("bot_id")) == str(bot_token) and str(item.get("الدورة")) == str(course_id):
-                file_status = str(item.get("الحالة")).strip() # حالة الملف (مجاني/مدفوع)
-                
-                # السماح بالوصول في حالتين: الملف مجاني للكل، أو الملف مدفوع والطالب دافع
-                if file_status == "مجاني" or (file_status == "مدفوع" and is_paid):
-                    filtered_content.append(item)
-        
-        return filtered_content
-    except Exception as e:
-        print(f"❌ خطأ في تصفية المكتبة: {e}")
-        return []
 
 # --------------------------------------------------------------------------
 # اشعار التفعيل 
@@ -2690,4 +2655,58 @@ def sync_ad_campaign_results(bot_token):
         return False
 
 # --------------------------------------------------------------------------
+# دالة المكتبة
+
+def add_library_item_to_sheet(bot_token, course_id, file_name, file_link, status):
+    """
+    إضافة ملف جديد إلى شيت المكتبة مع ملء كافة الأعمدة الـ 25
+    """
+    try:
+        sheet = ss.worksheet("المكتبة")
+        
+        # توليد معرف فريد للملف
+        file_id = str(uuid.uuid4())[:8].upper()
+        # جلب الوقت الحالي
+        current_time = get_system_time("full")
+        
+        # تجهيز الصف بالترتيب الصحيح للأعمدة (25 عمود)
+        row = [
+            str(bot_token),          # bot_id
+            "الفرع الرئيسي",          # معرف_الفرع 
+            file_id,                 # معرف_الملف
+            file_name,               # اسم_الملف
+            "PDF/Link",              # النوع
+            "تعليمي",                # التصنيف
+            str(course_id),          # الدورة
+            "ملف تعليمي مضاف حديثاً", # الوصف
+            file_link,               # الرابط
+            "عام",                   # صلاحية_الوصول
+            "0",                     # سعر_الوصول
+            0,                       # عدد_المشاهدات
+            0,                       # عدد_المشتركين
+            "العربية",               # لغة_المحتوى
+            "متوسط",                 # المستوى
+            "-",                     # مدة_المحاضرة
+            current_time,            # تاريخ_الإضافة
+            current_time,            # تاريخ_آخر_تحديث
+            "Admin",                 # أضيف_بواسطة
+            status,                  # الحالة (مجاني/مدفوع)
+            "Created",               # سجل_التعديل
+            0,                       # عدد_التقييمات
+            0,                       # متوسط_التقييم
+            "",                      # تعليقات
+            0                        # عدد_المشاركات
+        ]
+        
+        sheet.append_row(row)
+        return True
+    except Exception as e:
+        print(f"❌ خطأ في إضافة ملف للمكتبة: {e}")
+        return False
+ 
+
+
+
+
+
 

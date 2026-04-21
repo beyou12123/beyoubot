@@ -7,8 +7,19 @@ import sys
 import signal
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
-from sheets import ss, get_bot_setting, update_global_version, get_system_time
-from sheets import get_filtered_library_content, get_user_referral_stats
+
+
+
+from sheets import (
+ss,
+get_bot_setting,
+update_global_version,
+get_system_time, 
+get_filtered_library_content,
+get_bot_data_from_cache, 
+get_user_referral_stats
+
+)
 
 
 logger = logging.getLogger(__name__)
@@ -1297,6 +1308,93 @@ async def restart_bot_logic(update, context):
     # ملاحظة: السيرفر (Docker أو PM2) سيقوم بإعادة تشغيله تلقائياً
     os.kill(pid, signal.SIGTERM) 
 # --------------------------------------------------------------------------
+# --------------------------------------------------------------------------
+# في ملف course_engine.py
+
+async def show_library_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, course_id):
+    """عرض قائمة الملفات المتاحة للطالب في المكتبة بناءً على الدورة وحالة الدفع"""
+    query = update.callback_query
+    user_id = query.from_user.id
+    bot_token = context.bot.token
+
+    # استخدام الدالة التي وفرتها أنت لجلب البيانات المفلترة
+    library_items = get_filtered_library_content(bot_token, user_id, course_id)
+
+    if not library_items:
+        await query.answer("🚫 لا توجد ملفات متاحة لك في هذه المكتبة حالياً.", show_alert=True)
+        return
+
+    keyboard = []
+    # تنظيم الملفات في أزرار
+    for item in library_items:
+        file_name = item.get("اسم_الملف", "ملف بدون عنوان")
+        file_id = item.get("معرف_الملف")
+        # نضع معرف الملف في callback_data لفتحه لاحقاً
+        keyboard.append([InlineKeyboardButton(f"📄 {file_name}", callback_data=f"view_file_{file_id}")])
+
+    keyboard.append([InlineKeyboardButton("🔙 عودة للدروس", callback_data=f"view_course_{course_id}")])
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(
+        "📚 **المكتبة التعليمية**\n\nإليك المصادر والملفات المتاحة لك في هذه الدورة:",
+        reply_markup=reply_markup,
+        parse_mode="Markdown"
+    )
+
+async def view_file_details(update: Update, context: ContextTypes.DEFAULT_TYPE, file_id):
+    """عرض تفاصيل ملف معين وخيار تحميله/فتحه"""
+    query = update.callback_query
+    bot_token = context.bot.token
+    
+    # جلب كافة بيانات المكتبة من الكاش للبحث عن الملف
+    all_library = get_bot_data_from_cache(bot_token, "المكتبة")
+    file_data = next((f for f in all_library if str(f.get("معرف_الملف")) == str(file_id)), None)
+
+    if not file_data:
+        await query.answer("⚠️ تعذر العثور على بيانات الملف.")
+        return
+
+    caption = (
+        f"📄 **اسم الملف:** {file_data.get('اسم_الملف')}\n"
+        f"📝 **الوصف:** {file_data.get('الوصف', 'لا يوجد وصف')}\n"
+        f"🌐 **اللغة:** {file_data.get('لغة_المحتوى', 'غير محددة')}\n"
+        f"📊 **المستوى:** {file_data.get('المستوى', 'عام')}\n"
+    )
+
+    keyboard = []
+    file_link = file_data.get('الرابط')
+    if file_link:
+        keyboard.append([InlineKeyboardButton("📥 فتح / تحميل الملف", url=file_link)])
+    
+    keyboard.append([InlineKeyboardButton("🔙 عودة للمكتبة", callback_data=f"manage_library_{file_data.get('الدورة')}")])
+
+    await query.edit_message_text(caption, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+
+# --------------------------------------------------------------------------
+
+# --------------------------------------------------------------------------
+
+# --------------------------------------------------------------------------
+
+# --------------------------------------------------------------------------
+
+# --------------------------------------------------------------------------
+
+# --------------------------------------------------------------------------
+
+# --------------------------------------------------------------------------
+
+# --------------------------------------------------------------------------
+
+# --------------------------------------------------------------------------
+
+# --------------------------------------------------------------------------
+
+# --------------------------------------------------------------------------
+
+# --------------------------------------------------------------------------
+
 
 
 

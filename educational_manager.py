@@ -39,6 +39,9 @@ async def manage_groups_main(update, context, course_id):
     
     # 3. أزرار التحكم الثابتة
     keyboard.append([InlineKeyboardButton("➕ إنشاء مجموعة جديدة", callback_data=f"grp_add_start_{course_id}")])
+    keyboard.append([
+        InlineKeyboardButton("➕ إضافة ملف للمكتبة", callback_data=f"add_lib_file_{course_id}")
+    ])    
     keyboard.append([InlineKeyboardButton("🔙 عودة للدورة", callback_data=f"manage_crs_{course_id}")])
     
     text = (
@@ -1040,7 +1043,66 @@ async def process_q_flow(update, context):
             await update.message.reply_text("⚠️ خطأ! يرجى إرسال الرمز فقط (A، B، C، أو D).")
 
 # --------------------------------------------------------------------------
-# عرض الدروس للطالب 
+
+# === أضف هذا الكود في نهاية الملف تماماً ===
+
+async def prompt_add_library_file(update, context, course_id):
+    """بدء عملية طلب بيانات الملف من الأدمن"""
+    query = update.callback_query
+    context.user_data['awaiting_lib_file'] = course_id
+    await query.edit_message_text(
+        "📝 **إضافة ملف جديد للمكتبة**\n\n"
+        "يرجى إرسال تفاصيل الملف بالتنسيق التالي:\n"
+        "`اسم الملف | الرابط | الحالة (مجاني/مدفوع)`\n\n"
+        "مثال:\n"
+        "`كتاب البرمجة | https://t.me/file_link | مدفوع`",
+        parse_mode="Markdown"
+    )
+
+async def save_library_file_logic(update, context):
+    """استقبال الرسالة النصية وحفظها في الشيت مع ضمان تصفير الحالة"""
+    # نتحقق من وجود المفتاح في user_data أو في action
+    course_id = context.user_data.get('awaiting_lib_file')
+    
+    if course_id:
+        # تصفير الحالة فوراً لمنع التكرار أو التداخل مع رسائل أخرى
+        context.user_data.pop('awaiting_lib_file', None)
+        if context.user_data.get('action') == 'awaiting_lib_file':
+            context.user_data.pop('action', None)
+            
+        text = update.message.text
+        bot_token = context.bot.token
+        
+        try:
+            # تقسيم النص المدخل: الاسم | الرابط | الحالة
+            parts = [t.strip() for t in text.split("|")]
+            if len(parts) < 3:
+                raise ValueError("Format error")
+                
+            name, link, status = parts[0], parts[1], parts[2]
+            
+            # استدعاء دالة الحفظ من ملف sheets
+            from sheets import add_library_item_to_sheet
+            success = add_library_item_to_sheet(
+                bot_token=bot_token,
+                course_id=course_id,
+                file_name=name,
+                file_link=link,
+                status=status
+            )
+            
+            if success:
+                await update.message.reply_text(f"✅ **تمت الإضافة بنجاح!**\n\n📄 الملف: {name}\n🔗 الرابط: {link}\n🔓 الحالة: {status}")
+            else:
+                await update.message.reply_text("❌ حدث خطأ فني أثناء الكتابة في قاعدة البيانات.")
+                
+        except Exception as e:
+            # في حال الخطأ، نعيد للأدمن توضيح التنسيق المطلوب
+            await update.message.reply_text(
+                "⚠️ **خطأ في تنسيق البيانات!**\n\n"
+                "يرجى المحاولة مجدداً وإرسال البيانات بهذا الشكل حصراً:\n"
+                "`اسم الملف | الرابط | الحالة`"
+            )
 
 # --------------------------------------------------------------------------
 
