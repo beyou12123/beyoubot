@@ -685,9 +685,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         from sheets import get_sheets_structure
                         sheets_count = len(get_sheets_structure()) if result else 0
                 except:
-
-
-                if sheets_count > 0:
+                   sheets_count > 0:
                     result_text = (
                         "✅ <b>تمت العملية بنجاح!</b>\n"
                         "━━━━━━━━━━━━━━\n"
