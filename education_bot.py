@@ -339,29 +339,9 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
     bot_owner_id = int(config.get("admin_ids", 0))
     await query.answer()
 # --------------------------------------------------------------------------
-    # --- [ أولوية محرك الإعلانات اللحظي ] ---
-
-    # --- [ ممرات إدارة الحملات الإعلانية ] ---
-    if data == "ad_create_start":
-        await course_engine.ad_create_start(update, context)
-        return
-
-    elif data == "ad_report_view":
-        await course_engine.generate_ad_report(update, context)
-        return
-
-    elif data == "manage_ads":
-        await course_engine.manage_ads_main_ui(update, context)
-        return
-        
-    elif data == "tech_settings":
-        # زر العودة يعود للقائمة الرئيسية
-        await start_handler(update, context)
-        return
-
 
     # 1. معالجة جداول المحاضرات
-    elif data == "schedules_lectures":
+    if data == "schedules_lectures":
         from educational_manager import show_lectures_logic
         await show_lectures_logic(update, context)
         
@@ -840,7 +820,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
     
 # --------------------------------------------------------------------------
     # --- [ معالج الدعم الفني ] ---
-    if data == "contact_admin":
+    elif data == "contact_admin":
         # جلب إعدادات البوت لمعرفة هوية الإدارة
 
         config = get_bot_config(bot_token)
