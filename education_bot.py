@@ -331,6 +331,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
     print("--- [DEBUG]: تم ضغط زر في البوت الآن والطلب وصل للمعالج ---")    
     query = update.callback_query
     data = query.data
+    
     user_id = query.from_user.id
     bot_token = context.bot.token
     config = get_bot_config(bot_token)
@@ -339,27 +340,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
     await query.answer()
 # --------------------------------------------------------------------------
     # --- [ أولوية محرك الإعلانات اللحظي ] ---
-    if data == "manage_ads": # هل الكلمة هنا مطابقة تماماً لما في الزر؟
-        from course_engine import manage_ads_main_ui
-        await manage_ads_main_ui(update, context)
-        return
 
-    elif data == "ad_create_start":
-        from course_engine import ad_create_start
-        await ad_create_start(update, context)
-        return
-
-    elif data == "ad_report_view":
-        from course_engine import ad_report_view
-        await ad_report_view(update, context)
-        return
-
-    elif data.startswith("ad_set_crs_"):
-        course_id = data.replace("ad_set_crs_", "")
-        context.user_data['temp_ad'] = {'course_id': course_id}
-        context.user_data['action'] = 'awaiting_ad_platform'
-        await query.edit_message_text("🌐 <b>الخطوة 2:</b> أرسل اسم المنصة الإعلانية (مثلاً: فيسبوك):", parse_mode="HTML")
-        return
 
 
 
@@ -837,6 +818,42 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode="HTML"
         )
+#~~~~~~~~~~~~~~~~
+
+    # ... كود سابق
+    data = query.data
+    await query.answer()
+#~~~~~~~~~~~~~~~~
+
+    # --- أضف الكود هنا ليعمل زر إنشاء حملة والتقرير اللحظي ---
+    if data == "manage_ads":
+        from course_engine import manage_ads_main_ui
+        await manage_ads_main_ui(update, context)
+        return
+
+    elif data == "ad_create_start":
+        from course_engine import ad_create_start
+        await ad_create_start(update, context)
+        return
+
+    elif data == "ad_report_view":
+        from course_engine import ad_report_view
+        await ad_report_view(update, context)
+        return
+
+    elif data.startswith("ad_set_crs_"):
+        course_id = data.replace("ad_set_crs_", "")
+        context.user_data['temp_ad'] = {'course_id': course_id}
+        context.user_data['action'] = 'awaiting_ad_platform'
+        await query.edit_message_text("🌐 <b>الخطوة 2:</b> أرسل اسم المنصة الإعلانية (مثلاً: فيسبوك):", parse_mode="HTML")
+        return
+    # --- نهاية الإضافة ---
+
+    if data == "contact_admin":
+        # ... بقية الكود الأصلي في الملف
+
+
+
 
 # --------------------------------------------------------------------------
     # --- [ معالج الدعم الفني ] ---
