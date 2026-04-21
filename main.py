@@ -677,7 +677,16 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     sheets_count = int(result)
                 else:
                     sheets_count = total_sheets if result else 0
-                    
+                try:
+                    result = await setup_task
+                    if isinstance(result, int):
+                        sheets_count = result
+                    else:
+                        from sheets import get_sheets_structure
+                        sheets_count = len(get_sheets_structure()) if result else 0
+                except:
+
+
                 if sheets_count > 0:
                     result_text = (
                         "✅ <b>تمت العملية بنجاح!</b>\n"
