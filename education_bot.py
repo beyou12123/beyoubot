@@ -328,6 +328,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # --------------------------------------------------------------------------
 async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """التحكم في كافة عمليات الضغط على الأزرار الشفافة Inline Buttons"""
+    print("--- [DEBUG]: تم ضغط زر في البوت الآن والطلب وصل للمعالج ---")    
     query = update.callback_query
     data = query.data
     user_id = query.from_user.id
