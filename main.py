@@ -54,6 +54,47 @@ CHOOSING_TYPE, GETTING_TOKEN, GETTING_NAME = range(3)
 # تعريف حالة انتظار اسم الموديول الجديد (خاصة بالمطور)
 WAITING_FOR_MODULE_NAME = 4
 
+
+RUNNING_BOTS = set()
+_running_bot_tokens = set()
+
+RUNNING_LOCK = asyncio.Lock()
+
+# 🧠 يمنع تشغيل نفس البوت حتى لو العملية تكررت
+ACTIVE_RUNTIME_BOTS = {}
+
+# 🧱 PID Lock (حل جذري ضد تعدد العمليات)
+BOT_PROCESS_LOCK_FILE = "/app/cache_data/bot_factory.lock"
+
+
+def acquire_process_lock():
+    """يمنع تشغيل أكثر من عملية مصنع بوتات"""
+    if os.path.exists(BOT_PROCESS_LOCK_FILE):
+        return False
+    with open(BOT_PROCESS_LOCK_FILE, "w") as f:
+        f.write(str(os.getpid()))
+    return True
+
+
+def release_process_lock():
+    if os.path.exists(BOT_PROCESS_LOCK_FILE):
+        os.remove(BOT_PROCESS_LOCK_FILE)
+
+
+def is_bot_running(token: str) -> bool:
+    return token in ACTIVE_RUNTIME_BOTS
+
+
+def mark_bot_running(token: str, app):
+    ACTIVE_RUNTIME_BOTS[token] = app
+
+
+def mark_bot_stopped(token: str):
+    if token in ACTIVE_RUNTIME_BOTS:
+        del ACTIVE_RUNTIME_BOTS[token]
+
+
+
 # --- القوائم الشفافة المحدثة (Inline Keyboards) ---
 def get_main_menu_inline(user_id):
     keyboard = [[InlineKeyboardButton("➕ إنشاء بوت", callback_data="start_manufacture")]]
@@ -883,58 +924,52 @@ async def start_restore_process(update: Update, context: ContextTypes.DEFAULT_TY
 # --- [ القسم 1: الدوال التشغيلية (يجب أن تظل في الأعلى) ] ---
 
 # دالة تشغيل كافة البوتات عند الإقلاع لضمان التنفيذ المتسلسل
-RUNNING_BOTS = set()
-RUNNING_LOCK = asyncio.Lock()
-_running_bot_tokens = set()  # حماية من تشغيل نفس البوت أكثر من مرة
-
-# 🆕 طبقة إضافية: تتبع البوتات التي تم تفعيلها فعليًا في هذا التشغيل
-ACTIVE_RUNTIME_BOTS = set()
-
 async def start_all_sub_bots():
     from sheets import get_all_active_bots
     
-    active_bots = get_all_active_bots()
-    print(f"🔄 جاري محاولة تشغيل {len(active_bots)} بوت مصنوع...")
-    
-    for bot_data in active_bots:
-        token = bot_data.get("التوكن")
-        owner_id = bot_data.get("ID المالك")
-        bot_type = bot_data.get("نوع البوت")
+    # 🧱 منع تشغيل المصنع مرتين في نفس السيرفر
+    if not acquire_process_lock():
+        print("⚠️ مصنع البوتات يعمل بالفعل في عملية أخرى")
+        return
+
+    try:
+        active_bots = get_all_active_bots()
+        print(f"🔄 جاري محاولة تشغيل {len(active_bots)} بوت مصنوع...")
         
-        if not token or not bot_type:
-            continue
-        
-        # 🔒 حماية كاملة ذرّية
-        async with RUNNING_LOCK:
-
-            # ❗ منع تشغيل نفس التوكن مرتين (نظام 1)
-            if token in RUNNING_BOTS:
-                print(f"⚠️ البوت يعمل مسبقًا (RUNNING_BOTS): {bot_type}")
+        for bot_data in active_bots:
+            token = bot_data.get("التوكن")
+            owner_id = bot_data.get("ID المالك")
+            bot_type = bot_data.get("نوع البوت")
+            
+            if not token or not bot_type:
                 continue
+            
+            async with RUNNING_LOCK:
 
-            # ❗ منع التكرار الداخلي (نظام 2)
-            if token in _running_bot_tokens:
-                print(f"⚠️ تم تجاهل تشغيل بوت مكرر بنفس التوكن (_running_bot_tokens): {bot_type}")
-                continue
+                if token in RUNNING_BOTS:
+                    print(f"⚠️ البوت يعمل مسبقًا (RUNNING_BOTS): {bot_type}")
+                    continue
 
-            # ❗ حماية إضافية ضد إعادة التشغيل داخل نفس runtime
-            if token in ACTIVE_RUNTIME_BOTS:
-                print(f"⚠️ البوت نشط فعليًا داخل الرن تايم: {bot_type}")
-                continue
+                if token in _running_bot_tokens:
+                    print(f"⚠️ مكرر (_running_bot_tokens): {bot_type}")
+                    continue
 
-            # ✅ تسجيل كل الحالات
-            RUNNING_BOTS.add(token)
-            _running_bot_tokens.add(token)
-            ACTIVE_RUNTIME_BOTS.add(token)
+                if token in ACTIVE_RUNTIME_BOTS:
+                    print(f"⚠️ نشط فعليًا (ACTIVE_RUNTIME_BOTS): {bot_type}")
+                    continue
 
-        await asyncio.sleep(1.5)
+                RUNNING_BOTS.add(token)
+                _running_bot_tokens.add(token)
 
-        # 🚀 تشغيل البوت بدون أي تغيير في منطقك الأصلي
-        asyncio.create_task(run_dynamic_bot(token, bot_type, owner_id))
-        
-        print(f"✅ تم إرسال أمر تشغيل للبوت: {bot_type}")
+            await asyncio.sleep(1.5)
+            asyncio.create_task(run_dynamic_bot(token, bot_type, owner_id))
+            
+            print(f"✅ تم إرسال أمر تشغيل للبوت: {bot_type}")
 
-    print("🎊 اكتملت عملية إقلاع كافة البوتات التابعة.")
+        print("🎊 اكتملت عملية إقلاع كافة البوتات التابعة.")
+
+    finally:
+        release_process_lock()
     
     
 async def boot_all_bots():
