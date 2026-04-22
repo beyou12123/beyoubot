@@ -6,7 +6,8 @@ import asyncio
 from datetime import datetime
 import gspread
 import base64
-
+import pandas as pd
+from io import BytesIO 
 
 
 
@@ -509,6 +510,68 @@ async def sync_factory_to_sheets_smart():
     print(f"🎊 [FINISH] المزامنة اكتملت: {total_updates} تحديث، {total_added} إضافة جديدة.")
 
 # --------------------------------------------------------------------------
+# دالة تحميل اكسل
+
+def export_bot_data_to_excel(bot_token):
+    """تصدير كافة بيانات البوت من الكاش إلى ملف إكسل إذا كانت الميزة مفعلة"""
+    global FACTORY_GLOBAL_CACHE
+    
+    # 1. التحقق من الشرط في الكاش
+    all_bots = FACTORY_GLOBAL_CACHE["data"].get("البوتات_المصنوعة", [])
+    bot_settings = next((b for b in all_bots if str(b.get("التوكن")) == str(bot_token)), None)
+    
+    if not bot_settings:
+        return None, "❌ لم يتم العثور على إعدادات هذا البوت في الكاش."
+    
+    # التأكد من حالة القيمة (TRUE/FALSE)
+    is_enabled = str(bot_settings.get("ميزة_رفع_وتصدير_البيانات_اكسل", "FALSE")).upper() == "TRUE"
+    
+    if not is_enabled:
+        return None, "🚫 عذراً، ميزة تصدير البيانات غير مفعلة لاشتراككم. يرجى التواصل مع الإدارة."
+
+    # 2. توليد ملف الإكسل
+    output = BytesIO()
+    try:
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            # سنقوم بتصدير الجداول الهامة فقط أو كافة الجداول المرتبطة بالبوت
+            for sheet_name, rows in FACTORY_GLOBAL_CACHE["data"].items():
+                if rows:
+                    df = pd.DataFrame(rows)
+                    # تنظيف اسم الورقة (أقصى طول 31 حرف في إكسل)
+                    clean_name = sheet_name[:31]
+                    df.to_excel(writer, sheet_name=clean_name, index=False)
+        
+        output.seek(0)
+        return output, "success"
+    except Exception as e:
+        return None, f"❌ خطأ أثناء توليد الملف: {str(e)}"
+
+
+def check_excel_permission_from_cache(bot_token):
+    """التحقق من صلاحية الإكسل للبوت من خلال الكاش"""
+    global FACTORY_GLOBAL_CACHE
+    all_bots = FACTORY_GLOBAL_CACHE["data"].get("البوتات_المصنوعة", [])
+    bot_cfg = next((b for b in all_bots if str(b.get("التوكن")) == str(bot_token)), {})
+    return str(bot_cfg.get("ميزة_رفع_وتصدير_البيانات_اكسل", "FALSE")).upper() == "TRUE"
+
+def generate_excel_from_cache():
+    """تحويل كافة بيانات الكاش الحالية إلى ملف إكسل متعدد الأوراق"""
+    global FACTORY_GLOBAL_CACHE
+    output = BytesIO()
+    try:
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            for sheet_name, records in FACTORY_GLOBAL_CACHE["data"].items():
+                if records and isinstance(records, list):
+                    df = pd.DataFrame(records)
+                    clean_name = sheet_name[:31] # توافق إكسل
+                    df.to_excel(writer, sheet_name=clean_name, index=False)
+        output.seek(0)
+        return output
+    except Exception as e:
+        print(f"❌ خطأ تصدير الكاش: {e}")
+        return None
+
+
 
 # --------------------------------------------------------------------------
 

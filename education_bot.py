@@ -4,6 +4,7 @@ import io
 import uuid
 import course_engine
 import g4f  # لضمان عمل المحرك المجاني الذي اعتمدناه
+from datetime import datetime 
 import google.generativeai as genai
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Bot, ChatMember
 from telegram.ext import (
@@ -1806,6 +1807,41 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
         await query.edit_message_text("👨‍🏫 <b>إدارة الشؤون التعليمية :</b>\nيمكنك إضافة مدربين جدد دورات جديدة او اقسام او مجموعات أو استعراض القائمة الحالية للحذف.", 
                                       reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 #>>>>>>>>>>>>>>>>
+    # --- [ إضافة معالج الإكسل الناقص ] ---
+    elif data == "excel_export_start":
+        from cache_manager import export_bot_data_to_excel
+        from datetime import datetime
+        
+        # استدعاء الدالة التي أضفتها أنت في ملف الكاش
+        excel_file, status = export_bot_data_to_excel(bot_token)
+        
+        if status == "success":
+            await query.answer("جاري التصدير... ✅")
+            timestamp = datetime.now().strftime("%Y-%m-%d")
+            await query.message.reply_document(
+                document=excel_file,
+                filename=f"Data_Backup_{timestamp}.xlsx",
+                caption="📊 **تم تصدير نسخة البيانات كاملة من الكاش.**"
+            )
+        else:
+            # رسالة الرفض التسويقية في حال كانت الميزة FALSE
+            await query.answer("🚫 الميزة غير مفعلة", show_alert=True)
+            await query.message.reply_text(f"{status}\n\n💡 تواصل مع المطور لتفعيل الميزة.")
+
+    elif data == "excel_import_start":
+        from cache_manager import check_excel_permission_from_cache
+        if not check_excel_permission_from_cache(bot_token):
+             await query.answer("🚫 غير مصرح", show_alert=True)
+             await query.message.reply_text("⚠️ هذه الميزة مخصصة للباقات المتقدمة.")
+             return
+        await query.answer()
+        await query.edit_message_text("📥 يرجى رفع ملف Excel الآن لبدء الاستيراد.")
+        context.user_data['action'] = 'awaiting_excel_file'
+
+
+
+
+
     elif data == "passing_grade":
         keyboard = [
             [InlineKeyboardButton("درجة النجاح الصغرى", callback_data="minimum_passing_grade")],

@@ -1373,6 +1373,30 @@ async def view_file_details(update: Update, context: ContextTypes.DEFAULT_TYPE, 
 
 
 # --------------------------------------------------------------------------
+# تصدير البيانات اكسل
+async def handle_excel_export_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    bot_token = context.bot.token
+    
+    # استخدام الدالة الشاملة التي أضفتها أنت في ملف الكاش
+    from cache_manager import export_bot_data_to_excel
+    
+    # استدعاء الدالة (تقوم بالتحقق من TRUE/FALSE وتوليد الملف في خطوة واحدة)
+    excel_file, status = export_bot_data_to_excel(bot_token)
+    
+    if status == "success":
+        await query.answer("جاري إرسال البيانات... ✅")
+        await query.message.reply_document(
+            document=excel_file,
+            filename=f"Full_Backup_{datetime.now().strftime('%Y%m%d')}.xlsx",
+            caption="📊 **تم تصدير نسخة البيانات كاملة من الكاش.**"
+        )
+    else:
+        # إذا كان status يحتوي على رسالة الخطأ (الميزة غير مفعلة)
+        await query.answer("🚫 ميزة غير مفعلة", show_alert=True)
+        await query.message.reply_text(
+            f"{status}\n\n💡 **ملاحظة:** يمكنك التواصل مع الإدارة لترقية باقتك وتفعيل الرفع الشامل."
+        )
 
 # --------------------------------------------------------------------------
 
