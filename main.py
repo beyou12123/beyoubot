@@ -96,30 +96,21 @@ def mark_bot_stopped(token: str):
         del ACTIVE_RUNTIME_BOTS[token]
 
 
-
-def get_main_menu_inline(user_id):
-    # تحويل user_id إلى int للتأكد من المطابقة
-    u_id = int(user_id)
-    keyboard = [[InlineKeyboardButton("➕ إنشاء بوت", callback_data="start_manufacture")]]
-    
-    # التحقق من القائمة ومن المطور الأساسي
-    if u_id in ALL_ADMINS or u_id == DEVELOPER_ID or str(u_id) == str(DEVELOPER_ID):
-        keyboard.append([InlineKeyboardButton("🛠 لوحة التحكم (للأدمن)", callback_data="open_admin_dashboard")])
-    
-    return InlineKeyboardMarkup(keyboard)
-
-
-
-
 # --- القوائم الشفافة المحدثة ---
 def get_main_menu_inline(user_id):
-    keyboard = [[InlineKeyboardButton("➕ إنشاء بوت", callback_data="start_manufacture")]]
-    if user_id in ALL_ADMINS or user_id == DEVELOPER_ID:
-        keyboard.append([InlineKeyboardButton("🛠 لوحة التحكم (للأدمن)", callback_data="open_admin_dashboard")])
+    u_id = int(user_id)
+
+    keyboard = [
+        [InlineKeyboardButton("➕ إنشاء بوت", callback_data="start_manufacture")]
+    ]
+    
+    if u_id in ALL_ADMINS or u_id == DEVELOPER_ID:
+        keyboard.append([
+            InlineKeyboardButton("🛠 لوحة التحكم (للأدمن)", callback_data="open_admin_dashboard")
+        ])
     
     return InlineKeyboardMarkup(keyboard)
-    
-    
+
 # --------------------------------------------------------------------------
 def get_types_menu_inline(user_id):
     hidden_dev_files = ['test_lab.py']
