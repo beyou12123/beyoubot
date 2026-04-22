@@ -10,8 +10,9 @@ yt-dlp>=2025.3.31
 ffmpeg-python
 setuptools-rust
 apscheduler
-xlsxwriter
 pandas
+xlsxwriter
+
 
 
 
