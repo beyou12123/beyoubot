@@ -4,7 +4,7 @@ import re
 import asyncio
 import time
 import importlib # استيراد الموديولات ديناميكياً لتشغيل الملفات المرفوعة
-
+import signal
 # استيراد الأدوات الأساسية من مكتبة تليجرام
 from telegram import (
     Update, 
@@ -47,52 +47,25 @@ try:
     from course_engine import restart_bot_logic
 except ImportError:
     restart_bot_logic = None
-
-
-
-
 # --- [ إعدادات الهوية والصلاحيات ] ---
-
-# 1. التوكن يقرأ من ملف .env
 TOKEN = os.getenv("BOT_TOKEN")
-
-# 2. معرف المطور (أنت) - استبدلنا ADMIN_ID بـ DEVELOPER_ID
 DEVELOPER_ID = 873158772 
-
-# 3. قراءة قائمة الإداريين الآخرين من ملف .env
 raw_admins = os.getenv("ADMIN_IDS", "")
-
-
-# 4. دمج الكل في قائمة واحدة لفحص الصلاحيات لاحقاً
+# تنظيف وقراءة قائمة الإداريين
 ADMIN_IDS = [int(i.strip()) for i in raw_admins.replace('[','').replace(']','').split(",") if i.strip().isdigit()]
-
 ALL_ADMINS = list(set([DEVELOPER_ID] + ADMIN_IDS))
 
-
-# ملاحظة: سنبقي على ADMIN_ID مؤقتاً كنسخة من DEVELOPER_ID 
-# لضمان عدم تعطل الدوال القديمة التي لم نغير فيها الاسم بعد
 ADMIN_ID = DEVELOPER_ID 
 
-
-
-
-# تعريف مراحل محادثة إنشاء البوت (حالات الـ ConversationHandler)
+# تعريف مراحل محادثة إنشاء البوت
 CHOOSING_TYPE, GETTING_TOKEN, GETTING_NAME = range(3)
-# تعريف حالة انتظار اسم الموديول الجديد (خاصة بالمطور)
 WAITING_FOR_MODULE_NAME = 4
-
 
 RUNNING_BOTS = set()
 _running_bot_tokens = set()
-
 RUNNING_LOCK = asyncio.Lock()
-
-# 🧠 يمنع تشغيل نفس البوت حتى لو العملية تكررت
 ACTIVE_RUNTIME_BOTS = {}
-
-# 🧱 PID Lock (حل جذري ضد تعدد العمليات)
 BOT_PROCESS_LOCK_FILE = "/app/cache_data/bot_factory.lock"
-
 
 def acquire_process_lock():
     """يمنع تشغيل أكثر من عملية مصنع بوتات"""
@@ -108,6 +81,7 @@ def release_process_lock():
         os.remove(BOT_PROCESS_LOCK_FILE)
 
 
+
 def is_bot_running(token: str) -> bool:
     return token in ACTIVE_RUNTIME_BOTS
 
@@ -121,13 +95,10 @@ def mark_bot_stopped(token: str):
         del ACTIVE_RUNTIME_BOTS[token]
 
 
-
-# --- القوائم الشفافة المحدثة (Inline Keyboards) ---
+# --- القوائم الشفافة المحدثة ---
 def get_main_menu_inline(user_id):
     keyboard = [[InlineKeyboardButton("➕ إنشاء بوت", callback_data="start_manufacture")]]
- # التحقق مما إذا كان المستخدم موجوداً ضمن القائمة الشاملة (أنت + الأدمنية)
     if user_id in ALL_ADMINS:
-       
         keyboard.append([InlineKeyboardButton("🛠 لوحة التحكم (للأدمن)", callback_data="open_admin_dashboard")])
     return InlineKeyboardMarkup(keyboard)
 # --------------------------------------------------------------------------
@@ -708,11 +679,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text == "🔙 العودة للقائمة الرئيسية":
         await start(update, context)
         return
-
-    # تم استخدام ALL_ADMINS للسماح لكل طاقم الإدارة بالدخول للوحة
-    elif text == "🛠 لوحة التحكم (للأدمن)" and user_id in ALL_ADMINS:
-        await owner_dashboard(update, context)
-
+    # تم تصحيح المسافات البادئة والمنطق هنا بناءً على طلبك
+    elif text == "🛠 لوحة التحكم (للأدمن)":
+        if user_id == DEVELOPER_ID or user_id in ADMIN_IDS:
+            await owner_dashboard(update, context)
+        else:
+            await update.message.reply_text("🚫 عذراً، هذه اللوحة مخصصة للإدارة فقط.")
+            
     elif text == "➕ إنشاء بوت":
         await start_create_bot(update, context)
         
