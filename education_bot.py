@@ -1806,7 +1806,7 @@ async def contact_callback_handler(update: Update, context: ContextTypes.DEFAULT
 
         await query.edit_message_text("👨‍🏫 <b>إدارة الشؤون التعليمية :</b>\nيمكنك إضافة مدربين جدد دورات جديدة او اقسام او مجموعات أو استعراض القائمة الحالية للحذف.", 
                                       reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
-#>>>>>>>>>>>>>>>>
+#>>>>>>>>>>>>>>>
     # --- [ إضافة معالج الإكسل الناقص ] ---
     elif data == "excel_export_start":
         from cache_manager import export_bot_data_to_excel
