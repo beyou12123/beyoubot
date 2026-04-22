@@ -2,7 +2,6 @@ python-telegram-bot
 gspread
 oauth2client
 google-generativeai
-python-telegram-bot --upgrade
 g4f>=0.3.5.7
 pandas
 openpyxl
@@ -10,9 +9,4 @@ yt-dlp>=2025.3.31
 ffmpeg-python
 setuptools-rust
 apscheduler
-pandas
 xlsxwriter
-
-
-
-
