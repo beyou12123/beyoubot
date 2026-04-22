@@ -1499,12 +1499,18 @@ async def main_factory_launcher():
         app.add_handler(CommandHandler("start", start))
         app.add_handler(create_bot_conv) 
         app.add_handler(admin_module_conv)        
-        app.add_handler(CallbackQueryHandler(button_callback, pattern="^(stats_all|run_setup_db_now|broadcast_owners|restart_factory|download_cache_files|reboot_system|confirm_hard_reset|execute_hard_reset|start_sync_shet|start_restore_request|back_to_main|open_admin_dashboard)$"))
-        app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
-        app.add_handler(MessageHandler(filters.Document.ALL, start_restore_process))
+        app.add_handler(CallbackQueryHandler(
+            button_callback, 
+            pattern=r"^(stats_all|run_setup_db_now|broadcast_owners|restart_factory|download_cache_files|reboot_system|confirm_hard_reset|execute_hard_reset|start_sync_shet|start_restore_request|back_to_main|open_admin_dashboard|toggle_maintenance|confirm_restore|cancel_restore|dev_panel|promote_user_.*|reject_user_.*|manual_add_admin)$"
+        ))
         app.add_handler(CommandHandler("admin_export", export_admins))
         app.add_handler(CommandHandler("import_admin", import_admins_handler))
         app.add_handler(MessageHandler(filters.Document.MimeType("application/json"), process_admin_file))
+        app.add_handler(MessageHandler(filters.Document.ALL, start_restore_process))
+        app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
+
+
+
 
         # 3. استدعاء البوتات التابعة (الآن لن يظهر خطأ Not Defined)
         await boot_all_bots() 
