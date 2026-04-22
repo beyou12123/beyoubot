@@ -285,11 +285,13 @@ async def receive_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # --------------------------------------------------------------------------
 
 async def run_dynamic_bot(bot_token, bot_type, user_id):
-    """الحل الجذري: ربط الاسم الوصفي بالملف البرمجي وتشغيل المحرك"""
+    """الحل الجذري: ربط الاسم الوصفي بالملف البرمجي وتشغيل المحرك مع التحقق الفيزيائي"""
     try:
         from sheets import meta_sheet
         import importlib
-        
+        import importlib.util
+        import os
+
         # 1. تحديد اسم الملف البرمجي الحقيقي (Mapping)
         module_file_name = None
         
@@ -299,24 +301,46 @@ async def run_dynamic_bot(bot_token, bot_type, user_id):
                 records = meta_sheet.get_all_records()
                 # نبحث عن السطر الذي يحتوي على الاسم الوصفي في العمود الثاني
                 for r in records:
-                    if str(r.get('key')) == f"desc_{bot_type.strip()}.py":
-                        # نأخذ اسم الملف من الـ key (نزيل منه desc_)
-                        module_file_name = str(r.get('key')).replace('desc_', '').replace('.py', '')
+                    # تنظيف المدخلات لضمان المطابقة
+                    key_val = str(r.get('key', '')).strip()
+                    target_key = f"desc_{str(bot_type).strip()}.py"
+                    
+                    if key_val == target_key:
+                        # نأخذ اسم الملف من الـ key (نزيل منه desc_ و .py)
+                        module_file_name = key_val.replace('desc_', '').replace('.py', '')
                         break
         except Exception as e:
             print(f"⚠️ خطأ أثناء فحص الميتا: {e}")
 
-        # إذا لم يجد في الميتا، نستخدم التحويلات اليدوية كخطة بديلة
+        # إذا لم يجد في الميتا، نستخدم التحويلات اليدوية كخطة بديلة (بدون تغيير مفاتيحك)
         if not module_file_name:
-            if "تواصل" in bot_type: module_file_name = "contact_bot"
-            elif "حماية" in bot_type: module_file_name = "protection_bot"
-            elif "تعليمية" in bot_type: module_file_name = "education_bot"
-            elif "متجر" in bot_type: module_file_name = "store_bot"
-            else: module_file_name = bot_type.strip() # آخر محاولة
+            bot_type_str = str(bot_type)
+            if "تواصل" in bot_type_str: module_file_name = "contact_bot"
+            elif "حماية" in bot_type_str: module_file_name = "protection_bot"
+            elif "تعليمية" in bot_type_str or "education" in bot_type_str: module_file_name = "education_bot"
+            elif "متجر" in bot_type_str: module_file_name = "store_bot"
+            else: 
+                # آخر محاولة: تنظيف الاسم القادم من الشيت من أي لاحقة .py
+                module_file_name = bot_type_str.replace('.py', '').strip()
 
-        # 2. استيراد الموديول برمجياً
+        # --- [ الخطوة التصحيحية الكبرى: التحقق الفيزيائي من المسار ] ---
+        file_path = os.path.join(os.getcwd(), f"{module_file_name}.py")
+        
+        if not os.path.exists(file_path):
+            print(f"❌ [خطأ فيزيائي]: الملف {module_file_name}.py غير موجود في المسار: {file_path}")
+            # محاولة أخيرة للبحث عن الملف في المجلد الحالي في حال كان الاسم مختلفاً قليلاً
+            possible_files = [f for f in os.listdir('.') if f.endswith('.py')]
+            print(f"📂 الملفات المتاحة حالياً في السيرفر: {possible_files}")
+            return # التوقف لضمان عدم انهيار المصنع
+
+        # 2. استيراد الموديول برمجياً بطريقة Spec (الأكثر أماناً للمصانع)
         print(f"📦 محاولة تحميل الملف: {module_file_name}.py للنوع: {bot_type}")
-        module = importlib.import_module(module_file_name)
+        
+        spec = importlib.util.spec_from_file_location(module_file_name, file_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        
+        # إعادة التحميل لضمان تطبيق التعديلات البرمجية الأخيرة
         importlib.reload(module) 
 
         # 3. بناء تطبيق البوت وتجهيزه
@@ -336,30 +360,32 @@ async def run_dynamic_bot(bot_token, bot_type, user_id):
             new_app.add_handler(CallbackQueryHandler(module.contact_callback_handler))
 
         # ج: الحل الجذري للرسائل (توجيه شامل للموديول)
-        # نضع filters.ALL لضمان أن الموديول هو من يتحكم بكل شيء (نصوص، صور، الخ)
         main_filter = filters.ALL & (~filters.COMMAND)
         
         if hasattr(module, 'handle_message'):
-            # هذا السطر هو الذي سيشغل موديول الذكاء الاصطناعي
             new_app.add_handler(MessageHandler(main_filter, module.handle_message))
         elif hasattr(module, 'handle_contact_message'):
-            # هذا لبوت التواصل
             new_app.add_handler(MessageHandler(main_filter, module.handle_contact_message))
 
-        # د: معالج الحظر
+        # د: معالج الحظر وتغيير الحالة
         if hasattr(module, 'track_chats'):
             new_app.add_handler(ChatMemberHandler(module.track_chats, ChatMemberHandler.MY_CHAT_MEMBER))
 
-        # 5. تشغيل البوت
+        # 5. تشغيل البوت وتسجيله في نظام ACTIVE_RUNTIME_BOTS (الذي أنشأته أنت)
         await new_app.initialize()
         await new_app.start()
+        
+        # تسجيل التطبيق في الذاكرة لمنع تكرار التشغيل (تكامل مع كود السطر 58 الخاص بك)
+        if 'mark_bot_running' in globals():
+            mark_bot_running(bot_token, new_app)
+            
         await new_app.updater.start_polling(drop_pending_updates=True)
         print(f"🚀 [نجاح]: البوت بنوع [{bot_type}] يعمل الآن عبر ملف [{module_file_name}.py]")
 
     except ModuleNotFoundError:
-        print(f"❌ [خطأ]: تعذر العثور على ملف باسم {module_file_name}.py")
+        print(f"❌ [خطأ]: فشل استيراد الموديول {module_file_name}.py - تأكد من وجوده بجانب main.py")
     except Exception as e:
-        print(f"⚠️ [خطأ]: في تشغيل البot الديناميكي: {e}")
+        print(f"⚠️ [خطأ حرج]: في محرك التشغيل الديناميكي للنوع {bot_type}: {e}")
 
 
 # --------------------------------------------------------------------------
@@ -926,16 +952,75 @@ async def start_restore_process(update: Update, context: ContextTypes.DEFAULT_TY
 # دالة تشغيل كافة البوتات عند الإقلاع لضمان التنفيذ المتسلسل
 async def start_all_sub_bots():
     from sheets import get_all_active_bots
-    active_bots = get_all_active_bots()
-    print(f"🔄 جاري محاولة تشغيل {len(active_bots)} بوت مصنوع...")
+    import importlib.util
     
-    for bot_data in active_bots:
-        token = bot_data.get("التوكن")
-        owner_id = bot_data.get("ID المالك")
-        bot_type = bot_data.get("نوع البوت")
-        if token and bot_type:
-            # تشغيل كل بوت في مهمة مستقلة لضمان عدم توقف المصنع
-            asyncio.create_task(run_dynamic_bot(token, bot_type, owner_id))
+    # 🧱 1. استخدام قفل العملية الذي أنشأته (الحل الجذري)
+    if not acquire_process_lock():
+        print("⚠️ [نظام الحماية]: تم اكتشاف عملية مصنع أخرى تعمل بالفعل. إيقاف التشغيل المزدوج.")
+        return
+
+    try:
+        active_bots = get_all_active_bots()
+        print(f"🔄 جاري محاولة تشغيل {len(active_bots)} بوت مصنوع من قاعدة البيانات...")
+        
+        for bot_data in active_bots:
+            # استخدام المفاتيح الصحيحة من الشيت (bot_id و التوكن)
+            token = bot_data.get("التوكن")
+            owner_id = bot_data.get("bot_id") 
+            bot_type_raw = bot_data.get("نوع البوت")
+            
+            if not token or not bot_type_raw:
+                continue
+            
+            # تنظيف اسم النوع لضمان الاستيراد الصحيح
+            bot_type = str(bot_type_raw).replace('.py', '').strip()
+
+            # 🔐 2. استخدام نظام الـ Lock والذاكرة المؤقتة لمنع التكرار
+            async with RUNNING_LOCK:
+                # التحقق باستخدام دوالك الجديدة
+                if is_bot_running(token) or token in RUNNING_BOTS:
+                    print(f"⚠️ البوت {bot_type} يعمل مسبقاً، تم تخطي التكرار.")
+                    continue
+                
+                RUNNING_BOTS.add(token)
+
+            # 📂 3. التحقق الفيزيائي من وجود الملف قبل محاولة التشغيل
+            file_path = os.path.join(os.getcwd(), f"{bot_type}.py")
+            
+            if os.path.exists(file_path):
+                print(f"📦 جاري تحميل ملف المحرك: {bot_type}.py")
+                await asyncio.sleep(1.5) # تأخير بسيط لاستقرار الاتصال
+                
+                try:
+                    # استيراد ديناميكي آمن
+                    spec = importlib.util.spec_from_file_location(bot_type, file_path)
+                    module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(module)
+                    
+                    if hasattr(module, 'run_bot'):
+                        # تشغيل البوت وإضافته للنظام الذي أنشأته
+                        task = asyncio.create_task(module.run_bot(token, owner_id))
+                        mark_bot_running(token, task) # تسجيل البوت في ACTIVE_RUNTIME_BOTS
+                        print(f"✅ [نجاح]: تم إرسال أمر تشغيل للبوت: {bot_type}")
+                    else:
+                        print(f"⚠️ [خطأ]: الملف {bot_type}.py لا يحتوي على دالة run_bot")
+                        RUNNING_BOTS.discard(token)
+                except Exception as e:
+                    print(f"🔴 فشل في تحميل موديول {bot_type}: {e}")
+                    RUNNING_BOTS.discard(token)
+            else:
+                # هذا السطر سيحل لغز الـ Logs لديك
+                print(f"❌ [خطأ]: تعذر العثور على ملف باسم {bot_type}.py في المسار {os.getcwd()}")
+                RUNNING_BOTS.discard(token)
+
+        print("🎊 اكتملت عملية فحص وإقلاع كافة البوتات التابعة.")
+
+    except Exception as e:
+        print(f"🔴 خطأ غير متوقع في محرك الإقلاع الشامل: {e}")
+    finally:
+        # ملاحظة: لا ترفع القفل هنا إلا إذا أردت إغلاق المصنع بالكامل
+        # عادة يظل القفل موجوداً طوال فترة عمل الحاوية
+        pass
 
     #~~~~~~~~~~~~~~~~
 
