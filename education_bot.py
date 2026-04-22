@@ -2,6 +2,12 @@ import logging
 import re
 import io
 import uuid
+try:
+    import google.generativeai as genai
+    AI_ENABLED = True
+except ImportError:
+    AI_ENABLED = False
+    print("⚠️ تنبيه: مكتبة google-generativeai غير مثبتة، تم تعطيل ميزات الذكاء الاصطناعي مؤقتاً.")
 import g4f  # لضمان عمل المحرك المجاني الذي اعتمدناه
 from datetime import datetime 
 import google.generativeai as genai

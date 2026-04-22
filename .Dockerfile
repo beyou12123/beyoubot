@@ -13,8 +13,10 @@ RUN apt-get update && apt-get install -y \
 # نسخ ملف المتطلبات أولاً لتسريع البناء (Caching)
 COPY requirements.txt .
 
+# تثبيت المكتبات البرمجية
 # تغيير بسيط لإجبار الدوكر على إعادة التثبيت
 RUN pip install --no-cache-dir --force-reinstall -r requirements.txt
+
 
 # نسخ كافة ملفات المشروع إلى الحاوية
 COPY . .
@@ -24,4 +26,3 @@ RUN mkdir -p modules
 
 # الأمر المشغل للبوت الرئيسي
 CMD ["python", "main.py"]
-
