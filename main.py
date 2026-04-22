@@ -926,46 +926,16 @@ async def start_restore_process(update: Update, context: ContextTypes.DEFAULT_TY
 # دالة تشغيل كافة البوتات عند الإقلاع لضمان التنفيذ المتسلسل
 async def start_all_sub_bots():
     from sheets import get_all_active_bots
-    import importlib
+    active_bots = get_all_active_bots()
+    print(f"🔄 جاري محاولة تشغيل {len(active_bots)} بوت مصنوع...")
     
-    # 🧱 منع تشغيل المصنع مرتين في نفس السيرفر
-    if not acquire_process_lock():
-        print("⚠️ مصنع البوتات يعمل بالفعل في عملية أخرى")
-        return
-
-    try:
-        active_bots = get_all_active_bots()
-        print(f"🔄 جاري محاولة تشغيل {len(active_bots)} بوت مصنوع...")
-        
-        for bot_data in active_bots:
-            token = bot_data.get("التوكن")
-            owner_id = bot_data.get("bot_id") # تم تعديل المفتاح ليطابق بياناتك
-            bot_type_raw = bot_data.get("نوع البوت")
-            
-            if not token or not bot_type_raw:
-                continue
-            
-            # تنظيف اسم النوع لضمان الاستيراد الصحيح
-            bot_type = str(bot_type_raw).replace('.py', '').strip()
-
-            async with RUNNING_LOCK:
-                if token in RUNNING_BOTS: continue
-                RUNNING_BOTS.add(token)
-
-            # التحقق الفيزيائي من وجود الملف قبل الاستدعاء
-            if os.path.exists(f"{bot_type}.py"):
-                await asyncio.sleep(1.5)
-                # استدعاء دالة التشغيل الديناميكية
-                asyncio.create_task(run_dynamic_bot(token, bot_type, owner_id))
-                print(f"✅ تم إرسال أمر تشغيل للبوت: {bot_type}")
-            else:
-                print(f"❌ [خطأ]: الملف {bot_type}.py غير موجود فعلياً في المجلد!")
-
-        print("🎊 اكتملت عملية إقلاع كافة البوتات التابعة.")
-    finally:
-        release_process_lock()
-
-
+    for bot_data in active_bots:
+        token = bot_data.get("التوكن")
+        owner_id = bot_data.get("ID المالك")
+        bot_type = bot_data.get("نوع البوت")
+        if token and bot_type:
+            # تشغيل كل بوت في مهمة مستقلة لضمان عدم توقف المصنع
+            asyncio.create_task(run_dynamic_bot(token, bot_type, owner_id))
 
     #~~~~~~~~~~~~~~~~
 
