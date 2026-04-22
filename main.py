@@ -104,7 +104,7 @@ def get_main_menu_inline(user_id):
     
     # التحقق من القائمة ومن المطور الأساسي
     if u_id in ALL_ADMINS or u_id == DEVELOPER_ID or str(u_id) == str(DEVELOPER_ID):
-        keyboard.append([InlineKeyboardButton("🛠 لوحة التحكم (للأدمن)", callback_data="owner_dashboard")])
+        keyboard.append([InlineKeyboardButton("🛠 لوحة التحكم (للأدمن)", callback_data="open_admin_dashboard")])
     
     return InlineKeyboardMarkup(keyboard)
 
@@ -115,7 +115,7 @@ def get_main_menu_inline(user_id):
 def get_main_menu_inline(user_id):
     keyboard = [[InlineKeyboardButton("➕ إنشاء بوت", callback_data="start_manufacture")]]
     if user_id in ALL_ADMINS or user_id == DEVELOPER_ID:
-        keyboard.append([InlineKeyboardButton("🛠 لوحة التحكم (للأدمن)", callback_data="owner_dashboard")])
+        keyboard.append([InlineKeyboardButton("🛠 لوحة التحكم (للأدمن)", callback_data="open_admin_dashboard")])
     
     return InlineKeyboardMarkup(keyboard)
     
@@ -873,7 +873,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             await query.edit_message_text(f"❌ فشلت المزامنة اليدوية: {str(e)}")
         
-    elif data == "open_admin_panel" or data == "owner_dashboard":
+    elif data == "open_admin_panel" or data == "open_admin_dashboard":
         # --- [ إضافة جديدة: حماية الإدارة ] ---
         if user_id not in ALL_ADMINS:
             await deny_access(query)
@@ -1096,6 +1096,9 @@ async def show_admins_dashboard(update: Update, context: ContextTypes.DEFAULT_TY
     ])
 
     keyboard.append([
+        InlineKeyboardButton("❌ حذف أدمن", callback_data="show_admins_for_delete")
+    ])
+    keyboard.append([
         InlineKeyboardButton("🔄 تحديث", callback_data="refresh_admins")
     ])
 
@@ -1136,31 +1139,6 @@ async def handle_admin_management(update: Update, context: ContextTypes.DEFAULT_
         await show_admins_dashboard(update, context)  
 
 # --------------------------------------------------------------------------
-
-# 🧠 عند الضغط على الزر للأدمن 
-async def open_admin_section(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-
-    await query.answer()
-
-    text = (
-        "👨‍💼 <b>مرحباً بك في قسم إدارة الأدمن</b>\n"
-        "━━━━━━━━━━━━━━━\n\n"
-        "من هنا تستطيع إدارة الأدمن:\n"
-        "➕ إضافة أدمن\n"
-        "❌ حذف أدمن\n"
-    )
-
-    keyboard = [
-        [InlineKeyboardButton("➕ إضافة أدمن", callback_data="manual_add_admin")],
-        [InlineKeyboardButton("❌ حذف أدمن", callback_data="show_admins_for_delete")]
-    ]
-
-    await query.message.edit_text(
-        text,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode="HTML"
-    )
 
 
 # ================================
@@ -1674,9 +1652,9 @@ async def main_factory_launcher():
         app.add_handler(CommandHandler("start", start))
         app.add_handler(create_bot_conv) 
         app.add_handler(admin_module_conv) 
-        app.add_handler(CallbackQueryHandler(show_admins_dashboard, pattern="^owner_dashboard$"))
+        app.add_handler(CallbackQueryHandler(owner_dashboard, pattern="^open_admin_dashboard$"))
+        app.add_handler(CallbackQueryHandler(show_admins_dashboard, pattern="^admin_section$"))
         app.add_handler(CallbackQueryHandler(handle_admin_management, pattern="^(remove_admin_|refresh_admins)"))
-        app.add_handler(CallbackQueryHandler(open_admin_section, pattern="^admin_section$"))
         app.add_handler(CallbackQueryHandler(show_admins_for_delete, pattern="^show_admins_for_delete$"))        
         app.add_handler(CallbackQueryHandler(
             button_callback, 
