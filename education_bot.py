@@ -10,7 +10,7 @@ except ImportError:
     print("⚠️ تنبيه: مكتبة google-generativeai غير مثبتة، تم تعطيل ميزات الذكاء الاصطناعي مؤقتاً.")
 import g4f  # لضمان عمل المحرك المجاني الذي اعتمدناه
 from datetime import datetime 
-import google.generativeai as genai
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Bot, ChatMember
 from telegram.ext import (
     ApplicationBuilder, 
