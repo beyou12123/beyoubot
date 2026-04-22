@@ -13,10 +13,8 @@ RUN apt-get update && apt-get install -y \
 # نسخ ملف المتطلبات أولاً لتسريع البناء (Caching)
 COPY requirements.txt .
 
-
-# تثبيت المكتبات البرمجية مع إجبار التحديث
-RUN pip install --no-cache-dir --upgrade -r requirements.txt
-
+# تغيير بسيط لإجبار الدوكر على إعادة التثبيت
+RUN pip install --no-cache-dir --force-reinstall -r requirements.txt
 
 # نسخ كافة ملفات المشروع إلى الحاوية
 COPY . .
