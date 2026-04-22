@@ -5,6 +5,7 @@ import asyncio
 import time
 import importlib # استيراد الموديولات ديناميكياً لتشغيل الملفات المرفوعة
 import signal
+import json
 # استيراد الأدوات الأساسية من مكتبة تليجرام
 from telegram import (
     Update, 
@@ -98,9 +99,12 @@ def mark_bot_stopped(token: str):
 # --- القوائم الشفافة المحدثة ---
 def get_main_menu_inline(user_id):
     keyboard = [[InlineKeyboardButton("➕ إنشاء بوت", callback_data="start_manufacture")]]
-    if user_id in ALL_ADMINS:
+    if user_id in ALL_ADMINS or user_id == DEVELOPER_ID:
         keyboard.append([InlineKeyboardButton("🛠 لوحة التحكم (للأدمن)", callback_data="open_admin_dashboard")])
+    
     return InlineKeyboardMarkup(keyboard)
+    
+    
 # --------------------------------------------------------------------------
 def get_types_menu_inline(user_id):
     hidden_dev_files = ['test_lab.py']
@@ -1330,7 +1334,58 @@ async def start_restore_process(update: Update, context: ContextTypes.DEFAULT_TY
 
 
 # --------------------------------------------------------------------------
+# --- [ أوامر إدارة ملفات الإداريين ] ---
 
+async def export_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """تصدير قائمة الأدمنية الحالية إلى ملف JSON"""
+    if update.effective_user.id != DEVELOPER_ID:
+        return
+
+    # جمع كافة الأدمنية من القائمة الثابتة والمتغيرة
+    data = {
+        "admin_ids": ALL_ADMINS,
+        "export_date": asyncio.get_event_loop().time()
+    }
+    
+    file_path = "admins_backup.json"
+    with open(file_path, "w") as f:
+        json.dump(data, f)
+        
+    await update.message.reply_document(
+        document=open(file_path, "rb"),
+        filename=file_path,
+        caption="✅ تم تصدير قائمة الإداريين بنجاح."
+    )
+
+async def import_admins_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """المرحلة الأولى: طلب ملف الإداريين"""
+    if update.effective_user.id != DEVELOPER_ID:
+        return
+    await update.message.reply_text("📥 من فضلك أرسل ملف `admins_backup.json` الآن لترقية الجميع.")
+    context.user_data["admin_action"] = "waiting_admin_file"
+
+async def process_admin_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """المرحلة الثانية: معالجة الملف وترقية الجميع"""
+    if context.user_data.get("admin_action") != "waiting_admin_file":
+        return
+
+    doc = update.message.document
+    if not doc.file_name.endswith('.json'):
+        await update.message.reply_text("❌ الملف غير مدعوم.")
+        return
+
+    file = await doc.get_file()
+    content = await file.download_as_bytearray()
+    data = json.loads(content.decode('utf-8'))
+    
+    new_admins = data.get("admin_ids", [])
+    
+    # تحديث القائمة في الذاكرة الحالية (Hot Reload)
+    global ALL_ADMINS
+    ALL_ADMINS = list(set(ALL_ADMINS + new_admins))
+    
+    await update.message.reply_text(f"✅ تمت المهمة! تم ترقية {len(new_admins)} مستخدم إلى إداريين بنجاح.")
+    context.user_data["admin_action"] = None
 
 # --------------------------------------------------------------------------
 
@@ -1444,9 +1499,12 @@ async def main_factory_launcher():
         app.add_handler(CommandHandler("start", start))
         app.add_handler(create_bot_conv) 
         app.add_handler(admin_module_conv)        
-        app.add_handler(CallbackQueryHandler(button_callback))
+        app.add_handler(CallbackQueryHandler(button_callback, pattern="^(stats_all|run_setup_db_now|broadcast_owners|restart_factory|download_cache_files|reboot_system|confirm_hard_reset|execute_hard_reset|start_sync_shet|start_restore_request|back_to_main|open_admin_dashboard)$"))
         app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
         app.add_handler(MessageHandler(filters.Document.ALL, start_restore_process))
+        app.add_handler(CommandHandler("admin_export", export_admins))
+        app.add_handler(CommandHandler("import_admin", import_admins_handler))
+        app.add_handler(MessageHandler(filters.Document.MimeType("application/json"), process_admin_file))
 
         # 3. استدعاء البوتات التابعة (الآن لن يظهر خطأ Not Defined)
         await boot_all_bots() 
