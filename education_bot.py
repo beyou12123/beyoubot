@@ -25,7 +25,7 @@ from telegram.ext import (
 # --- [ ذاكرة المحادثات المؤقتة للطلاب ] ---
 user_messages = {} 
 
-# ادمج هذه الكتلة في السطر 21 بدلاً من القديمة واحذف أي استيراد لـ sheets داخل الدوال
+# ادمج هذه الكتلة في السطر 21 بدلاً من القديمة واحذف أي استيراد 
 from sheets import (
     get_bot_config, 
     add_log_entry, 
