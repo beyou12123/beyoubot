@@ -964,6 +964,8 @@ async def start_all_sub_bots():
             await asyncio.sleep(1.5)
             asyncio.create_task(run_dynamic_bot(token, bot_type, owner_id))
             
+            print(f"📂 الملفات الموجودة في السيرفر: {os.listdir('.')}")
+
             print(f"✅ تم إرسال أمر تشغيل للبوت: {bot_type}")
 
         print("🎊 اكتملت عملية إقلاع كافة البوتات التابعة.")
