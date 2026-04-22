@@ -54,7 +54,7 @@ DEVELOPER_ID = 873158772
 raw_admins = os.getenv("ADMIN_IDS", "")
 # تنظيف وقراءة قائمة الإداريين
 ADMIN_IDS = [int(i.strip()) for i in raw_admins.replace('[','').replace(']','').split(",") if i.strip().isdigit()]
-ALL_ADMINS = list(set([DEVELOPER_ID] + ADMIN_IDS))
+ALL_ADMINS = set([DEVELOPER_ID] + ADMIN_IDS)
 
 ADMIN_ID = DEVELOPER_ID 
 
@@ -94,6 +94,21 @@ def mark_bot_running(token: str, app):
 def mark_bot_stopped(token: str):
     if token in ACTIVE_RUNTIME_BOTS:
         del ACTIVE_RUNTIME_BOTS[token]
+
+
+
+def get_main_menu_inline(user_id):
+    # تحويل user_id إلى int للتأكد من المطابقة
+    u_id = int(user_id)
+    keyboard = [[InlineKeyboardButton("➕ إنشاء بوت", callback_data="start_manufacture")]]
+    
+    # التحقق من القائمة ومن المطور الأساسي
+    if u_id in ALL_ADMINS or u_id == DEVELOPER_ID or str(u_id) == str(DEVELOPER_ID):
+        keyboard.append([InlineKeyboardButton("🛠 لوحة التحكم (للأدمن)", callback_data="open_admin_dashboard")])
+    
+    return InlineKeyboardMarkup(keyboard)
+
+
 
 
 # --- القوائم الشفافة المحدثة ---
@@ -182,7 +197,7 @@ def get_factory_admin_stats():
         stats = {
             "total_users": get_total_factory_users(),
             "total_bots": get_total_bots_count(),
-            "admins_count": len(ADMIN_IDS) + 1, # +1 للمطور الأساسي
+            "admins_count": len(set(ADMIN_IDS + [DEVELOPER_ID])), # +1 للمطور الأساسي
             "banned_count": 0, # قيمة افتراضية حتى ربطها بدالة الحظر
             "blocked_bot": 0   # قيمة افتراضية
         }
@@ -196,7 +211,7 @@ async def process_admin_request(update: Update, context: ContextTypes.DEFAULT_TY
     user_id = user.id
     
     # منع الطلب إذا كان المستخدم أدمن بالفعل
-    if user_id in ALL_ADMINS:
+    if user_id in set(ALL_ADMINS):
         await update.message.reply_text(f"✅ يا {user.first_name}، أنت بالفعل ضمن فريق إدارة المصنع!")
         return
 
@@ -238,33 +253,39 @@ async def handle_admin_promotion_callbacks(update: Update, context: ContextTypes
     query = update.callback_query
     data = query.data
     
-    if query.from_user.id != DEVELOPER_ID: return # للمطور فقط
+    if query.from_user.id != DEVELOPER_ID: return  # للمطور فقط
 
     if data.startswith("promote_user_"):
         target_id = int(data.replace("promote_user_", ""))
         # منطق الإضافة (يمكنك هنا تحديث ملف .env أو قاعدة البيانات)
-        # حالياً سنكتفي بإرسال الإشعار وتأكيد العملية
+        ALL_ADMINS.add(target_id)
         await query.message.edit_text(f"✅ تم قبول الترقية للآيدي: <code>{target_id}</code>", parse_mode="HTML")
         try:
             await context.bot.send_message(chat_id=target_id, text="🎊 <b>مبروك!</b> تم قبول انضمامك لفريق إدارة المصنع بنجاح.", parse_mode="HTML")
-        except: pass
+        except:
+            pass
 
     elif data.startswith("reject_user_"):
         target_id = int(data.replace("reject_user_", ""))
         await query.message.edit_text(f"❌ تم رفض طلب العضو: <code>{target_id}</code>", parse_mode="HTML")
         try:
             await context.bot.send_message(chat_id=target_id, text="⚠️ نعتذر منك، تم رفض طلب انضمامك للإدارة حالياً.")
-        except: pass
+        except:
+            pass
 
     elif data == "manual_add_admin":
         await query.message.reply_text("📝 من فضلك أرسل آيدي (ID) المستخدم المراد ترقيته مباشرة:")
         context.user_data["admin_action"] = "manual_promote"
 
+
 # --------------------------------------------------------------------------
 
-
-
-
+async def handle_manual_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if context.user_data.get("admin_action") == "manual_promote":
+        target_id = int(update.message.text)
+        ALL_ADMINS.add(target_id)
+        context.user_data.pop("admin_action")
+        await update.message.reply_text("✅ تم إضافة الأدمن بنجاح")
 
 # يمكنك كتابة أي دوال جديدة هنا (مثل دوال الإحصائيات المتقدمة أو أنظمة الدفع)
 # --------------------------------------------------------------------------
@@ -1031,6 +1052,23 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # --- نهاية معالج الأزرار وبداية الدوال المستقلة ---
+# --------------------------------------------------------------------------
+async def open_admin_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    await query.message.reply_text("🛠 تم فتح لوحة التحكم")
+# --------------------------------------------------------------------------
+
+# --------------------------------------------------------------------------
+
+# --------------------------------------------------------------------------
+
+# --------------------------------------------------------------------------
+
+# --------------------------------------------------------------------------
+
+# --------------------------------------------------------------------------
+
 
 # --- [ إضافة جديدة: سجل تتبع العمليات ] ---
 def log_cancel_action(user_id):
@@ -1058,14 +1096,14 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     
     # --- [ إضافة جديدة: ضمان تنظيف الذاكرة المؤقتة للإدارة ] ---
-    if user_id in ALL_ADMINS:
+    if user_id in set(ALL_ADMINS):
         context.user_data.pop("admin_action", None)
         context.user_data.pop("setup_running", None)
 
     return ConversationHandler.END
 
 # --------------------------------------------------------------------------
-# --- [ إضافة جديدة: نظام مراقبة الملفات المرفوعة ] ---
+ 
 # ==========================================
 # 🔒 طبقة الحماية والاستقرار (إضافات فقط)
 # ==========================================
@@ -1342,10 +1380,12 @@ async def export_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # جمع كافة الأدمنية من القائمة الثابتة والمتغيرة
+    from datetime import datetime
     data = {
-        "admin_ids": ALL_ADMINS,
-        "export_date": asyncio.get_event_loop().time()
+        "admin_ids": list(ALL_ADMINS),
+        "export_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     }
+    
     
     file_path = "admins_backup.json"
     with open(file_path, "w") as f:
@@ -1498,10 +1538,11 @@ async def main_factory_launcher():
         # 2. إضافة المعالجات (تأكد من وجود handlers المعرفة سابقاً)
         app.add_handler(CommandHandler("start", start))
         app.add_handler(create_bot_conv) 
-        app.add_handler(admin_module_conv)        
+        app.add_handler(admin_module_conv) 
+        app.add_handler(CallbackQueryHandler(open_admin_dashboard, pattern="^open_admin_dashboard$"))       
         app.add_handler(CallbackQueryHandler(
             button_callback, 
-            pattern=r"^(stats_all|run_setup_db_now|broadcast_owners|restart_factory|download_cache_files|reboot_system|confirm_hard_reset|execute_hard_reset|start_sync_shet|start_restore_request|back_to_main|open_admin_dashboard|toggle_maintenance|confirm_restore|cancel_restore|dev_panel|promote_user_.*|reject_user_.*|manual_add_admin)$"
+            pattern=r"^(stats_all|run_setup_db_now|broadcast_owners|restart_factory|download_cache_files|reboot_system|confirm_hard_reset|execute_hard_reset|start_sync_shet|start_restore_request|back_to_main|toggle_maintenance|confirm_restore|cancel_restore|dev_panel|promote_user_.*|reject_user_.*|manual_add_admin)$"
         ))
         app.add_handler(CommandHandler("admin_export", export_admins))
         app.add_handler(CommandHandler("import_admin", import_admins_handler))
