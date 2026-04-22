@@ -16,6 +16,7 @@ try:
     import google.generativeai as genai
     AI_ENABLED = True
 except (ImportError, ModuleNotFoundError):
+    genai = None  # أضف هذا السطر لتعريف المتغير كـ None ومنع خطأ NameError
     AI_ENABLED = False
     print("⚠️ تنبيه: مكتبة google-generativeai غير مثبتة في البيئة الحالية.")
 
