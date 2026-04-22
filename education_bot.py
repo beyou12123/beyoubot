@@ -2,7 +2,6 @@ import logging
 import re
 import io
 import uuid
-import course_engine
 import g4f  # لضمان عمل المحرك المجاني الذي اعتمدناه
 from datetime import datetime 
 import google.generativeai as genai
