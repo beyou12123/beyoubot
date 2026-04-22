@@ -1087,7 +1087,7 @@ async def show_admins_dashboard(update: Update, context: ContextTypes.DEFAULT_TY
     ])
 
     keyboard.append([
-        InlineKeyboardButton("❌ حذف أدمن", callback_data="show_admins_for_delete")
+        InlineKeyboardButton("❌ حذف أدمن", callback_data="open_admin_dashboard")
     ])
     keyboard.append([
         InlineKeyboardButton("🔄 تحديث", callback_data="refresh_admins")
