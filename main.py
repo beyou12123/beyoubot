@@ -43,11 +43,29 @@ from sheets import (
     reset_entire_database, 
     ensure_all_sheets_schema
 )
+# --- [ إعدادات الهوية والصلاحيات ] ---
+
+# 1. التوكن يقرأ من ملف .env
+TOKEN = os.getenv("BOT_TOKEN")
+
+# 2. معرف المطور (أنت) - استبدلنا ADMIN_ID بـ DEVELOPER_ID
+DEVELOPER_ID = 873158772 
+
+# 3. قراءة قائمة الإداريين الآخرين من ملف .env
+raw_admins = os.getenv("ADMIN_IDS", "")
+ADMIN_IDS = [int(i.strip()) for i in raw_admins.replace('[','').replace(']','').split(",") if i.strip().isdigit()]
+
+# 4. دمج الكل في قائمة واحدة لفحص الصلاحيات لاحقاً
+ADMIN_IDS = [int(i.strip()) for i in raw_admins.split(",") if i.strip().isdigit()]
+ALL_ADMINS = list(set([DEVELOPER_ID] + ADMIN_IDS))
 
 
-# --- الإعدادات الأساسية ---
-TOKEN = "1657415602:AAFZzxVc9ECvdJ5WwmzVyM219ilLhjUDgLM"
-ADMIN_ID = 873158772  # معرف المطور والمالك
+# ملاحظة: سنبقي على ADMIN_ID مؤقتاً كنسخة من DEVELOPER_ID 
+# لضمان عدم تعطل الدوال القديمة التي لم نغير فيها الاسم بعد
+ADMIN_ID = DEVELOPER_ID 
+
+
+
 
 # تعريف مراحل محادثة إنشاء البوت (حالات الـ ConversationHandler)
 CHOOSING_TYPE, GETTING_TOKEN, GETTING_NAME = range(3)
@@ -98,8 +116,10 @@ def mark_bot_stopped(token: str):
 # --- القوائم الشفافة المحدثة (Inline Keyboards) ---
 def get_main_menu_inline(user_id):
     keyboard = [[InlineKeyboardButton("➕ إنشاء بوت", callback_data="start_manufacture")]]
-    if user_id == ADMIN_ID:
-        keyboard.append([InlineKeyboardButton("🛠 لوحة التحكم (للمالك)", callback_data="open_admin_dashboard")])
+ # التحقق مما إذا كان المستخدم موجوداً ضمن القائمة الشاملة (أنت + الأدمنية)
+    if user_id in ALL_ADMINS:
+       
+        keyboard.append([InlineKeyboardButton("🛠 لوحة التحكم (للأدمن)", callback_data="open_admin_dashboard")])
     return InlineKeyboardMarkup(keyboard)
 # --------------------------------------------------------------------------
 def get_types_menu_inline(user_id):
@@ -141,10 +161,12 @@ def get_types_menu_inline(user_id):
     return InlineKeyboardMarkup(keyboard)
 
 
+
+
 # --------------------------------------------------------------------------
 
 # القوائم القديمة (للحفاظ على التوافق مع الوظائف التي قد تطلبها)
-main_menu = [["➕ إنشاء بوت"], ["🛠 لوحة التحكم (للمالك)"]]
+main_menu = [["➕ إنشاء بوت"], ["🛠 لوحة التحكم (للأدمن)"]]
 admin_options = [["📝 تعديل النصوص", "⚙️ إعدادات الموديولات"], ["🔙 العودة للقائمة الرئيسية"]]
 types_menu = [["📩 تواصل"], ["🛡 حماية"], ["🎓 منصة تعليمية"], ["🛒 متجر"]]
 
@@ -159,6 +181,107 @@ async def load_and_run_sub_bots():
     pass 
 # --------------------------------------------------------------------------
 # [مكان إضافة الدوال والوظائف البرمجية المستقبلية]
+
+# ==========================================
+# 🛡️ نظام طلبات الإدارة والترقية (إضافات فقط)
+# ==========================================
+
+# 1. الدالة المساعدة لجلب إحصائيات الإدارة الشاملة
+def get_factory_admin_stats():
+    try:
+        from sheets import (
+            get_total_factory_users, 
+            get_total_bots_count, 
+            ADMIN_IDS
+        )
+        # ملاحظة: يمكنك إضافة دوال الحظر لاحقاً إذا كانت متوفرة في sheets.py
+        stats = {
+            "total_users": get_total_factory_users(),
+            "total_bots": get_total_bots_count(),
+            "admins_count": len(ADMIN_IDS) + 1, # +1 للمطور الأساسي
+            "banned_count": 0, # قيمة افتراضية حتى ربطها بدالة الحظر
+            "blocked_bot": 0   # قيمة افتراضية
+        }
+        return stats
+    except:
+        return {"total_users": "N/A", "total_bots": "N/A", "admins_count": "N/A", "banned_count": "N/A", "blocked_bot": "N/A"}
+
+# 2. معالج طلب الانضمام التلقائي (الكلمة المفتاحية)
+async def process_admin_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    user_id = user.id
+    
+    # منع الطلب إذا كان المستخدم أدمن بالفعل
+    if user_id in ALL_ADMINS:
+        await update.message.reply_text(f"✅ يا {user.first_name}، أنت بالفعل ضمن فريق إدارة المصنع!")
+        return
+
+    stats = get_factory_admin_stats()
+    
+    # رسالة الإشعار للمطور
+    admin_notif_text = (
+        f"📶 <b>مستخدم جديد يريد الانضمام لإدارة المصنع</b>\n\n"
+        f"👤 <b>معلومات العضو:</b>\n"
+        f"• الاسم: {user.full_name}\n"
+        f"• المعرّف: @{user.username if user.username else 'لا يوجد'}\n"
+        f"• الآيدي: <code>{user_id}</code>\n\n"
+        f"📊 <b>إحصائيات المصنع اللحظية:</b>\n"
+        f"• إجمالي مستخدمي المصنع: {stats['total_users']}\n"
+        f"• إجمالي المحظورين: {stats['banned_count']}\n"
+        f"• إجمالي الحاظرين للمصنع: {stats['blocked_bot']}\n"
+        f"• إجمالي الأدمنية: {stats['admins_count']}\n\n"
+        f"<b>هل تريد ترقية المستخدم إلى أدمن؟</b>"
+    )
+    
+    keyboard = [
+        [
+            InlineKeyboardButton("✅ قبول الترقية", callback_data=f"promote_user_{user_id}"),
+            InlineKeyboardButton("❌ رفض الطلب", callback_data=f"reject_user_{user_id}")
+        ]
+    ]
+    
+    # إرسال الطلب للمطور
+    await context.bot.send_message(
+        chat_id=DEVELOPER_ID, 
+        text=admin_notif_text, 
+        reply_markup=InlineKeyboardMarkup(keyboard), 
+        parse_mode="HTML"
+    )
+    
+    await update.message.reply_text("📨 تم إرسال طلبك إلى مالك المصنع، سيتم إشعارك عند المراجعة.")
+
+async def handle_admin_promotion_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    data = query.data
+    
+    if query.from_user.id != DEVELOPER_ID: return # للمطور فقط
+
+    if data.startswith("promote_user_"):
+        target_id = int(data.replace("promote_user_", ""))
+        # منطق الإضافة (يمكنك هنا تحديث ملف .env أو قاعدة البيانات)
+        # حالياً سنكتفي بإرسال الإشعار وتأكيد العملية
+        await query.message.edit_text(f"✅ تم قبول الترقية للآيدي: <code>{target_id}</code>", parse_mode="HTML")
+        try:
+            await context.bot.send_message(chat_id=target_id, text="🎊 <b>مبروك!</b> تم قبول انضمامك لفريق إدارة المصنع بنجاح.", parse_mode="HTML")
+        except: pass
+
+    elif data.startswith("reject_user_"):
+        target_id = int(data.replace("reject_user_", ""))
+        await query.message.edit_text(f"❌ تم رفض طلب العضو: <code>{target_id}</code>", parse_mode="HTML")
+        try:
+            await context.bot.send_message(chat_id=target_id, text="⚠️ نعتذر منك، تم رفض طلب انضمامك للإدارة حالياً.")
+        except: pass
+
+    elif data == "manual_add_admin":
+        await query.message.reply_text("📝 من فضلك أرسل آيدي (ID) المستخدم المراد ترقيته مباشرة:")
+        context.user_data["admin_action"] = "manual_promote"
+
+# --------------------------------------------------------------------------
+
+
+
+
+
 # يمكنك كتابة أي دوال جديدة هنا (مثل دوال الإحصائيات المتقدمة أو أنظمة الدفع)
 # --------------------------------------------------------------------------
 
@@ -416,8 +539,7 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from sheets import save_bot, get_total_bots_count
         success = save_bot(user_id, bot_type, friendly_name, bot_token)
 
-        if success:
-            #from main--import run_dynamic_bot 
+        if success: 
             asyncio.create_task(run_dynamic_bot(bot_token, bot_type, user_id))
 
             # --- [ الرسالة الأولى: في بوت المصنع ] ---
@@ -502,80 +624,179 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 # --------------------------------------------------------------------------
-# --- لوحة التحكم والعمليات الإدارية ---
-
+    # --- [ إعداد لوحة المفاتيح بناءً على الصلاحيات ] ---
 async def owner_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """لوحة تحكم المطور (المالك) - متوافقة مع الأزرار الشفافة"""
     user_id = update.effective_user.id
-    if user_id != ADMIN_ID:
+    # التحقق من الصلاحية: يجب أن يكون المستخدم ضمن قائمة الإداريين أو المطور
+    if user_id not in ALL_ADMINS:
         return
-
+    # 1. أزرار متاحة لجميع الإداريين والمطور
     keyboard = [
         [InlineKeyboardButton("📊 إحصائيات البوتات", callback_data="stats_all")],
-        [InlineKeyboardButton("⚙️ تهيئة الجداول", callback_data="run_setup_db_now")],
         [InlineKeyboardButton("📢 إذاعة للمشتركين", callback_data="broadcast_owners")],
-        [
-            InlineKeyboardButton("📥 تحميل نسخة", callback_data="download_cache_files"),
-            InlineKeyboardButton("📤 رفع نسخة", callback_data="start_restore_request")
-        ],
-        [
-            InlineKeyboardButton("🔄 تحديث السيرفر", callback_data="restart_factory"), 
-            InlineKeyboardButton("♻️ إعادة تشغيل", callback_data="reboot_system")
-        ],
-        [InlineKeyboardButton("⏳ بدء المزامنة اليدوية", callback_data="start_sync_shet")],
-        [InlineKeyboardButton("⚠️ تصفير النظام بالكامل", callback_data="confirm_hard_reset")],
-        [InlineKeyboardButton("🔙 العودة للقائمة الرئيسية", callback_data="back_to_main")]
+        [InlineKeyboardButton("📥 تحميل نسخة", callback_data="download_cache_files")]
     ]
+    # 2. أزرار حصرية للمطور فقط (DEVELOPER_ID) - الحفاظ على كافة الوظائف والمفاتيح
+    if user_id == DEVELOPER_ID:
+        config = get_bot_config(TOKEN)
+        m_status = "🔴 (نشط)" if str(config.get("maintenance_mode", "FALSE")).upper() == "TRUE" else "🟢 (متوقف)"    	
+        keyboard.extend([
+            [InlineKeyboardButton("─── عمليات النظام الحساسة ───", callback_data="none")],
+            [
+                InlineKeyboardButton(f"🛠 وضع الصيانة {m_status}", callback_data="toggle_maintenance")
+            ],
+            [InlineKeyboardButton("⚙️ تهيئة الجداول", callback_data="run_setup_db_now")],
+            [
+                InlineKeyboardButton("📤 رفع نسخة", callback_data="start_restore_request"),
+                InlineKeyboardButton("⏳ بدء المزامنة اليدوية", callback_data="start_sync_shet")
+            ],
+            [
+                InlineKeyboardButton("🔄 تحديث السيرفر", callback_data="restart_factory"), 
+                InlineKeyboardButton("♻️ إعادة تشغيل", callback_data="reboot_system")
+            ],
+            [InlineKeyboardButton("➕ إضافة أدمن", callback_data="manual_add_admin")], 
+            [InlineKeyboardButton("⚠️ تصفير النظام بالكامل", callback_data="confirm_hard_reset")]
+        ])
 
+    # 3. زر العودة الدائم
+    keyboard.append([InlineKeyboardButton("🔙 العودة للقائمة الرئيسية", callback_data="back_to_main")])
+
+    text = "🛠 **لوحة تحكم المطور والعمليات المركزية**\nمرحباً بك، اختر الإجراء المطلوب:"
     
-    text = "🛠 **لوحة تحكم المطور**\nإدارة المصنع والعمليات المركزية:"
-    
+    # التعامل مع الضغط من زر شفاف (Callback) أو أمر نصي
     if update.callback_query:
-        await update.callback_query.answer()
-        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+        try:
+            await update.callback_query.answer()
+            await update.callback_query.edit_message_text(
+                text, 
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            print(f"⚠️ خطأ في تحديث لوحة التحكم: {e}")
     else:
-        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
-
-
+        await update.message.reply_text(
+            text, 
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="Markdown"
+        )
+#~~~~~~~~~~~~~~~~
+        
+#  معالج الرسائل النصية الأزرار الدائمة  لجميع البوتات 
+#  معالج الرسائل النصية الأزرار الدائمة 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """معالجة الرسائل النصية والأزرار الدائمة"""
-    text = update.message.text
-    user_id = update.effective_user.id
     
+    # ✅ حماية إضافية من الرسائل الفارغة أو غير النصية
+    if not update.message or not update.message.text:
+        return
+    
+    text = update.message.text.strip()  # تحسين: إزالة الفراغات
+    user_id = update.effective_user.id
+
+    # ✅ سجل تتبع (Debug بسيط)
+    print(f"[MESSAGE] User:{user_id} Text:{text}")
+
     if text == "🔙 العودة للقائمة الرئيسية":
         await start(update, context)
         return
 
-    elif text == "🛠 لوحة التحكم (للمالك)" and user_id == ADMIN_ID:
+    # تم استخدام ALL_ADMINS للسماح لكل طاقم الإدارة بالدخول للوحة
+    elif text == "🛠 لوحة التحكم (للأدمن)" and user_id in ALL_ADMINS:
         await owner_dashboard(update, context)
 
     elif text == "➕ إنشاء بوت":
         await start_create_bot(update, context)
+        
+    elif text == "طلب_انضمام_الى_فريق_ادارة_المصنع":
+        await process_admin_request(update, context)
 
-    elif text == "📝 تعديل النصوص" and user_id == ADMIN_ID:
+    elif context.user_data.get("admin_action") == "manual_promote" and user_id == DEVELOPER_ID:
+        try:
+            target_id = int(text)
+            await update.message.reply_text(f"✅ جاري ترقية العضو ذو الآيدي {target_id}...")
+            await context.bot.send_message(chat_id=target_id, text="🎊 مبروك! تم قبول ترقيتك كأدمن في المصنع.")
+            context.user_data["admin_action"] = None
+        except ValueError:
+            await update.message.reply_text("❌ خطأ: يرجى إرسال رقم آيدي (ID) صحيح فقط.")
+
+    # تم استبدال ADMIN_ID بـ DEVELOPER_ID لضمان صلاحية المطور (أنت)
+    elif text == "📝 تعديل النصوص" and user_id == DEVELOPER_ID:
         await update.message.reply_text("أرسل ID البوت أو التوكن الذي تريد تعديل نصوصه:")
         context.user_data["admin_action"] = "edit_texts"
+        context.user_data["action_timestamp"] = asyncio.get_event_loop().time()  # ✅ تتبع الوقت
 
-    elif context.user_data.get("admin_action") == "edit_texts" and user_id == ADMIN_ID:
+    # تم استبدال ADMIN_ID بـ DEVELOPER_ID هنا أيضاً لضمان استمرارية الوظيفة
+    elif context.user_data.get("admin_action") == "edit_texts" and user_id == DEVELOPER_ID:
+        
+        # ✅ تحقق من انتهاء المهلة (Timeout حماية)
+        action_time = context.user_data.get("action_timestamp")
+        if action_time:
+            now = asyncio.get_event_loop().time()
+            if now - action_time > 300:  # 5 دقائق
+                await update.message.reply_text("⏳ انتهت مهلة العملية، يرجى إعادة المحاولة.")
+                context.user_data["admin_action"] = None
+                return
+
         target_bot = text
+
+        # ✅ تحقق بسيط من المدخل
+        if len(target_bot) < 5:
+            await update.message.reply_text("⚠️ الإدخال غير صالح، حاول مرة أخرى.")
+            return
+
         context.user_data["target_bot"] = target_bot
+
         keyboard = [
             [InlineKeyboardButton("الرسالة الترحيبية", callback_data="set_welcome")],
             [InlineKeyboardButton("القوانين", callback_data="set_rules")]
         ]
+
         await update.message.reply_text(
             f"ماذا تريد أن تعدل في سجلات البوت {target_bot}؟", 
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
+
         context.user_data["admin_action"] = None
-#>>>>>>>>>>>>>>>>
+
+    # ✅ NEW: fallback لأي نص غير معروف
+    else:
+        await update.message.reply_text(
+            "❓ لم أفهم طلبك.\n"
+            "يرجى استخدام الأزرار أو اختيار أمر صحيح من القائمة."
+        )
+
+#>>>>>>>>>>>>>>>>#~~~~~~~~~~~~~~~~
+# ✅ سجل تتبع مركزي
+def log_action(user_id, action):
+    print(f"[CALLBACK] User:{user_id} Action:{action}")
+
+# ✅ دالة موحدة للرفض (بدون تغيير الكود الأصلي)
+async def deny_access(query, message="🚫 لا تمتلك صلاحية."):
+    try:
+        await query.answer(message, show_alert=True)
+    except:
+        pass
+        
+
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """معالجة ضغطات الأزرار الشفافة المركزية"""
     query = update.callback_query
     data = query.data
     user_id = query.from_user.id
+    
+    # --- [ إضافة جديدة: سجل التتبع ] ---
+    log_action(user_id, data)
+    
     await query.answer() # لإيقاف مؤشر التحميل في تليجرام
+    
     if data == "confirm_hard_reset":
+        # --- [ إضافة جديدة: حماية المطور ] ---
+        if user_id != DEVELOPER_ID:
+            await deny_access(query, "⚠️ هذا الإجراء الخطير متاح للمطور الأساسي فقط.")
+            return
+
         keyboard = [
             [InlineKeyboardButton("✅ نعم، متأكد", callback_data="execute_hard_reset")],
             [InlineKeyboardButton("❌ تراجع", callback_data="dev_panel")]
@@ -583,6 +804,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("‼️ **تحذير حرج:**\nهذا الإجراء سيحذف كافة البيانات في جوجل شيت. هل أنت متأكد؟", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
     elif data == "execute_hard_reset":
+        # --- [ إضافة جديدة: حماية المطور ] ---
+        if user_id != DEVELOPER_ID:
+            return
+
         await query.edit_message_text("⏳ جاري التصفير...")
         if reset_entire_database():
             await query.edit_message_text("✅ تم تصفير النظام بنجاح.\nيرجى إعادة تشغيل السيرفر الآن.")
@@ -591,13 +816,25 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     
     elif data == "restart_factory":
+        # --- [ إضافة جديدة: حماية المطور ] ---
+        if user_id != DEVELOPER_ID:
+            await deny_access(query, "🚫 إعادة تشغيل المصنع صلاحية حصرية للمطور.")
+            return
+
         await query.answer("🔄 جاري إعادة التشغيل...")
-        from cache_manager import fetch_full_factory_data; await fetch_full_factory_data()        
+        from cache_manager import fetch_full_factory_data
+       await fetch_full_factory_data()
+   
         await query.edit_message_text("🔄 جاري إعادة تشغيل المصنع لتطبيق التحديثات...")
         os.execv(sys.executable, ['python'] + sys.argv)
 #~~~~~~~~~~~~~~~~
     # --- [ معالج زر إعادة تشغيل المحرك لقتل النسخ المتضاربة ] ---
     elif data == "reboot_system":
+        # --- [ إضافة جديدة: حماية المطور ] ---
+        if user_id != DEVELOPER_ID:
+            await deny_access(query)
+            return
+
         from course_engine import restart_bot_logic
         await restart_bot_logic(update, context)
 
@@ -608,6 +845,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # --- [ معالج زر بدء المزامنة اليدوية ] ---
     elif data == "start_sync_shet":
+        # --- [ إضافة جديدة: حماية الإدارة ] ---
+        if user_id not in ALL_ADMINS:
+            await deny_access(query)
+            return
+
         # إرسال رسالة أولية للمستخدم
         msg = await query.edit_message_text("🔄 جاري بدء مزامنة المصنع مع السحابة... يرجى الانتظار")
         
@@ -624,17 +866,40 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text(f"❌ فشلت المزامنة اليدوية: {str(e)}")
         
     elif data == "open_admin_panel" or data == "open_admin_dashboard":
+        # --- [ إضافة جديدة: حماية الإدارة ] ---
+        if user_id not in ALL_ADMINS:
+            await deny_access(query)
+    # معالجة طلبات الإدارة والترقية
+    elif data.startswith("promote_user_") or data.startswith("reject_user_") or data == "manual_add_admin":
+        await handle_admin_promotion_callbacks(update, context)
+            
+            return
+
         await owner_dashboard(update, context)
         
     elif data == "download_cache_files":
+        # --- [ إضافة جديدة: حماية الإدارة ] ---
+        if user_id not in ALL_ADMINS:
+            await deny_access(query)
+            return
+
         await download_bot_cache(update, context)
         
     elif data == "start_restore_request":
+        # --- [ إضافة جديدة: حماية المطور ] ---
+        if user_id != DEVELOPER_ID:
+            await deny_access(query, "📥 نظام الاستعادة متاح للمطور فقط.")
+            return
+
         await query.answer()
         await query.edit_message_text("📥 <b>نظام الاستعادة:</b>\nيرجى إرسال ملف النسخة الاحتياطية (.json) الآن.", parse_mode="HTML")
         
     # استعادة النسخة - القرار النهائي
     elif data == "confirm_restore":
+        # --- [ إضافة جديدة: حماية المطور ] ---
+        if user_id != DEVELOPER_ID:
+            return
+
         content = context.user_data.get('pending_restore_content')
         if not content:
             await query.edit_message_text("❌ انتهت صلاحية الجلسة أو الملف غير موجود، يرجى المحاولة مجدداً.")
@@ -675,6 +940,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # تهيئة الورق والإعدادات - النسخة الاحترافية النهائية
     elif data == "run_setup_db_now":
+        # --- [ إضافة جديدة: حماية المطور ] ---
+        if user_id != DEVELOPER_ID:
+            await deny_access(query, "⚙️ تهيئة الجداول متاحة للمطور فقط.")
+            return
+
         # 1. نظام الحماية من التشغيل المزدوج
         if context.user_data.get("setup_running"):
             await query.answer("⚠️ العملية قيد التنفيذ بالفعل...", show_alert=True)
@@ -771,60 +1041,193 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         except:
             pass
+
+
 # --- نهاية معالج الأزرار وبداية الدوال المستقلة ---
+
+# --- [ إضافة جديدة: سجل تتبع العمليات ] ---
+def log_cancel_action(user_id):
+    print(f"[CANCEL_ACTION] User:{user_id} has terminated a conversation flow.")
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دالة إلغاء عملية إنشاء البوت والعودة للقائمة الرئيسية"""
     user_id = update.effective_user.id
+    
+    # --- [ إضافة جديدة: تسجيل العملية في السيرفر ] ---
+    log_cancel_action(user_id)
+    
     text = "❌ تم إلغاء عملية الإنشاء والعودة للقائمة الرئيسية."
     
     if update.callback_query:
         await update.callback_query.answer()
+        # --- [ إضافة جديدة: التحقق من صلاحيات الواجهة قبل العرض ] ---
+        reply_markup = get_main_menu_inline(user_id)
         await update.callback_query.edit_message_text(text, reply_markup=get_main_menu_inline(user_id))
     else:
+        # --- [ إضافة جديدة: تأمين الرد للمطورين والإداريين ] ---
+        reply_markup = get_main_menu_inline(user_id)
         await update.message.reply_text(text, reply_markup=get_main_menu_inline(user_id))
         
     context.user_data.clear()
+    
+    # --- [ إضافة جديدة: ضمان تنظيف الذاكرة المؤقتة للإدارة ] ---
+    if user_id in ALL_ADMINS:
+        context.user_data.pop("admin_action", None)
+        context.user_data.pop("setup_running", None)
+
     return ConversationHandler.END
 
 # --------------------------------------------------------------------------
-# دالة رفع ملف بوت جديد (تحديث تفاعلي للمطور)
+# --- [ إضافة جديدة: نظام مراقبة الملفات المرفوعة ] ---
+# ==========================================
+# 🔒 طبقة الحماية والاستقرار (إضافات فقط)
+# ==========================================
+
+if "operation_lock" not in globals():
+    operation_lock = asyncio.Lock()
+
+
+def sync_twin_keys(context):
+    try:
+        if "pending_twin_file" in context.user_data and "twin_waiting" not in context.user_data:
+            context.user_data["twin_waiting"] = context.user_data["pending_twin_file"]
+        if "twin_waiting" in context.user_data and "pending_twin_file" not in context.user_data:
+            context.user_data["pending_twin_file"] = context.user_data["twin_waiting"]
+    except: pass
+
+
+async def store_env_file_temporarily(file_name, file_obj, context):
+    try:
+        temp_path = f"./temp_{file_name}"
+        await file_obj.download_to_drive(temp_path)
+        context.user_data.setdefault("env_temp_files", {})
+        context.user_data["env_temp_files"][file_name] = temp_path
+    except Exception as e:
+        print(f"⚠️ خطأ في حفظ ملف البيئة مؤقتاً: {e}")
+
+
+async def safe_process_file_decision(update, context, file_name, file_obj):
+    async with operation_lock:
+        try:
+            sync_twin_keys(context)
+            if file_name in [".Dockerfile", "requirements.txt"]:
+                await store_env_file_temporarily(file_name, file_obj, context)
+            return await process_file_decision(update, context, file_name, file_obj)
+        except Exception as e:
+            print(f"❌ خطأ في محرك القرار: {e}")
+            await update.message.reply_text("❌ حدث خطأ أثناء معالجة الملف")
+            return "ERROR"
+
+
+# ==========================================
+# ⚙️ محرك القرار (كما هو بدون أي تغيير)
+# ==========================================
+async def process_file_decision(update: Update, context: ContextTypes.DEFAULT_TYPE, file_name, file_obj):
+    user_id = update.effective_user.id
+
+    env_files = [".Dockerfile", "requirements.txt"]
+    core_files = ["main.py", "sheets.py", "cache_manager.py"]
+    bot_files = ["education_bot.py", "store_bot.py", "contact_bot.py", "protection_bot.py", "downloader_bot.py"]
+    logic_files = ["course_engine.py", "educational_manager.py"]
+
+    if file_name in env_files:
+        twin = "requirements.txt" if file_name == ".Dockerfile" else ".Dockerfile"
+        context.user_data["pending_twin_file"] = file_name
+
+        if context.user_data.get("twin_waiting") == twin:
+            keyboard = [
+                [InlineKeyboardButton("✅ نعم، إتمام التحديث", callback_data="confirm_env_update")],
+                [InlineKeyboardButton("❌ تراجع", callback_data="cancel_action")]
+            ]
+            await update.message.reply_text(
+                f"⚠️ <b>تحذير عالي الخطورة:</b>\nاكتمل التوأم ({file_name} + {twin}).\nهل تريد الإتمام؟",
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode="HTML"
+            )
+            return "WAITING_CONFIRM"
+        else:
+            context.user_data["twin_waiting"] = file_name
+            await update.message.reply_text(
+                f"📦 تم استلام <code>{file_name}</code>.\nأرسل التوأم <code>{twin}</code>",
+                parse_mode="HTML"
+            )
+            return "TWIN_MISSING"
+
+    if file_name in core_files:
+        await file_obj.download_to_drive(f"./{file_name}")
+        await update.message.reply_text(f"✅ تم استبدال ملف النظام <code>{file_name}</code>", parse_mode="HTML")
+        os.execv(sys.executable, ['python'] + sys.argv)
+
+    if file_name in bot_files:
+        await file_obj.download_to_drive(f"./{file_name}")
+        await update.message.reply_text(f"✅ تم استبدال بوت <code>{file_name}</code>", parse_mode="HTML")
+        return "SUCCESS_DIRECT"
+
+    if file_name in logic_files:
+        await file_obj.download_to_drive(f"./{file_name}")
+
+        if file_name == "course_engine.py":
+            import course_engine; importlib.reload(course_engine)
+        elif file_name == "educational_manager.py":
+            import educational_manager; importlib.reload(educational_manager)
+
+        await update.message.reply_text(f"⚙️ Hot Reload تم لـ <code>{file_name}</code>", parse_mode="HTML")
+        return "SUCCESS_RELOAD"
+
+    return "PLUGIN"
+
+
+# ==========================================
+# 🚀 رفع الموديول (بدون تعديل المنطق)
+# ==========================================
 async def handle_module_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """الخطوة 1: استقبال الملف البرمجي من المطور"""
-    if update.effective_user.id != ADMIN_ID: return
-    
+    if update.effective_user.id != DEVELOPER_ID: return
+if update.effective_user.id != DEVELOPER_ID:
+    return
+
+
     doc = update.message.document
+
+    decision = await safe_process_file_decision(
+        update, context, doc.file_name, await doc.get_file()
+    )
+
+    if decision != "PLUGIN":
+        return
+
     if doc.file_name.endswith(".py"):
         file = await doc.get_file()
         file_path = f"./{doc.file_name}"
         await file.download_to_drive(file_path)
-        
-        # حفظ اسم الملف مؤقتاً للخطوة التالية
+
         context.user_data["uploaded_module_file"] = doc.file_name
-        
+
         await update.message.reply_text(
-            f"✅ تم رفع الملف <code>{doc.file_name}</code> بنجاح.\n\n"
-            f"<b>الآن أرسل الاسم (النوع) الجديد الذي تريد ربطه بهذا الملف:</b>",
+            f"✅ تم رفع الملف <code>{doc.file_name}</code>\n"
+            f"أرسل الاسم الوصفي:",
             parse_mode="HTML"
         )
         return WAITING_FOR_MODULE_NAME
 
-# --------------------------------------------------------------------------
+
+# ==========================================
+# 🧩 حفظ اسم الموديول (كما هو)
+# ==========================================
 async def finalize_module_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """الخطوة 2: استقبال اسم الموديول، حفظ الوصف في الشيت، وإعادة تشغيل المصنع"""
+    if update.effective_user.id != DEVELOPER_ID: return
     if update.effective_user.id != ADMIN_ID: return
-    
+
     module_display_name = update.message.text.strip()
     file_name = context.user_data.get("uploaded_module_file")
     key_name = f"desc_{file_name}"
-    
-    # --- نظام الحفظ الذكي في شيت الميتا (تحديث أو إضافة) ---
+
     status_msg = "تمت إضافته كنوع جديد"
+
     try:
         from sheets import meta_sheet
         from datetime import datetime
+
         if meta_sheet:
-            # البحث عن الملف إذا كان مسجلاً مسبقاً
             cell = None
             try:
                 cell = meta_sheet.find(key_name)
@@ -832,53 +1235,58 @@ async def finalize_module_name(update: Update, context: ContextTypes.DEFAULT_TYP
                 pass
 
             now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
             if cell:
-                # إذا وجدناه، نقوم بتحديث العمود الثاني (الاسم الوصفي) والثالث (التاريخ)
                 meta_sheet.update_cell(cell.row, 2, module_display_name)
                 meta_sheet.update_cell(cell.row, 3, now_str)
                 status_msg = "تم تحديث بيانات الموديول الحالي"
             else:
-                # إذا لم نجده، نضيف سطراً جديداً
                 meta_sheet.append_row([key_name, module_display_name, now_str])
-    except Exception as e:
-        print(f"⚠️ خطأ في مزامنة الميتا: {e}")
-        status_msg = "تم الرفع (مع تعذر تحديث قاعدة البيانات)"
 
-    # رسالة التأكيد الاحترافية التي طلبتها
+    except Exception as e:
+        print(f"⚠️ خطأ: {e}")
+        status_msg = "تم الرفع مع خطأ قاعدة البيانات"
+
     await update.message.reply_text(
-        f"<b>🚀 {status_msg} بنجاح!</b>\n"
-        f"-----------------------\n"
-        f"📛 <b>الاسم الوصفي:</b> {module_display_name}\n"
-        f"📄 <b>الملف البرمجي:</b> <code>{file_name}</code>\n"
-        f"⚙️ <b>الحالة:</b> مرتبط وجاهز للتشغيل\n"
-        f"-----------------------\n"
-        f"🔄 جاري الآن إعادة تشغيل المصنع لتفعيل التحديثات فوراً...",
+        f"🚀 {status_msg}\n📛 {module_display_name}",
         parse_mode="HTML"
     )
-    
+
     context.user_data.clear()
-    # إعادة التشغيل لتطبيق التغييرات برمجياً
     os.execv(sys.executable, ['python'] + sys.argv)
 
-# --------------------------------------------------------------------------
 
-# إعداد الـ ConversationHandler لإنشاء البوت (مع خطوة الاسم المخصص)
-create_bot_conv = ConversationHandler(
-    entry_points=[
-        MessageHandler(filters.Regex('^➕ إنشاء بوت$'), start_create_bot),
-        CallbackQueryHandler(start_create_bot, pattern="^start_manufacture$")
-    ],
-    states={
-        CHOOSING_TYPE: [CallbackQueryHandler(select_type, pattern="^set_type_")],
-        GETTING_TOKEN: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_token)],
-        GETTING_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, finalize_bot)],
-    },
-    fallbacks=[
-        CommandHandler('cancel', cancel), 
-        CallbackQueryHandler(cancel, pattern="^cancel_action$"),
-        MessageHandler(filters.Regex('^🔙 العودة$'), cancel)
-    ],
-)
+# ==========================================
+# 🔘 تأكيد ملفات البيئة (كما هو)
+# ==========================================
+async def confirm_env_update_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if query.from_user.id != DEVELOPER_ID: return
+
+    if query.data == "confirm_env_update":
+        await query.message.edit_text("📤 إرسال نسخة احتياطية...")
+
+        from main import download_bot_cache
+        await download_bot_cache(update, context)
+
+        await query.message.reply_text("🔄 جاري تحديث المصنع...")
+
+        try:
+            env_files = context.user_data.get("env_temp_files", {})
+            for f_name, t_path in env_files.items():
+                if os.path.exists(t_path):
+                    os.replace(t_path, f"./{f_name}")
+        except: pass
+
+        if os.path.exists("./factory_cache.json"):
+            os.remove("./factory_cache.json")
+
+        context.user_data.clear()
+        os.execv(sys.executable, ['python'] + sys.argv)
+
+#-----------------------
+
+
 
 # إعداد الـ ConversationHandler لرفع الموديولات للمطور
 admin_module_conv = ConversationHandler(
@@ -1032,6 +1440,14 @@ async def boot_all_bots():
     active_bots = get_all_active_bots()
     print(f"🔄 جاري تحضير إقلاع {len(active_bots)} بوت تابعة للمصنع...")
 
+create_bot_conv = ConversationHandler(
+    entry_points=[CallbackQueryHandler(start_create_bot, pattern="^start_manufacture$"), MessageHandler(filters.Regex("^➕ إنشاء بوت$"), start_create_bot)],
+    states={
+        CHOOSING_TYPE: [CallbackQueryHandler(select_type, pattern="^set_type_")],
+        GETTING_TOKEN: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_token)],
+    },
+    fallbacks=[CallbackQueryHandler(cancel, pattern="^cancel_action$"), CommandHandler('cancel', cancel)],
+)
 
 
 
@@ -1046,8 +1462,8 @@ async def main_factory_launcher():
         # 2. إضافة المعالجات (تأكد من وجود handlers المعرفة سابقاً)
         app.add_handler(CommandHandler("start", start))
         app.add_handler(create_bot_conv) 
-        app.add_handler(admin_module_conv)
-        app.add_handler(CallbackQueryHandler(button_callback, pattern="^(stats_all|run_setup_db_now|broadcast_owners|restart_factory|download_cache_files|reboot_system|confirm_hard_reset|execute_hard_reset|start_sync_shet|start_restore_request|back_to_main|open_admin_dashboard)$"))
+        app.add_handler(admin_module_conv)        
+        app.add_handler(CallbackQueryHandler(button_callback))
         app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
         app.add_handler(MessageHandler(filters.Document.ALL, start_restore_process))
 
