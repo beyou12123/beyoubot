@@ -938,60 +938,34 @@ async def start_all_sub_bots():
         print(f"🔄 جاري محاولة تشغيل {len(active_bots)} بوت مصنوع...")
         
         for bot_data in active_bots:
-            # التصحيح هنا: المفاتيح يجب أن تطابق رؤوس الأعمدة في الشيت تماماً
             token = bot_data.get("التوكن")
-            
-            # في بياناتك العمود اسمه 'bot_id' وليس 'ID المالك'
-            owner_id = bot_data.get("bot_id") 
-            
-            # التأكد من جلب نوع البوت وتنظيفه من أي مسافات أو لاحقات زائدة
+            owner_id = bot_data.get("bot_id") # تم تعديل المفتاح ليطابق بياناتك
             bot_type_raw = bot_data.get("نوع البوت")
             
             if not token or not bot_type_raw:
                 continue
-
-            # تنظيف bot_type لضمان العثور على الملف (إزالة .py والمسافات)
+            
+            # تنظيف اسم النوع لضمان الاستيراد الصحيح
             bot_type = str(bot_type_raw).replace('.py', '').strip()
-            
+
             async with RUNNING_LOCK:
-
-                if token in RUNNING_BOTS:
-                    print(f"⚠️ البوت يعمل مسبقاً (RUNNING_BOTS): {bot_type}")
-                    continue
-
-                if token in _running_bot_tokens:
-                    print(f"⚠️ مكرر (_running_bot_tokens): {bot_type}")
-                    continue
-
-                if token in ACTIVE_RUNTIME_BOTS:
-                    print(f"⚠️ نشط فعلياً (ACTIVE_RUNTIME_BOTS): {bot_type}")
-                    continue
-
+                if token in RUNNING_BOTS: continue
                 RUNNING_BOTS.add(token)
-                _running_bot_tokens.add(token)
 
-            await asyncio.sleep(1.5)
-            
-            # التأكد فيزيائياً من وجود الملف قبل محاولة تشغيله
-            target_file = f"{bot_type}.py"
-            if os.path.exists(target_file):
+            # التحقق الفيزيائي من وجود الملف قبل الاستدعاء
+            if os.path.exists(f"{bot_type}.py"):
+                await asyncio.sleep(1.5)
                 # استدعاء دالة التشغيل الديناميكية
                 asyncio.create_task(run_dynamic_bot(token, bot_type, owner_id))
-                print(f"📂 الملفات الموجودة في السيرفر: {os.listdir('.')}")
                 print(f"✅ تم إرسال أمر تشغيل للبوت: {bot_type}")
             else:
-                print(f"❌ [خطأ]: تعذر العثور على ملف باسم {target_file} للنوع: {bot_type}")
-                # تحرير التوكن للسماح بالمحاولة مرة أخرى عند الإصلاح
-                async with RUNNING_LOCK:
-                    RUNNING_BOTS.discard(token)
-                    _running_bot_tokens.discard(token)
+                print(f"❌ [خطأ]: الملف {bot_type}.py غير موجود فعلياً في المجلد!")
 
         print("🎊 اكتملت عملية إقلاع كافة البوتات التابعة.")
-
-    except Exception as e:
-        print(f"🔴 خطأ أثناء إقلاع البوتات التابعة: {e}")
     finally:
         release_process_lock()
+
+
 
     #~~~~~~~~~~~~~~~~
 
