@@ -1,31 +1,48 @@
+# --- [ 1. المكتبات القياسية ونظام التشغيل ] ---
 import logging
 import re
 import io
+import os
 import uuid
+import json
+import secrets
+import importlib
+import importlib.util
+from datetime import datetime
+
+# --- [ 2. مكتبات معالجة البيانات والذكاء الاصطناعي ] ---
+# محرك الذكاء الاصطناعي من جوجل (مع نظام حماية ضد الفشل)
 try:
     import google.generativeai as genai
     AI_ENABLED = True
-except ImportError:
+except (ImportError, ModuleNotFoundError):
     AI_ENABLED = False
-    print("⚠️ تنبيه: مكتبة google-generativeai غير مثبتة، تم تعطيل ميزات الذكاء الاصطناعي مؤقتاً.")
-import g4f  # لضمان عمل المحرك المجاني الذي اعتمدناه
-from datetime import datetime 
+    print("⚠️ تنبيه: مكتبة google-generativeai غير مثبتة في البيئة الحالية.")
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Bot, ChatMember
+import g4f  # المحرك المجاني البديل لضمان استمرارية الردود
+import pandas as pd # ضروري لعمليات استيراد وتصدير الإكسل
+import openpyxl    # محرك معالجة ملفات xlsx
+
+# --- [ 3. مكتبات تليجرام بوت (النسخة الحديثة) ] ---
+from telegram import (
+    Update, 
+    InlineKeyboardButton, 
+    InlineKeyboardMarkup, 
+    Bot, 
+    ChatMember
+)
 from telegram.ext import (
     ApplicationBuilder, 
     ContextTypes, 
     ChatMemberHandler, 
-    CommandHandler,      # ضروري لأمر /start
-    CallbackQueryHandler, # ضروري لعمل الأزرار
+    CommandHandler,      
+    CallbackQueryHandler, 
     MessageHandler, 
-    filters
+    filters,
+    JobQueue
 )
 
-# --- [ ذاكرة المحادثات المؤقتة للطلاب ] ---
-user_messages = {} 
-
-# ادمج هذه الكتلة في السطر 21 بدلاً من القديمة واحذف أي استيراد 
+import sheets
 from sheets import (
     get_bot_config, 
     add_log_entry, 
@@ -79,7 +96,8 @@ from sheets import (
     get_system_time, 
     get_courses_knowledge_base
 )
-
+# --- [ استيرادات الموديلات الأخرى ] ---
+import educational_manager
 from educational_manager import (
     list_all_discounts_ui,
     process_dsc_ask_desc,
@@ -116,8 +134,8 @@ from educational_manager import (
     process_grp_days,
     process_grp_time
 )
-
-
+# --- [ محرك الدورات ] ---
+import course_engine
 from course_engine import (
     # --- إدارة الإعلانات والحملات ---
     ad_create_start, 
@@ -154,7 +172,18 @@ from course_engine import (
     show_honors_main_menu,
     show_course_content_ui
 )
+# --- [ إدارة الكاش والبيانات ] ---
+import cache_manager
+from cache_manager import (
+    FACTORY_GLOBAL_CACHE, 
+    save_cache_to_disk, 
+    fetch_full_factory_data,
+    export_bot_data_to_excel,
+    check_excel_permission_from_cache
+)
 
+# --- [ ذاكرة المحادثات المؤقتة للطلاب ] ---
+user_messages = {} 
 
 
 # إعداد المفتاح الذي حصلت عليه
