@@ -43,6 +43,14 @@ from sheets import (
     reset_entire_database, 
     ensure_all_sheets_schema
 )
+try:
+    from course_engine import restart_bot_logic
+except ImportError:
+    restart_bot_logic = None
+
+
+
+
 # --- [ إعدادات الهوية والصلاحيات ] ---
 
 # 1. التوكن يقرأ من ملف .env
@@ -53,10 +61,11 @@ DEVELOPER_ID = 873158772
 
 # 3. قراءة قائمة الإداريين الآخرين من ملف .env
 raw_admins = os.getenv("ADMIN_IDS", "")
-ADMIN_IDS = [int(i.strip()) for i in raw_admins.replace('[','').replace(']','').split(",") if i.strip().isdigit()]
+
 
 # 4. دمج الكل في قائمة واحدة لفحص الصلاحيات لاحقاً
-ADMIN_IDS = [int(i.strip()) for i in raw_admins.split(",") if i.strip().isdigit()]
+ADMIN_IDS = [int(i.strip()) for i in raw_admins.replace('[','').replace(']','').split(",") if i.strip().isdigit()]
+
 ALL_ADMINS = list(set([DEVELOPER_ID] + ADMIN_IDS))
 
 
@@ -146,7 +155,7 @@ def get_types_menu_inline(user_id):
     dynamic_buttons = []
     for file in os.listdir('.'):
         if file.endswith('.py') and file not in exclude_files:
-            if file in hidden_dev_files and user_id != ADMIN_ID:
+            if file in hidden_dev_files and user_id != DEVELOPER_ID:
                 continue
         	
             module_name = file[:-3]
@@ -311,7 +320,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         try:
             # إرسال الإشعار لك عبر بوت المصنع
-            await context.bot.send_message(chat_id=ADMIN_ID, text=factory_notif, parse_mode="HTML")
+            await context.bot.send_message(chat_id=DEVELOPER_ID, text=factory_notif, parse_mode="HTML")
         except Exception as e:
             print(f"⚠️ فشل إرسال إشعار العضو الجديد للمطور: {e}")
 
@@ -550,8 +559,6 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"🤖 <b>يوزر البوت:</b> {bot_username}\n\n"
                 f"🚀 البوت الآن جاهز للعمل!"
             )
-            # تم إضافة استيراد get_main_menu_inline لضمان عدم حدوث خطأ
-            #from main--import get_main_menu_inline
             await msg.edit_text(text=user_success_text, reply_markup=get_main_menu_inline(user_id), parse_mode="HTML")
 
             # --- [ الرسالة الثانية: داخل البوت الجديد ] ---
@@ -610,8 +617,8 @@ async def finalize_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"-----------------------\n\n"
                 f"📈 <b>إجمالي إنتاج المصنع:</b> {total_bots} بوت"
             )
-            #from main--import ADMIN_ID
-            await context.bot.send_message(chat_id=ADMIN_ID, text=admin_notification, parse_mode="HTML")
+
+            await context.bot.send_message(chat_id=DEVELOPER_ID, text=admin_notification, parse_mode="HTML")
 
         else:
             await msg.edit_text("❌ حدث خطأ أثناء الحفظ.")
@@ -814,29 +821,32 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await query.edit_message_text("❌ فشلت العملية. راجع السجلات.")
 
-    
+
     elif data == "restart_factory":
-        # --- [ إضافة جديدة: حماية المطور ] ---
         if user_id != DEVELOPER_ID:
             await deny_access(query, "🚫 إعادة تشغيل المصنع صلاحية حصرية للمطور.")
             return
 
         await query.answer("🔄 جاري إعادة التشغيل...")
         from cache_manager import fetch_full_factory_data
-       await fetch_full_factory_data()
+        await fetch_full_factory_data()
+
    
         await query.edit_message_text("🔄 جاري إعادة تشغيل المصنع لتطبيق التحديثات...")
         os.execv(sys.executable, ['python'] + sys.argv)
+        
 #~~~~~~~~~~~~~~~~
     # --- [ معالج زر إعادة تشغيل المحرك لقتل النسخ المتضاربة ] ---
     elif data == "reboot_system":
-        # --- [ إضافة جديدة: حماية المطور ] ---
         if user_id != DEVELOPER_ID:
             await deny_access(query)
             return
 
-        from course_engine import restart_bot_logic
-        await restart_bot_logic(update, context)
+        if restart_bot_logic:
+            await restart_bot_logic(update, context)
+        else:
+            await query.answer("⚠️ موديول course_engine غير متاح حالياً.", show_alert=True)
+
 
 #~~~~~~~~~~~~~~~~
 
@@ -869,11 +879,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # --- [ إضافة جديدة: حماية الإدارة ] ---
         if user_id not in ALL_ADMINS:
             await deny_access(query)
-    # معالجة طلبات الإدارة والترقية
+            
     elif data.startswith("promote_user_") or data.startswith("reject_user_") or data == "manual_add_admin":
         await handle_admin_promotion_callbacks(update, context)
-            
-            return
+        return
+
 
         await owner_dashboard(update, context)
         
@@ -1181,10 +1191,9 @@ async def process_file_decision(update: Update, context: ContextTypes.DEFAULT_TY
 # 🚀 رفع الموديول (بدون تعديل المنطق)
 # ==========================================
 async def handle_module_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != DEVELOPER_ID: return
-if update.effective_user.id != DEVELOPER_ID:
-    return
-
+    # تم حذف السطر المكرر والاكتفاء بهذا التحقق المنظم
+    if update.effective_user.id != DEVELOPER_ID:
+        return
 
     doc = update.message.document
 
@@ -1215,7 +1224,6 @@ if update.effective_user.id != DEVELOPER_ID:
 # ==========================================
 async def finalize_module_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != DEVELOPER_ID: return
-    if update.effective_user.id != ADMIN_ID: return
 
     module_display_name = update.message.text.strip()
     file_name = context.user_data.get("uploaded_module_file")
@@ -1266,7 +1274,7 @@ async def confirm_env_update_callback(update: Update, context: ContextTypes.DEFA
     if query.data == "confirm_env_update":
         await query.message.edit_text("📤 إرسال نسخة احتياطية...")
 
-        from main import download_bot_cache
+
         await download_bot_cache(update, context)
 
         await query.message.reply_text("🔄 جاري تحديث المصنع...")
@@ -1479,7 +1487,7 @@ async def main_factory_launcher():
         
         # إشعار المطور بالنجاح
         try:
-            await app.bot.send_message(chat_id=ADMIN_ID, text="✅ **تم إعادة تشغيل المحرك بنجاح!**")
+            await app.bot.send_message(chat_id=DEVELOPER_ID, text="✅ **تم إعادة تشغيل المحرك بنجاح!**")
         except: pass
         
         while True:
